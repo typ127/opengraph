@@ -3,6 +3,8 @@ import { Handle, Position } from 'reactflow';
 import * as Icons from '@mui/icons-material';
 import { Typography, Box } from '@mui/material';
 
+import { getHexColor } from './constants';
+
 const KeyLinesNode = ({ data }) => {
   const { label, icon, donut = [], score = 1.0 } = data;
   const IconComponent = Icons[icon] || Icons.HelpOutline;
@@ -19,17 +21,7 @@ const KeyLinesNode = ({ data }) => {
 
   let cumulativeOffset = 0;
 
-  // Eigene Farbe basierend auf Typ (für den Icon-Hintergrund)
-  const typeColors = {
-    person: "#1976d2",
-    robot: "#ff9800",
-    planet: "#4caf50",
-    item: "#ff9800",
-    mutant: "#1976d2",
-    entity: "#9c27b0",
-    science: "#9c27b0"
-  };
-  const myColor = typeColors[data.type?.toLowerCase()] || "#9e9e9e";
+  const myColor = getHexColor(data.type);
 
   return (
     <Box sx={{ 

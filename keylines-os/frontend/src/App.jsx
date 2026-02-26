@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useRef, useMemo } from 'react';
 import ReactFlow, { 
   useNodesState, 
   useEdgesState, 
@@ -26,7 +26,10 @@ import {
   ListItemIcon,
   Avatar,
   ListItemAvatar,
-  ListItemSecondaryAction
+  ListItemSecondaryAction,
+  Checkbox,
+  FormControlLabel,
+  FormGroup
 } from '@mui/material';
 import { 
   AccountTree as TreeIcon, 
@@ -36,30 +39,16 @@ import {
   Info as InfoIcon,
   Category as TypeIcon,
   Group as GroupIcon,
-  AddCircleOutline as AddIcon
+  AddCircleOutline as AddIcon,
+  FilterList as FilterIcon
 } from '@mui/icons-material';
 import * as Icons from '@mui/icons-material';
 
+// Zentrale Konstanten importieren
+import { categoryMap, typeColors, getHexColor } from './constants';
+
 const nodeTypes = {
   keylines: KeyLinesNode,
-};
-
-// --- CONFIG ---
-const categoryMap = {
-  "person": "blue", "mutant": "blue",
-  "planet": "green",
-  "robot": "crimson",
-  "item": "orange",
-  "entity": "purple", "science": "purple",
-};
-
-const typeColors = {
-  blue: "#1976d2",
-  green: "#4caf50",
-  crimson: "#dc143c",
-  orange: "#ff9800",
-  purple: "#9c27b0",
-  other: "#9e9e9e"
 };
 
 const deduplicate = (arr) => {
@@ -191,6 +180,7 @@ export default function App() {
   const [selectedNodeNeighbors, setSelectedNodeNeighbors] = useState([]);
   const [previewData, setPreviewData] = useState(null);
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [hiddenTypes, setHiddenTypes] = useState(new Set());
 
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
@@ -254,19 +244,15 @@ export default function App() {
   const addSingleNode = useCallback((sourceId, targetNode) => {
     const currentNodes = nodesRef.current;
     const currentEdges = edgesRef.current;
-    
     if (currentNodes.find(n => n.id === targetNode.id)) return;
-
     const sourceNode = currentNodes.find(n => n.id === sourceId);
     const sourcePos = sourceNode ? sourceNode.position : { x: 400, y: 400 };
-
     const newNode = {
       ...targetNode,
       type: 'keylines',
       position: { ...sourcePos },
       data: { ...targetNode.data, onSegmentClick: (cat, e) => expandNode(targetNode.id, cat, e) }
     };
-
     const newEdge = {
       id: `e-${sourceId}-manual-${targetNode.id}`,
       source: sourceId,
@@ -274,13 +260,10 @@ export default function App() {
       animated: true,
       style: getEdgeStyle('default')
     };
-
     const nextNodes = deduplicate([...currentNodes, newNode]);
     const nextEdges = deduplicate([...currentEdges, newEdge]);
-
     setNodes(nextNodes);
     setEdges(nextEdges);
-
     setTimeout(() => {
       setNodes(nds => applyLayout(nds, nextEdges, activeLayoutRef.current));
       setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
@@ -322,14 +305,43 @@ export default function App() {
     setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
   };
 
+  const toggleType = (typeName) => {
+    setHiddenTypes(prev => {
+      const next = new Set(prev);
+      if (next.has(typeName)) next.delete(typeName);
+      else next.add(typeName);
+      return next;
+    });
+  };
+
   const closeSidebar = () => {
     setSelectedNode(null);
     setPreviewData(null);
     setSelectedNodeNeighbors([]);
   };
 
+  const visibleNodes = useMemo(() => {
+    return nodes.filter(n => !hiddenTypes.has(n.data.type));
+  }, [nodes, hiddenTypes]);
+
+  const visibleEdges = useMemo(() => {
+    const nodeIds = new Set(visibleNodes.map(n => n.id));
+    return edges
+      .filter(e => nodeIds.has(e.source) && nodeIds.has(e.target))
+      .map(edge => ({...edge, label: zoomLevel > 0.6 ? (edge.data?.type?.replace("_", " ").toLowerCase()) : ""}));
+  }, [edges, visibleNodes, zoomLevel]);
+
+  const stats = useMemo(() => {
+    const counts = {};
+    nodes.forEach(n => {
+      const type = n.data.type || 'Unknown';
+      counts[type] = (counts[type] || 0) + 1;
+    });
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  }, [nodes]);
+
   const IconComponent = selectedNode ? Icons[selectedNode.data.icon] || Icons.HelpOutline : null;
-  const sidebarColor = selectedNode ? (typeColors[categoryMap[selectedNode.data.type?.toLowerCase()]] || typeColors.other) : 
+  const sidebarColor = selectedNode ? getHexColor(selectedNode.data.type) : 
                        previewData ? typeColors[previewData.category] : typeColors.other;
 
   return (
@@ -340,8 +352,8 @@ export default function App() {
         .react-flow__edge-textwrapper { transition: opacity 0.3s ease; opacity: ${zoomLevel > 0.6 ? 1 : 0}; }
       `}</style>
       <ReactFlow
-        nodes={nodes}
-        edges={edges.map(edge => ({...edge, label: zoomLevel > 0.6 ? (edge.data?.type?.replace("_", " ").toLowerCase()) : ""}))}
+        nodes={visibleNodes}
+        edges={visibleEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={(e, n) => e.shiftKey ? openDetails(n) : expandNode(n.id)}
@@ -353,6 +365,48 @@ export default function App() {
       >
         <Background />
         <Controls />
+        
+        <Panel position="top-left">
+          <Paper elevation={3} sx={{ p: 2, m: 2, width: 220, bgcolor: 'rgba(255,255,255,0.9)', borderRadius: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <FilterIcon size="small" sx={{ mr: 1, color: 'text.secondary' }} />
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>Entity Types</Typography>
+            </Box>
+            
+            <FormGroup>
+              {stats.map(([type, count]) => {
+                const isHidden = hiddenTypes.has(type);
+                const color = getHexColor(type);
+                const maxCount = Math.max(...stats.map(s => s[1]), 1);
+                const barWidth = (count / maxCount) * 100;
+
+                return (
+                  <Box key={type} sx={{ mb: 1.5 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                      <FormControlLabel
+                        control={
+                          <Checkbox 
+                            size="small" 
+                            checked={!isHidden} 
+                            onChange={() => toggleType(type)}
+                            sx={{ color: color, '&.Mui-checked': { color: color }, py: 0 }}
+                          />
+                        }
+                        label={<Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.7rem' }}>{type.toUpperCase()}</Typography>}
+                        sx={{ m: 0 }}
+                      />
+                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>{count}</Typography>
+                    </Box>
+                    <Box sx={{ height: 4, width: '100%', bgcolor: 'action.hover', borderRadius: 1, overflow: 'hidden' }}>
+                      <Box sx={{ height: '100%', width: `${barWidth}%`, bgcolor: color, transition: 'width 0.5s ease' }} />
+                    </Box>
+                  </Box>
+                );
+              })}
+            </FormGroup>
+          </Paper>
+        </Panel>
+
         <Panel position="top-right">
           <Paper elevation={3} sx={{ p: 0.5, m: 2, bgcolor: 'rgba(255,255,255,0.9)', borderRadius: 2 }}>
             <ButtonGroup variant="text" size="small">
@@ -364,7 +418,6 @@ export default function App() {
         </Panel>
       </ReactFlow>
 
-      {/* Sidebar */}
       <Drawer anchor="right" open={!!selectedNode || !!previewData} onClose={closeSidebar} variant="temporary" sx={{ width: 350, '& .MuiDrawer-paper': { width: 350, borderLeft: `4px solid ${sidebarColor}`, boxShadow: -5 } }}>
         <Box sx={{ p: 3 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
@@ -391,18 +444,13 @@ export default function App() {
                   return (
                     <ListItem key={node.id} sx={{ px: 0 }}>
                       <ListItemAvatar>
-                        <Avatar sx={{ bgcolor: typeColors[categoryMap[node.data.type?.toLowerCase()]] || typeColors.other, width: 32, height: 32 }}>
+                        <Avatar sx={{ bgcolor: getHexColor(node.data.type), width: 32, height: 32 }}>
                           <NodeIcon sx={{ fontSize: 18 }} />
                         </Avatar>
                       </ListItemAvatar>
                       <ListItemText primary={node.data.label} secondary={node.data.type} />
                       <ListItemSecondaryAction>
-                        <IconButton 
-                          edge="end" 
-                          color="primary" 
-                          disabled={isAlreadyOnCanvas}
-                          onClick={() => addSingleNode(selectedNode.id, node)}
-                        >
+                        <IconButton edge="end" color="primary" disabled={isAlreadyOnCanvas} onClick={() => addSingleNode(selectedNode.id, node)}>
                           {isAlreadyOnCanvas ? <Icons.Check /> : <AddIcon />}
                         </IconButton>
                       </ListItemSecondaryAction>
@@ -433,12 +481,7 @@ export default function App() {
                       </ListItemAvatar>
                       <ListItemText primary={node.data.label} secondary={node.data.type} />
                       <ListItemSecondaryAction>
-                        <IconButton 
-                          edge="end" 
-                          color="primary" 
-                          disabled={isAlreadyOnCanvas}
-                          onClick={() => addSingleNode(previewData.sourceId, node)}
-                        >
+                        <IconButton edge="end" color="primary" disabled={isAlreadyOnCanvas} onClick={() => addSingleNode(previewData.sourceId, node)}>
                           {isAlreadyOnCanvas ? <Icons.Check /> : <AddIcon />}
                         </IconButton>
                       </ListItemSecondaryAction>

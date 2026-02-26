@@ -79,16 +79,16 @@ async def expand(node_id: str, use_mock: bool = Query(False), filter_category: s
     
     # Mapping von Typen zu Kategorien/Farben
     category_map = {
-        "person": "blue", "mutant": "blue",
+        "person": "blue", "mutant": "crimson",
         "planet": "green",
-        "robot": "crimson",
+        "robot": "deepskyblue",
         "item": "orange",
         "entity": "purple", "science": "purple",
     }
     
     color_values = {
         "blue": "#1976d2", "green": "#4caf50",
-        "crimson": "#dc143c",
+        "crimson": "#dc143c", "deepskyblue": "#00bfff",
         "orange": "#ff9800", "purple": "#9c27b0", "other": "#9e9e9e"
     }
 
@@ -152,9 +152,6 @@ async def expand(node_id: str, use_mock: bool = Query(False), filter_category: s
                 }
             
             if e and id_n and id_m:
-                # Eindeutige ID durch Einbeziehung des Typs
-                # Bei GQLAlchemy/Memgraph ist der Typ oft in '_type' oder über 'type(e)' in Cypher erreichbar
-                # Da wir hier das Objekt haben, nutzen wir die sicherste Methode:
                 rel_type = "RELATES_TO"
                 if hasattr(e, "_type"):
                     rel_type = e._type
@@ -169,7 +166,6 @@ async def expand(node_id: str, use_mock: bool = Query(False), filter_category: s
                     "animated": rel_type in ["TRAVELS_WITH", "CONNECTS", "FOLLOWS"]
                 })
 
-    # De-duplizierung der Ergebnisse (da die Query durch mn-Joins Zeilen verdoppelt)
     unique_nodes = list(nodes_dict.values())
     unique_edges = []
     seen_edge_ids = set()

@@ -2,20 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.6.0] - 2026-02-26
+## [1.7.0] - 2026-02-26
 
 ### Added
-- **Neighborhood Explorer**: Shift+Clicking a node now opens a detailed list of all database neighbors in the sidebar.
-- **Selective Node Addition**: Users can now "pick" individual nodes from the sidebar list using a new "+" button, adding only that specific node to the canvas instead of the whole group.
-- **Visual Neighborhood Status**: The sidebar list now indicates if a neighbor is already present on the canvas (Checkmark) or can be added (Add icon).
-- **Crimson Robot Theme**: Specialized robots are now categorized under "Crimson" (#dc143c) to distinguish them from standard "Orange" items.
-- **Auto-Zoom & Viewport Tracking**: Integrated `useReactFlow` to automatically center the view after expansion and added zoom-dependent label visibility.
+- **Interactive Type Histogram**: A new left-side panel showing a real-time distribution of entity types (e.g., "PERSON", "PLANET", "MUTANT").
+- **Global Type Filtering**: Integrated checkboxes in the histogram to hide/show entire entity types across the canvas.
+- **Centralized Color Architecture**: Created `constants.js` as a single source of truth for all category-to-color mappings, ensuring 100% consistency between donuts, nodes, sidebar, and histogram.
 
 ### Changed
-- **Sidebar UX**: Removed raw JSON data from the sidebar to focus on navigational discovery and neighborhood sorting (by type).
-- **Consolidated Categorization**: Refactored `categoryMap` and `typeColors` across backend and frontend for consistent crimson branding.
+- **Refined Color Palette**: 
+    - Mutants are now distinctively **Crimson** (#dc143c).
+    - Robots are now **Deepskyblue** (#00bfff).
+- **Code Quality**: Refactored `App.jsx` and `KeyLinesNode.jsx` to eliminate duplicate color logic by using the new central utility functions.
 
-## [1.5.0] - 2026-02-26
+## [1.6.0] - 2026-02-26
 
 ## [1.0.0] - 2026-02-26
 
