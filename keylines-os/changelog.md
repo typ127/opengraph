@@ -2,24 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.2.0] - 2026-02-26
+## [1.3.0] - 2026-02-26
 
 ### Added
-- **Selective Expansion**: Users can now click on specific donut segments (e.g., the "blue" segment) to expand only nodes of that category (e.g., Persons).
-- **Automated Layout System**: The active layout (Force, Hierarchical, or Circular) is now automatically reapplied after every graph expansion to maintain structure.
-- **Visual Layout Feedback**: The active layout button in the toolbar is now highlighted (secondary color).
-- **Interactive Neighbor Donuts**: Neighbors appearing after an expansion now also have interactive donut segments, allowing for deep exploration of the network.
-
-### Changed
-- **Default Layout**: Set Force-Directed Layout as the default on application start.
-- **Improved Force Physics**: Refined D3-force parameters (charge, distance, collision) for a more stable and aesthetically pleasing organic look.
-- **Smarter Node Spawning**: New nodes now spawn close to their parent, preventing the "exploding graph" effect during expansion.
+- **Donut Toggle Logic**: Donut segments now act as toggles. Clicking a segment once expands its category; clicking it again recursively collapses that entire branch.
+- **Advanced Hitbox Precision**: Optimized SVG donuts with `pointer-events: stroke` and `fill: none`, ensuring that clicks and hover effects only trigger on the actual visible ring segments.
+- **Recursive Cleanup**: Implementing a `getDescendants` helper to ensure that collapsing a node or segment also removes all subsequent "child-of-child" nodes, keeping the canvas clean.
 
 ### Fixed
-- **Backend Robustness**: Refactored `main.py` to fix `NameError` and ensure correct function ordering and error handling.
-- **State Consistency**: Fixed a bug where `onSegmentClick` handlers were not correctly assigned to dynamically added neighbor nodes.
+- **Interaction Overlap**: Resolved a bug where inner transparent areas of the donut segments blocked clicks to lower segments.
+- **State Reliability**: Integrated `useRef` for nodes and edges to ensure the expansion/collapse logic always operates on the most current graph state.
 
-## [1.1.0] - 2026-02-26
+## [1.2.0] - 2026-02-26
 
 ## [1.0.0] - 2026-02-26
 

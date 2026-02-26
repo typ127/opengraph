@@ -41,7 +41,7 @@ const KeyLinesNode = ({ data }) => {
     }}>
       <div style={{ position: 'relative', width: size, height: size }}>
         {/* SVG Donut Ring */}
-        <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+        <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', overflow: 'visible' }}>
           {donut.map((segment, index) => {
             const value = typeof segment === 'object' ? segment.value : segment;
             const color = typeof segment === 'object' ? segment.color : (index === 0 ? '#1976d2' : '#dc004e');
@@ -56,17 +56,25 @@ const KeyLinesNode = ({ data }) => {
                 cx={center}
                 cy={center}
                 r={radius}
-                fill="transparent"
+                fill="none"
                 stroke={color}
-                strokeWidth="6"
+                strokeWidth="10"
                 strokeDasharray={strokeDasharray}
                 strokeDashoffset={strokeDashoffset}
                 strokeLinecap="butt"
-                style={{ cursor: 'pointer' }}
+                style={{ 
+                  cursor: 'pointer', 
+                  transition: 'stroke-width 0.2s',
+                  pointerEvents: 'stroke' 
+                }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (data.onSegmentClick) data.onSegmentClick(segment.category);
+                  if (data.onSegmentClick && segment.category) {
+                    data.onSegmentClick(segment.category);
+                  }
                 }}
+                onMouseEnter={(e) => e.target.setAttribute('stroke-width', '14')}
+                onMouseLeave={(e) => e.target.setAttribute('stroke-width', '10')}
               />
             );
           })}
@@ -76,7 +84,7 @@ const KeyLinesNode = ({ data }) => {
               cx={center}
               cy={center}
               r={radius}
-              fill="transparent"
+              fill="none"
               stroke="#e0e0e0"
               strokeWidth="2"
             />
