@@ -1,0 +1,21 @@
+id,label,type,icon,donut,planet,category
+n1,Hari Seldon,Person,Hub,100,Trantor,Psychohistorian
+n2,R. Daneel Olivaw,Robot,SmartButton,100,Aurora,Eternal Guardian
+n3,Elijah Baley,Person,Person,100,Earth,Detective
+n4,The Mule,Mutant,Warning,80;20,Gaia,Conqueror
+n5,Salvor Hardin,Person,Security,50;50,Terminus,Mayor
+n6,Trantor,Planet,Language,100,None,Empire Capital
+n7,Terminus,Planet,Public,100,None,Foundation Seat
+n8,Prime Radiant,Item,AutoGraph,100,None,Seldon Tool
+n9,Psychohistory,Science,AutoFixHigh,100,None,Mathematical Theory
+n10,Gaia,Planet,Public,100,None,Collective Mind
+n11,Aurora,Planet,LightMode,100,None,Spacer World
+n12,The Second Foundation,Entity,Groups,100,Trantor,Secret Society
+n13,Galactic Empire,Entity,Castle,100,Trantor,Political Power
+n14,Hober Mallow,Person,Business,90;10,Terminus,Merchant Prince
+n15,Bayta Darell,Person,Face,100,Terminus,Heroine
+n16,Visi-Sonor,Item,MusicNote,100,None,Musical Instrument
+n17,Solaria,Planet,WbSunny,100,None,Isolated World
+n18,Gladia Delmarre,Person,Face,100,Solaria,Spacer
+n19,Golan Trevize,Person,Explore,100,Terminus,Councilman
+n20,Janov Pelorat,Person,School,100,Terminus,Historian
