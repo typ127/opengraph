@@ -1,0 +1,26 @@
+services:
+  memgraph:
+    image: memgraph/memgraph-platform:latest
+    ports:
+      - "7687:7687" # Cypher Protokoll
+      - "3000:3000" # Memgraph Lab (UI zur Datenbank-Kontrolle)
+    networks:
+      - graph-network
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      - MEMGRAPH_HOST=memgraph
+      - MEMGRAPH_PORT=7687
+    depends_on:
+      - memgraph
+    networks:
+      - graph-network
+
+networks:
+  graph-network:
+    driver: bridge

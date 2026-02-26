@@ -1,0 +1,5 @@
+fastapi
+uvicorn
+gqlalchemy  # OGM für Memgraph/Cypher
+networkx    # Für Social Algorithms (PageRank, etc.)
+pandas
