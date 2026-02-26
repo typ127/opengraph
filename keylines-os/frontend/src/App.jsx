@@ -29,7 +29,10 @@ import {
   ListItemSecondaryAction,
   Checkbox,
   FormControlLabel,
-  FormGroup
+  FormGroup,
+  Autocomplete,
+  TextField,
+  InputAdornment
 } from '@mui/material';
 import { 
   AccountTree as TreeIcon, 
@@ -40,11 +43,13 @@ import {
   Category as TypeIcon,
   Group as GroupIcon,
   AddCircleOutline as AddIcon,
-  FilterList as FilterIcon
+  FilterList as FilterIcon,
+  Search as SearchIcon,
+  ClearAll as ClearAllIcon,
+  ControlPointDuplicate as ExpandAllIcon
 } from '@mui/icons-material';
 import * as Icons from '@mui/icons-material';
 
-// Zentrale Konstanten importieren
 import { categoryMap, typeColors, getHexColor } from './constants';
 
 const nodeTypes = {
@@ -172,7 +177,7 @@ const integrateNewData = (currentNodes, currentEdges, newData, sourceNodeId, exp
 };
 
 export default function App() {
-  const { fitView } = useReactFlow();
+  const { fitView, setCenter } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [activeLayout, setActiveLayout] = useState('force');
@@ -181,6 +186,9 @@ export default function App() {
   const [previewData, setPreviewData] = useState(null);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [hiddenTypes, setHiddenTypes] = useState(new Set());
+  
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchValue, setSearchValue] = useState("");
 
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
@@ -241,25 +249,21 @@ export default function App() {
     } catch (error) { console.error('Error expanding node:', error); }
   }, [applyLayout, fitView]);
 
+  const expandAllOfType = useCallback(async (typeName) => {
+    const nodesToExpand = nodesRef.current.filter(n => n.data.type === typeName);
+    for (const node of nodesToExpand) {
+      await expandNode(node.id);
+    }
+  }, [expandNode]);
+
   const addSingleNode = useCallback((sourceId, targetNode) => {
     const currentNodes = nodesRef.current;
     const currentEdges = edgesRef.current;
     if (currentNodes.find(n => n.id === targetNode.id)) return;
     const sourceNode = currentNodes.find(n => n.id === sourceId);
     const sourcePos = sourceNode ? sourceNode.position : { x: 400, y: 400 };
-    const newNode = {
-      ...targetNode,
-      type: 'keylines',
-      position: { ...sourcePos },
-      data: { ...targetNode.data, onSegmentClick: (cat, e) => expandNode(targetNode.id, cat, e) }
-    };
-    const newEdge = {
-      id: `e-${sourceId}-manual-${targetNode.id}`,
-      source: sourceId,
-      target: targetNode.id,
-      animated: true,
-      style: getEdgeStyle('default')
-    };
+    const newNode = { ...targetNode, type: 'keylines', position: { ...sourcePos }, data: { ...targetNode.data, onSegmentClick: (cat, e) => expandNode(targetNode.id, cat, e) } };
+    const newEdge = { id: `e-${sourceId}-manual-${targetNode.id}`, source: sourceId, target: targetNode.id, animated: true, style: getEdgeStyle('default') };
     const nextNodes = deduplicate([...currentNodes, newNode]);
     const nextEdges = deduplicate([...currentEdges, newEdge]);
     setNodes(nextNodes);
@@ -281,23 +285,38 @@ export default function App() {
     } catch (e) { console.error(e); }
   }, []);
 
-  useEffect(() => {
-    const startHandler = (cat, e) => expandNode('n1', cat, e);
-    setNodes([{
-      id: 'n1',
-      type: 'keylines',
-      position: { x: 400, y: 400 },
-      data: { label: 'Hari Seldon', icon: 'Hub', type: 'Person', donut: [], score: 1.0, onSegmentClick: startHandler },
-    }]);
-    fetch(`http://localhost:8000/expand/n1`).then(res => res.json()).then(data => {
-      const startNodeData = data.nodes.find(n => n.id === 'n1');
-      if (startNodeData) {
-        setNodes(nds => nds.map(node => 
-          node.id === 'n1' ? { ...node, data: { ...node.data, ...startNodeData.data, onSegmentClick: startHandler } } : node
-        ));
+  const handleSearch = async (val) => {
+    setSearchValue(val);
+    if (val.length < 2) { setSearchResults([]); return; }
+    try {
+      const response = await fetch(`http://localhost:8000/search?q=${val}`);
+      const data = await response.json();
+      setSearchResults(data);
+    } catch (e) { console.error(e); }
+  };
+
+  const onSelectSearchResult = async (nodeInfo) => {
+    if (!nodeInfo) return;
+    let existing = nodes.find(n => n.id === nodeInfo.id);
+    if (!existing) {
+      const response = await fetch(`http://localhost:8000/expand/${nodeInfo.id}`);
+      const data = await response.json();
+      const fullNode = data.nodes.find(n => n.id === nodeInfo.id);
+      if (fullNode) {
+        const newNode = { ...fullNode, type: 'keylines', position: { x: 400, y: 400 }, data: { ...fullNode.data, onSegmentClick: (cat, e) => expandNode(fullNode.id, cat, e) } };
+        setNodes(nds => deduplicate([...nds, newNode]));
+        existing = newNode;
       }
-    });
-  }, []);
+    }
+    if (existing) {
+      setTimeout(() => {
+        const nodePos = nodesRef.current.find(n => n.id === nodeInfo.id)?.position;
+        if (nodePos) setCenter(nodePos.x, nodePos.y, { zoom: 1.2, duration: 800 });
+      }, 100);
+    }
+  };
+
+  useEffect(() => {}, []);
 
   const onLayoutClick = (type) => {
     setActiveLayout(type);
@@ -314,35 +333,21 @@ export default function App() {
     });
   };
 
-  const closeSidebar = () => {
-    setSelectedNode(null);
-    setPreviewData(null);
-    setSelectedNodeNeighbors([]);
-  };
+  const closeSidebar = () => { setSelectedNode(null); setPreviewData(null); setSelectedNodeNeighbors([]); };
 
-  const visibleNodes = useMemo(() => {
-    return nodes.filter(n => !hiddenTypes.has(n.data.type));
-  }, [nodes, hiddenTypes]);
-
+  const visibleNodes = useMemo(() => nodes.filter(n => !hiddenTypes.has(n.data.type)), [nodes, hiddenTypes]);
   const visibleEdges = useMemo(() => {
     const nodeIds = new Set(visibleNodes.map(n => n.id));
-    return edges
-      .filter(e => nodeIds.has(e.source) && nodeIds.has(e.target))
-      .map(edge => ({...edge, label: zoomLevel > 0.6 ? (edge.data?.type?.replace("_", " ").toLowerCase()) : ""}));
+    return edges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target)).map(edge => ({...edge, label: zoomLevel > 0.6 ? (edge.data?.type?.replace("_", " ").toLowerCase()) : ""}));
   }, [edges, visibleNodes, zoomLevel]);
 
   const stats = useMemo(() => {
     const counts = {};
-    nodes.forEach(n => {
-      const type = n.data.type || 'Unknown';
-      counts[type] = (counts[type] || 0) + 1;
-    });
+    nodes.forEach(n => { const type = n.data.type || 'Unknown'; counts[type] = (counts[type] || 0) + 1; });
     return Object.entries(counts).sort((a, b) => b[1] - a[1]);
   }, [nodes]);
 
-  const IconComponent = selectedNode ? Icons[selectedNode.data.icon] || Icons.HelpOutline : null;
-  const sidebarColor = selectedNode ? getHexColor(selectedNode.data.type) : 
-                       previewData ? typeColors[previewData.category] : typeColors.other;
+  const sidebarColor = selectedNode ? getHexColor(selectedNode.data.type) : previewData ? typeColors[previewData.category] : typeColors.other;
 
   return (
     <Box sx={{ width: '100vw', height: '100vh', background: '#f5f5f5', display: 'flex', fontFamily: '"Open Sans", sans-serif' }}>
@@ -366,6 +371,64 @@ export default function App() {
         <Background />
         <Controls />
         
+        {/* TOP CENTER: SEARCH & CLEAR */}
+        <Panel position="top-center">
+          <Paper elevation={3} sx={{ p: 0.5, m: 2, display: 'flex', alignItems: 'center', gap: 1, bgcolor: 'rgba(255,255,255,0.95)', borderRadius: 2 }}>
+            <Autocomplete
+              sx={{ width: 400 }}
+              size="small"
+              options={searchResults}
+              getOptionLabel={(option) => option.label}
+              onInputChange={(e, val) => handleSearch(val)}
+              onChange={(e, val) => onSelectSearchResult(val)}
+              autoSelect
+              selectOnFocus
+              handleHomeEndKeys
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  placeholder="Search Asimov's Universe..."
+                  variant="outlined"
+                  InputProps={{
+                    ...params.InputProps,
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon fontSize="small" color="action" />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              )}
+              renderOption={(props, option) => (
+                <ListItem {...props} key={option.id}>
+                  <ListItemAvatar>
+                    <Avatar sx={{ bgcolor: getHexColor(option.type), width: 24, height: 24 }}>
+                      {React.createElement(Icons[option.icon] || Icons.HelpOutline, { sx: { fontSize: 14 } })}
+                    </Avatar>
+                  </ListItemAvatar>
+                  <ListItemText primary={option.label} secondary={option.type} />
+                </ListItem>
+              )}
+            />
+            <Divider orientation="vertical" flexItem sx={{ my: 1 }} />
+            <Tooltip title="Clear Canvas" arrow>
+              <IconButton 
+                color="error" 
+                onClick={() => {
+                  setNodes([]);
+                  setEdges([]);
+                  setSearchValue("");
+                  setSelectedNode(null);
+                  setPreviewData(null);
+                }}
+              >
+                <ClearAllIcon />
+              </IconButton>
+            </Tooltip>
+          </Paper>
+        </Panel>
+
+        {/* TOP LEFT: FILTERS & HISTOGRAM */}
         <Panel position="top-left">
           <Paper elevation={3} sx={{ p: 2, m: 2, width: 220, bgcolor: 'rgba(255,255,255,0.9)', borderRadius: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -375,7 +438,6 @@ export default function App() {
             
             <FormGroup>
               {stats.map(([type, count]) => {
-                const isHidden = hiddenTypes.has(type);
                 const color = getHexColor(type);
                 const maxCount = Math.max(...stats.map(s => s[1]), 1);
                 const barWidth = (count / maxCount) * 100;
@@ -387,7 +449,7 @@ export default function App() {
                         control={
                           <Checkbox 
                             size="small" 
-                            checked={!isHidden} 
+                            checked={!hiddenTypes.has(type)} 
                             onChange={() => toggleType(type)}
                             sx={{ color: color, '&.Mui-checked': { color: color }, py: 0 }}
                           />
@@ -395,7 +457,14 @@ export default function App() {
                         label={<Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.7rem' }}>{type.toUpperCase()}</Typography>}
                         sx={{ m: 0 }}
                       />
-                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>{count}</Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', mr: 0.5 }}>{count}</Typography>
+                        <Tooltip title={`Expand all ${type}s`} arrow>
+                          <IconButton size="small" sx={{ p: 0 }} onClick={() => expandAllOfType(type)}>
+                            <AddIcon sx={{ fontSize: 16, color: color }} />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
                     </Box>
                     <Box sx={{ height: 4, width: '100%', bgcolor: 'action.hover', borderRadius: 1, overflow: 'hidden' }}>
                       <Box sx={{ height: '100%', width: `${barWidth}%`, bgcolor: color, transition: 'width 0.5s ease' }} />
@@ -422,7 +491,7 @@ export default function App() {
         <Box sx={{ p: 3 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
             <Avatar sx={{ bgcolor: sidebarColor, width: 64, height: 64 }}>
-              {selectedNode ? <IconComponent sx={{ fontSize: 32 }} /> : <GroupIcon sx={{ fontSize: 32 }} />}
+              {selectedNode ? React.createElement(Icons[selectedNode.data.icon] || Icons.HelpOutline, { sx: { fontSize: 32 } }) : <GroupIcon sx={{ fontSize: 32 }} />}
             </Avatar>
             <IconButton onClick={closeSidebar}><CloseIcon /></IconButton>
           </Box>
@@ -450,7 +519,12 @@ export default function App() {
                       </ListItemAvatar>
                       <ListItemText primary={node.data.label} secondary={node.data.type} />
                       <ListItemSecondaryAction>
-                        <IconButton edge="end" color="primary" disabled={isAlreadyOnCanvas} onClick={() => addSingleNode(selectedNode.id, node)}>
+                        <IconButton 
+                          edge="end" 
+                          color="primary" 
+                          disabled={isAlreadyOnCanvas}
+                          onClick={() => addSingleNode(selectedNode.id, node)}
+                        >
                           {isAlreadyOnCanvas ? <Icons.Check /> : <AddIcon />}
                         </IconButton>
                       </ListItemSecondaryAction>
@@ -481,7 +555,12 @@ export default function App() {
                       </ListItemAvatar>
                       <ListItemText primary={node.data.label} secondary={node.data.type} />
                       <ListItemSecondaryAction>
-                        <IconButton edge="end" color="primary" disabled={isAlreadyOnCanvas} onClick={() => addSingleNode(previewData.sourceId, node)}>
+                        <IconButton 
+                          edge="end" 
+                          color="primary" 
+                          disabled={isAlreadyOnCanvas}
+                          onClick={() => addSingleNode(previewData.sourceId, node)}
+                        >
                           {isAlreadyOnCanvas ? <Icons.Check /> : <AddIcon />}
                         </IconButton>
                       </ListItemSecondaryAction>

@@ -2,20 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.7.0] - 2026-02-26
+## [1.8.0] - 2026-02-26
 
 ### Added
-- **Interactive Type Histogram**: A new left-side panel showing a real-time distribution of entity types (e.g., "PERSON", "PLANET", "MUTANT").
-- **Global Type Filtering**: Integrated checkboxes in the histogram to hide/show entire entity types across the canvas.
-- **Centralized Color Architecture**: Created `constants.js` as a single source of truth for all category-to-color mappings, ensuring 100% consistency between donuts, nodes, sidebar, and histogram.
+- **Global Search**: A centered search bar with autocomplete allows finding characters and entities directly. Selecting a result automatically adds it to the canvas and centers the camera.
+- **Batch Type Expansion**: Added an "Expand All" button to each entry in the histogram panel, allowing users to expand all visible nodes of a specific type with a single click.
+- **Instant MUI Tooltips**: Replaced native tooltips with Material-UI Tooltips on donut segments. Configured with zero delay and a 12px offset for a premium, responsive feel.
+- **Dynamic Type Labels in Tooltips**: Donut tooltips now show specific entity types and their counts (e.g., "PERSON (3), MUTANT (1)").
+- **Empty Start State**: The application now starts with a clean canvas, encouraging discovery via search.
 
-### Changed
-- **Refined Color Palette**: 
-    - Mutants are now distinctively **Crimson** (#dc143c).
-    - Robots are now **Deepskyblue** (#00bfff).
-- **Code Quality**: Refactored `App.jsx` and `KeyLinesNode.jsx` to eliminate duplicate color logic by using the new central utility functions.
+### Fixed
+- **Backend Search Robustness**: Switched search logic to `CONTAINS` for better character matching across different database versions.
+- **Search Error Handling**: Refactored `main.py` to fix syntax errors and ensure reliable autocomplete responses.
 
-## [1.6.0] - 2026-02-26
+## [1.7.0] - 2026-02-26
 
 ## [1.0.0] - 2026-02-26
 

@@ -1,7 +1,7 @@
 import React, { memo } from 'react';
 import { Handle, Position } from 'reactflow';
 import * as Icons from '@mui/icons-material';
-import { Typography, Box } from '@mui/material';
+import { Typography, Box, Tooltip } from '@mui/material';
 
 import { getHexColor } from './constants';
 
@@ -9,18 +9,15 @@ const KeyLinesNode = ({ data }) => {
   const { label, icon, donut = [], score = 1.0 } = data;
   const IconComponent = Icons[icon] || Icons.HelpOutline;
 
-  // Constants for Donut SVG
   const size = 60;
   const radius = 25;
   const center = size / 2;
   const circumference = 2 * Math.PI * radius;
 
-  // Scale node based on score (0.1 - 1.0)
   const baseScale = 0.8;
   const scale = baseScale + (score * 0.5);
 
   let cumulativeOffset = 0;
-
   const myColor = getHexColor(data.type);
 
   return (
@@ -42,44 +39,58 @@ const KeyLinesNode = ({ data }) => {
             const strokeDashoffset = -cumulativeOffset;
             cumulativeOffset += (value / 100) * circumference;
 
+            const tooltipTitle = segment.type_labels ? segment.type_labels.join(", ") : (segment.types ? segment.types.join(", ") : segment.category?.toUpperCase());
+
             return (
-              <circle
-                key={index}
-                cx={center}
-                cy={center}
-                r={radius}
-                fill="none"
-                stroke={color}
-                strokeWidth="10"
-                strokeDasharray={strokeDasharray}
-                strokeDashoffset={strokeDashoffset}
-                strokeLinecap="butt"
-                style={{ 
-                  cursor: 'pointer', 
-                  transition: 'stroke-width 0.2s',
-                  pointerEvents: 'stroke' 
+              <Tooltip 
+                key={index} 
+                title={tooltipTitle} 
+                arrow 
+                placement="top"
+                enterDelay={0}
+                enterNextDelay={0}
+                slotProps={{
+                  popper: {
+                    modifiers: [
+                      {
+                        name: 'offset',
+                        options: {
+                          offset: [0, 12],
+                        },
+                      },
+                    ],
+                  },
                 }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (data.onSegmentClick && segment.category) {
-                    data.onSegmentClick(segment.category, e); // Event e hinzugefügt
-                  }
-                }}
-                onMouseEnter={(e) => e.target.setAttribute('stroke-width', '14')}
-                onMouseLeave={(e) => e.target.setAttribute('stroke-width', '10')}
-              />
+              >
+                <circle
+                  cx={center}
+                  cy={center}
+                  r={radius}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth="10"
+                  strokeDasharray={strokeDasharray}
+                  strokeDashoffset={strokeDashoffset}
+                  strokeLinecap="butt"
+                  style={{ 
+                    cursor: 'pointer', 
+                    transition: 'stroke-width 0.2s',
+                    pointerEvents: 'stroke' 
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (data.onSegmentClick && segment.category) {
+                      data.onSegmentClick(segment.category, e);
+                    }
+                  }}
+                  onMouseEnter={(e) => e.target.setAttribute('stroke-width', '14')}
+                  onMouseLeave={(e) => e.target.setAttribute('stroke-width', '10')}
+                />
+              </Tooltip>
             );
           })}
-          {/* Default Border if no donut */}
           {donut.length === 0 && (
-            <circle
-              cx={center}
-              cy={center}
-              r={radius}
-              fill="none"
-              stroke="#e0e0e0"
-              strokeWidth="2"
-            />
+            <circle cx={center} cy={center} r={radius} fill="none" stroke="#e0e0e0" strokeWidth="2" />
           )}
         </svg>
 
@@ -102,17 +113,9 @@ const KeyLinesNode = ({ data }) => {
           <IconComponent sx={{ fontSize: 24, color: 'white' }} />
         </Box>
 
-        {/* Handles im Zentrum des Kreises */}
-        <Handle 
-          type="target" 
-          position={Position.Top} 
-          style={{ top: '30px', left: '30px', background: 'transparent', border: 'none', pointerEvents: 'none' }} 
-        />
-        <Handle 
-          type="source" 
-          position={Position.Bottom} 
-          style={{ top: '30px', left: '30px', background: 'transparent', border: 'none', pointerEvents: 'none' }} 
-        />
+        {/* Handles */}
+        <Handle type="target" position={Position.Top} style={{ top: '30px', left: '30px', background: 'transparent', border: 'none', pointerEvents: 'none' }} />
+        <Handle type="source" position={Position.Bottom} style={{ top: '30px', left: '30px', background: 'transparent', border: 'none', pointerEvents: 'none' }} />
       </div>
 
       {/* Label */}

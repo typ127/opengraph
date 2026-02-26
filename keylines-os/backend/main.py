@@ -52,12 +52,36 @@ def process_with_social_algorithms(nodes, edges):
 
     return {"nodes": nodes, "edges": edges}
 
+@app.get("/search")
+async def search(q: str = Query(...)):
+    print(f"Searching for: {q}")
+    query = f"""
+    MATCH (n)
+    WHERE toLower(n.label) CONTAINS toLower('{q}')
+    RETURN n LIMIT 15;
+    """
+    try:
+        results = list(memgraph.execute_and_fetch(query))
+        nodes = []
+        for row in results:
+            node = row['n']
+            props = get_props(node)
+            nodes.append({
+                "id": props.get("id"),
+                "label": props.get("label"),
+                "type": props.get("type"),
+                "icon": props.get("icon")
+            })
+        return nodes
+    except Exception as e:
+        print(f"Search error: {e}")
+        return []
+
 @app.get("/expand/{node_id}")
 async def expand(node_id: str, use_mock: bool = Query(False), filter_category: str = Query(None)):
     if use_mock:
         return process_with_social_algorithms(MOCK_DATA["nodes"], MOCK_DATA["edges"])
 
-    # --- LOOK-AHEAD ABFRAGE ---
     query = f"""
     MATCH (n {{id: '{node_id}'}})
     OPTIONAL MATCH (n)-[e]-(m)
@@ -77,7 +101,6 @@ async def expand(node_id: str, use_mock: bool = Query(False), filter_category: s
     nodes_dict = {}
     edges = []
     
-    # Mapping von Typen zu Kategorien/Farben
     category_map = {
         "person": "blue", "mutant": "crimson",
         "planet": "green",
@@ -95,15 +118,22 @@ async def expand(node_id: str, use_mock: bool = Query(False), filter_category: s
     def calculate_donut(type_list):
         if not type_list: return []
         cat_counts = {}
+        cat_type_details = {}
+        
         for t in type_list:
             if not t: continue
             cat = category_map.get(t.lower(), "other")
             cat_counts[cat] = cat_counts.get(cat, 0) + 1
+            
+            if cat not in cat_type_details: cat_type_details[cat] = {}
+            t_upper = t.upper()
+            cat_type_details[cat][t_upper] = cat_type_details[cat].get(t_upper, 0) + 1
         
         total = sum(cat_counts.values())
         return [
             {
                 "category": cat,
+                "type_labels": [f"{t} ({count})" for t, count in cat_type_details[cat].items()],
                 "value": (count / total) * 100, 
                 "color": color_values[cat]
             }
@@ -115,14 +145,12 @@ async def expand(node_id: str, use_mock: bool = Query(False), filter_category: s
         n_neighbor_types = row.get("n_neighbor_types", [])
         m_neighbor_types = row.get("m_neighbor_types", [])
 
-        # Filter anwenden
         if filter_category and m:
             p_m = get_props(m)
             m_cat = category_map.get(p_m.get("type", "").lower(), "other")
             if m_cat != filter_category:
                 continue
 
-        # Zentrum n verarbeiten
         p_n = get_props(n)
         id_n = p_n.get("id")
         if id_n and id_n not in nodes_dict:
@@ -136,7 +164,6 @@ async def expand(node_id: str, use_mock: bool = Query(False), filter_category: s
                 }
             }
 
-        # Nachbar m verarbeiten
         if m:
             p_m = get_props(m)
             id_m = p_m.get("id")
