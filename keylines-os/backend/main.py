@@ -35,11 +35,15 @@ async def expand(node_id: str, use_mock: bool = Query(False)):
     if use_mock:
         return process_with_social_algorithms(MOCK_DATA["nodes"], MOCK_DATA["edges"])
 
-    # Direkte Abfrage nach dem Knoten und all seinen Nachbarn
+    # --- LOOK-AHEAD ABFRAGE (OHNE DISTINCT FÜR KORREKTE ANZAHL) ---
     query = f"""
     MATCH (n {{id: '{node_id}'}})
     OPTIONAL MATCH (n)-[e]-(m)
-    RETURN n, e, m;
+    WITH n, e, m
+    OPTIONAL MATCH (m)-[]-(mn)
+    WITH n, e, m, collect(mn.type) as m_neighbor_types
+    OPTIONAL MATCH (n)-[]-(nn)
+    RETURN n, collect(nn.type) as n_neighbor_types, e, m, m_neighbor_types;
     """
     
     try:
@@ -51,39 +55,83 @@ async def expand(node_id: str, use_mock: bool = Query(False)):
     nodes_dict = {}
     edges = []
     
+    # Mapping von Typen zu Kategorien/Farben
+    category_map = {
+        "person": "blue", "mutant": "blue",
+        "planet": "green",
+        "robot": "orange", "item": "orange",
+        "entity": "purple", "science": "purple",
+    }
+    
+    color_values = {
+        "blue": "#1976d2",
+        "green": "#4caf50",
+        "orange": "#ff9800",
+        "purple": "#9c27b0",
+        "other": "#9e9e9e"
+    }
+
+    def calculate_donut(type_list):
+        if not type_list: return []
+        
+        # 1. Typen auf Kategorien mappen und zählen
+        cat_counts = {}
+        for t in type_list:
+            if not t: continue
+            cat = category_map.get(t.lower(), "other")
+            cat_counts[cat] = cat_counts.get(cat, 0) + 1
+        
+        total = sum(cat_counts.values())
+        
+        # 2. In Prozent umrechnen
+        return [
+            {"value": (count / total) * 100, "color": color_values[cat]}
+            for cat, count in cat_counts.items()
+        ]
+
     def get_props(ent):
         if not ent: return {}
         return getattr(ent, "properties", getattr(ent, "_properties", {}))
 
     for row in results:
         n, e, m = row.get("n"), row.get("e"), row.get("m")
+        n_neighbor_types = row.get("n_neighbor_types", [])
+        m_neighbor_types = row.get("m_neighbor_types", [])
+
+        # Zentrum n verarbeiten
         p_n = get_props(n)
         id_n = p_n.get("id")
+        if id_n and id_n not in nodes_dict:
+            nodes_dict[id_n] = {
+                "id": id_n, "type": "keylines",
+                "data": {
+                    "label": p_n.get("label"), 
+                    "icon": p_n.get("icon"),
+                    "type": p_n.get("type"),
+                    "donut": calculate_donut(n_neighbor_types)
+                }
+            }
 
-        if id_n:
-            if id_n not in nodes_dict:
-                nodes_dict[id_n] = {
-                    "id": id_n, "type": "keylines",
-                    "data": {"label": p_n.get("label"), "icon": p_n.get("icon"), "donut": p_n.get("donut", [100])}
+        # Nachbar m verarbeiten
+        if m:
+            p_m = get_props(m)
+            id_m = p_m.get("id")
+            if id_m and id_m not in nodes_dict:
+                nodes_dict[id_m] = {
+                    "id": id_m, "type": "keylines",
+                    "data": {
+                        "label": p_m.get("label"), 
+                        "icon": p_m.get("icon"),
+                        "type": p_m.get("type"),
+                        "donut": calculate_donut(m_neighbor_types)
+                    }
                 }
             
-            if m:
-                p_m = get_props(m)
-                id_m = p_m.get("id")
-                if id_m:
-                    if id_m not in nodes_dict:
-                        nodes_dict[id_m] = {
-                            "id": id_m, "type": "keylines",
-                            "data": {"label": p_m.get("label"), "icon": p_m.get("icon"), "donut": p_m.get("donut", [100])}
-                        }
-                    
-                    if e:
-                        edges.append({
-                            "id": f"e-{id_n}-{id_m}",
-                            "source": id_n,
-                            "target": id_m,
-                            "animated": True
-                        })
+            if e and id_n and id_m:
+                edges.append({
+                    "id": f"e-{id_n}-{id_m}",
+                    "source": id_n, "target": id_m, "animated": True
+                })
 
     return process_with_social_algorithms(list(nodes_dict.values()), edges)
 

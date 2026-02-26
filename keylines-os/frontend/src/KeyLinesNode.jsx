@@ -19,6 +19,18 @@ const KeyLinesNode = ({ data }) => {
 
   let cumulativeOffset = 0;
 
+  // Eigene Farbe basierend auf Typ (für den Icon-Hintergrund)
+  const typeColors = {
+    person: "#1976d2",
+    robot: "#ff9800",
+    planet: "#4caf50",
+    item: "#ff9800",
+    mutant: "#1976d2",
+    entity: "#9c27b0",
+    science: "#9c27b0"
+  };
+  const myColor = typeColors[data.type?.toLowerCase()] || "#9e9e9e";
+
   return (
     <Box sx={{ 
       display: 'flex', 
@@ -30,10 +42,13 @@ const KeyLinesNode = ({ data }) => {
       <div style={{ position: 'relative', width: size, height: size }}>
         {/* SVG Donut Ring */}
         <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-          {donut.map((percentage, index) => {
-            const strokeDasharray = `${(percentage / 100) * circumference} ${circumference}`;
+          {donut.map((segment, index) => {
+            const value = typeof segment === 'object' ? segment.value : segment;
+            const color = typeof segment === 'object' ? segment.color : (index === 0 ? '#1976d2' : '#dc004e');
+            
+            const strokeDasharray = `${(value / 100) * circumference} ${circumference}`;
             const strokeDashoffset = -cumulativeOffset;
-            cumulativeOffset += (percentage / 100) * circumference;
+            cumulativeOffset += (value / 100) * circumference;
 
             return (
               <circle
@@ -42,14 +57,15 @@ const KeyLinesNode = ({ data }) => {
                 cy={center}
                 r={radius}
                 fill="transparent"
-                stroke={index === 0 ? '#1976d2' : '#dc004e'}
+                stroke={color}
                 strokeWidth="6"
                 strokeDasharray={strokeDasharray}
                 strokeDashoffset={strokeDashoffset}
+                strokeLinecap="butt"
               />
             );
           })}
-          {/* Background circle if donut is empty */}
+          {/* Default Border if no donut */}
           {donut.length === 0 && (
             <circle
               cx={center}
@@ -57,7 +73,7 @@ const KeyLinesNode = ({ data }) => {
               r={radius}
               fill="transparent"
               stroke="#e0e0e0"
-              strokeWidth="6"
+              strokeWidth="2"
             />
           )}
         </svg>
@@ -71,24 +87,33 @@ const KeyLinesNode = ({ data }) => {
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
-          bgcolor: 'white',
+          bgcolor: myColor,
           borderRadius: '50%',
           width: 34,
           height: 34,
-          boxShadow: 2
+          boxShadow: 2,
+          border: '2px solid white'
         }}>
-          <IconComponent sx={{ fontSize: 24, color: '#444' }} />
+          <IconComponent sx={{ fontSize: 24, color: 'white' }} />
         </Box>
+
+        {/* Handles im Zentrum des Kreises */}
+        <Handle 
+          type="target" 
+          position={Position.Top} 
+          style={{ top: '30px', left: '30px', background: 'transparent', border: 'none', pointerEvents: 'none' }} 
+        />
+        <Handle 
+          type="source" 
+          position={Position.Bottom} 
+          style={{ top: '30px', left: '30px', background: 'transparent', border: 'none', pointerEvents: 'none' }} 
+        />
       </div>
 
       {/* Label */}
-      <Typography variant="caption" sx={{ mt: 1, fontWeight: 'bold', color: '#333' }}>
+      <Typography variant="caption" sx={{ mt: 1, fontWeight: 'bold', color: '#333', textAlign: 'center' }}>
         {label}
       </Typography>
-
-      {/* Handles */}
-      <Handle type="target" position={Position.Top} style={{ visibility: 'hidden' }} />
-      <Handle type="source" position={Position.Bottom} style={{ visibility: 'hidden' }} />
     </Box>
   );
 };
