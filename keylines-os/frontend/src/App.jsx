@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import ReactFlow, { 
   useNodesState, 
   useEdgesState, 
@@ -70,9 +70,10 @@ const getForceLayout = (nodes, edges) => {
   const simulationLinks = edges.map(e => ({ ...e }));
 
   const simulation = d3Force.forceSimulation(simulationNodes)
-    .force('link', d3Force.forceLink(simulationLinks).id(d => d.id).distance(150))
+    .force('link', d3Force.forceLink(simulationLinks).id(d => d.id).distance(150).strength(0.5))
     .force('charge', d3Force.forceManyBody().strength(-500))
     .force('center', d3Force.forceCenter(400, 400))
+    .force('collide', d3Force.forceCollide().radius(50))
     .stop();
 
   for (let i = 0; i < 300; ++i) simulation.tick();
@@ -85,15 +86,15 @@ const getForceLayout = (nodes, edges) => {
 
 // --- HELPER ---
 
-const integrateNewData = (currentNodes, currentEdges, newData, sourceNodeId) => {
+const integrateNewData = (currentNodes, currentEdges, newData, sourceNodeId, expandNodeFn) => {
   const sourceNode = currentNodes.find(n => n.id === sourceNodeId);
-  const sourcePos = sourceNode ? sourceNode.position : { x: 0, y: 0 };
-  const radius = 180;
+  const sourcePos = sourceNode ? sourceNode.position : { x: 400, y: 400 };
+  const initialRadius = 20;
   
   const updatedNodes = currentNodes.map(node => {
     const freshData = newData.nodes.find(n => n.id === node.id);
     if (freshData) {
-      return { ...node, data: { ...node.data, ...freshData.data } };
+      return { ...node, data: { ...node.data, ...freshData.data, onSegmentClick: (cat) => expandNodeFn(node.id, cat) } };
     }
     return node;
   });
@@ -106,9 +107,10 @@ const integrateNewData = (currentNodes, currentEdges, newData, sourceNodeId) => 
         ...newNode,
         type: 'keylines',
         position: {
-          x: sourcePos.x + radius * Math.cos(angle),
-          y: sourcePos.y + radius * Math.sin(angle),
+          x: sourcePos.x + initialRadius * Math.cos(angle),
+          y: sourcePos.y + initialRadius * Math.sin(angle),
         },
+        data: { ...newNode.data, onSegmentClick: (cat) => expandNodeFn(newNode.id, cat) }
       };
     });
 
@@ -122,46 +124,50 @@ const integrateNewData = (currentNodes, currentEdges, newData, sourceNodeId) => 
   };
 };
 
-const initialNodes = [
-  {
-    id: 'n1',
-    type: 'keylines',
-    position: { x: 250, y: 250 },
-    data: { 
-      label: 'Hari Seldon', 
-      icon: 'Hub', 
-      type: 'Person', 
-      donut: [], 
-      score: 1.0 
-    },
-  },
-];
-
 export default function App() {
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [activeLayout, setActiveLayout] = useState('force');
 
-  const expandNode = useCallback(async (nodeId) => {
+  const applyLayout = useCallback((nds, eds, type) => {
+    if (type === 'hierarchical') return getLayoutedElements(nds, eds);
+    if (type === 'circular') return getCircularLayout(nds);
+    if (type === 'force') return getForceLayout(nds, eds);
+    return nds;
+  }, []);
+
+  const expandNode = useCallback(async (nodeId, filterCategory = null) => {
     try {
-      const response = await fetch(`http://localhost:8000/expand/${nodeId}`);
+      let url = `http://localhost:8000/expand/${nodeId}`;
+      if (filterCategory) url += `?filter_category=${filterCategory}`;
+      
+      const response = await fetch(url);
       const data = await response.json();
       
       setNodes((nds) => {
-        const { nodes: integratedNodes } = integrateNewData(nds, edges, data, nodeId);
-        return [...integratedNodes];
+        const { nodes: integratedNodes } = integrateNewData(nds, edges, data, nodeId, expandNode);
+        const allEdges = [...edges, ...data.edges.filter(e => !edges.find(oldE => oldE.id === e.id))];
+        return applyLayout(integratedNodes, allEdges, activeLayout);
       });
 
       setEdges((eds) => {
-        const { edges: integratedEdges } = integrateNewData(nodes, eds, data, nodeId);
+        const { edges: integratedEdges } = integrateNewData(nodes, eds, data, nodeId, expandNode);
         return [...integratedEdges];
       });
     } catch (error) {
       console.error('Error expanding node:', error);
     }
-  }, [nodes, edges, setNodes, setEdges]);
+  }, [nodes, edges, setNodes, setEdges, activeLayout, applyLayout]);
 
-  // Initialer Load nur für den Donut des Startknotens (ohne Expansion)
   useEffect(() => {
+    const startHandler = (cat) => expandNode('n1', cat);
+    setNodes([{
+      id: 'n1',
+      type: 'keylines',
+      position: { x: 400, y: 400 },
+      data: { label: 'Hari Seldon', icon: 'Hub', type: 'Person', donut: [], score: 1.0, onSegmentClick: startHandler },
+    }]);
+    
     const fetchInitialData = async () => {
       try {
         const response = await fetch(`http://localhost:8000/expand/n1`);
@@ -171,7 +177,7 @@ export default function App() {
         if (startNodeData) {
           setNodes((nds) => nds.map(node => 
             node.id === 'n1' 
-              ? { ...node, data: { ...node.data, ...startNodeData.data } }
+              ? { ...node, data: { ...node.data, ...startNodeData.data, onSegmentClick: startHandler } }
               : node
           ));
         }
@@ -180,16 +186,12 @@ export default function App() {
       }
     };
     fetchInitialData();
-  }, [setNodes]);
+  }, []);
 
-  const onLayout = useCallback((type) => {
-    let layoutedNodes = [];
-    if (type === 'hierarchical') layoutedNodes = getLayoutedElements(nodes, edges);
-    if (type === 'circular') layoutedNodes = getCircularLayout(nodes);
-    if (type === 'force') layoutedNodes = getForceLayout(nodes, edges);
-    
-    setNodes([...layoutedNodes]);
-  }, [nodes, edges, setNodes]);
+  const onLayoutClick = useCallback((type) => {
+    setActiveLayout(type);
+    setNodes((nds) => applyLayout(nds, edges, type));
+  }, [edges, setNodes, applyLayout]);
 
   const onNodeClick = useCallback((event, node) => {
     expandNode(node.id);
@@ -213,17 +215,26 @@ export default function App() {
           <Paper elevation={3} sx={{ p: 0.5, m: 2, bgcolor: 'rgba(255,255,255,0.9)', borderRadius: 2 }}>
             <ButtonGroup variant="text" size="small">
               <Tooltip title="Hierarchical Layout" arrow>
-                <IconButton onClick={() => onLayout('hierarchical')} color="primary">
+                <IconButton 
+                  onClick={() => onLayoutClick('hierarchical')} 
+                  color={activeLayout === 'hierarchical' ? 'secondary' : 'primary'}
+                >
                   <TreeIcon />
                 </IconButton>
               </Tooltip>
               <Tooltip title="Circular Layout" arrow>
-                <IconButton onClick={() => onLayout('circular')} color="primary">
+                <IconButton 
+                  onClick={() => onLayoutClick('circular')} 
+                  color={activeLayout === 'circular' ? 'secondary' : 'primary'}
+                >
                   <CircularIcon />
                 </IconButton>
               </Tooltip>
               <Tooltip title="Force Directed Layout" arrow>
-                <IconButton onClick={() => onLayout('force')} color="primary">
+                <IconButton 
+                  onClick={() => onLayoutClick('force')} 
+                  color={activeLayout === 'force' ? 'secondary' : 'primary'}
+                >
                   <ForceIcon />
                 </IconButton>
               </Tooltip>

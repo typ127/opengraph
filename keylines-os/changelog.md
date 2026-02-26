@@ -2,28 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.1.0] - 2026-02-26
+## [1.2.0] - 2026-02-26
 
 ### Added
-- **Predictive Donuts (Look-ahead)**: Backend now calculates neighbor distributions for all returned nodes, allowing donuts to visualize "what's next" before expansion.
-- **Asimov Universe Dataset**: Added CSV-based dataset with 20+ nodes and edges (Seldon, Robots, Planets).
-- **Layout Control Panel**: Integrated UI buttons (Icon-only with tooltips) for:
-    - **Hierarchical Layout** (Dagre)
-    - **Circular Layout**
-    - **Force-Directed Layout** (D3-Force)
-- **Database Management Tools**: Added `import_asimov.py` and `clear_db.py` for easy data lifecycle management.
-- **Auto-Initialization**: App now automatically fetches data for the start node (Hari Seldon) on mount.
+- **Selective Expansion**: Users can now click on specific donut segments (e.g., the "blue" segment) to expand only nodes of that category (e.g., Persons).
+- **Automated Layout System**: The active layout (Force, Hierarchical, or Circular) is now automatically reapplied after every graph expansion to maintain structure.
+- **Visual Layout Feedback**: The active layout button in the toolbar is now highlighted (secondary color).
+- **Interactive Neighbor Donuts**: Neighbors appearing after an expansion now also have interactive donut segments, allowing for deep exploration of the network.
 
 ### Changed
-- **Visual Overhaul**: 
-    - Nodes now feature a solid color fill based on type (Person: Blue, Planet: Green, Tech: Orange, Entity: Purple).
-    - Icons are now white for better contrast.
-    - Edges are now straight lines originating exactly from the center of the nodes.
-- **Donut Logic**: Grouped multiple node types into color categories (e.g., Robot + Item = Orange) for cleaner visualization.
+- **Default Layout**: Set Force-Directed Layout as the default on application start.
+- **Improved Force Physics**: Refined D3-force parameters (charge, distance, collision) for a more stable and aesthetically pleasing organic look.
+- **Smarter Node Spawning**: New nodes now spawn close to their parent, preventing the "exploding graph" effect during expansion.
 
 ### Fixed
-- **Edge Alignment**: Moved handles inside the circular container to prevent offsets caused by long labels.
-- **State Integration**: Improved `integrateNewData` to properly refresh existing node data (labels, icons, donuts) during expansion.
+- **Backend Robustness**: Refactored `main.py` to fix `NameError` and ensure correct function ordering and error handling.
+- **State Consistency**: Fixed a bug where `onSegmentClick` handlers were not correctly assigned to dynamically added neighbor nodes.
+
+## [1.1.0] - 2026-02-26
 
 ## [1.0.0] - 2026-02-26
 

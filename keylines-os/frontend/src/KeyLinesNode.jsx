@@ -62,6 +62,11 @@ const KeyLinesNode = ({ data }) => {
                 strokeDasharray={strokeDasharray}
                 strokeDashoffset={strokeDashoffset}
                 strokeLinecap="butt"
+                style={{ cursor: 'pointer' }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (data.onSegmentClick) data.onSegmentClick(segment.category);
+                }}
               />
             );
           })}

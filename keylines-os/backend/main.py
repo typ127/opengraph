@@ -30,12 +30,34 @@ MOCK_DATA = {
     ]
 }
 
+def get_props(ent):
+    if not ent: return {}
+    return getattr(ent, "properties", getattr(ent, "_properties", {}))
+
+def process_with_social_algorithms(nodes, edges):
+    """Berechnet Centrality Scores mit NetworkX für das Visual-Scaling."""
+    if not nodes:
+        return {"nodes": [], "edges": []}
+
+    G = nx.Graph()
+    for e in edges:
+        G.add_edge(e["source"], e["target"])
+    
+    # Centrality berechnen (Wichtigkeit im Netzwerk)
+    centrality = nx.degree_centrality(G) if len(G.nodes) > 1 else {n["id"]: 1.0 for n in nodes}
+    
+    # Scores normalisieren und zuweisen
+    for node in nodes:
+        node["data"]["score"] = centrality.get(node["id"], 0.1)
+
+    return {"nodes": nodes, "edges": edges}
+
 @app.get("/expand/{node_id}")
-async def expand(node_id: str, use_mock: bool = Query(False)):
+async def expand(node_id: str, use_mock: bool = Query(False), filter_category: str = Query(None)):
     if use_mock:
         return process_with_social_algorithms(MOCK_DATA["nodes"], MOCK_DATA["edges"])
 
-    # --- LOOK-AHEAD ABFRAGE (OHNE DISTINCT FÜR KORREKTE ANZAHL) ---
+    # --- LOOK-AHEAD ABFRAGE ---
     query = f"""
     MATCH (n {{id: '{node_id}'}})
     OPTIONAL MATCH (n)-[e]-(m)
@@ -64,17 +86,12 @@ async def expand(node_id: str, use_mock: bool = Query(False)):
     }
     
     color_values = {
-        "blue": "#1976d2",
-        "green": "#4caf50",
-        "orange": "#ff9800",
-        "purple": "#9c27b0",
-        "other": "#9e9e9e"
+        "blue": "#1976d2", "green": "#4caf50",
+        "orange": "#ff9800", "purple": "#9c27b0", "other": "#9e9e9e"
     }
 
     def calculate_donut(type_list):
         if not type_list: return []
-        
-        # 1. Typen auf Kategorien mappen und zählen
         cat_counts = {}
         for t in type_list:
             if not t: continue
@@ -82,21 +99,26 @@ async def expand(node_id: str, use_mock: bool = Query(False)):
             cat_counts[cat] = cat_counts.get(cat, 0) + 1
         
         total = sum(cat_counts.values())
-        
-        # 2. In Prozent umrechnen
         return [
-            {"value": (count / total) * 100, "color": color_values[cat]}
+            {
+                "category": cat,
+                "value": (count / total) * 100, 
+                "color": color_values[cat]
+            }
             for cat, count in cat_counts.items()
         ]
-
-    def get_props(ent):
-        if not ent: return {}
-        return getattr(ent, "properties", getattr(ent, "_properties", {}))
 
     for row in results:
         n, e, m = row.get("n"), row.get("e"), row.get("m")
         n_neighbor_types = row.get("n_neighbor_types", [])
         m_neighbor_types = row.get("m_neighbor_types", [])
+
+        # Filter anwenden
+        if filter_category and m:
+            p_m = get_props(m)
+            m_cat = category_map.get(p_m.get("type", "").lower(), "other")
+            if m_cat != filter_category:
+                continue
 
         # Zentrum n verarbeiten
         p_n = get_props(n)
@@ -134,21 +156,3 @@ async def expand(node_id: str, use_mock: bool = Query(False)):
                 })
 
     return process_with_social_algorithms(list(nodes_dict.values()), edges)
-
-def process_with_social_algorithms(nodes, edges):
-    """Berechnet Centrality Scores mit NetworkX für das Visual-Scaling."""
-    if not nodes:
-        return {"nodes": [], "edges": []}
-
-    G = nx.Graph()
-    for e in edges:
-        G.add_edge(e["source"], e["target"])
-    
-    # Centrality berechnen (Wichtigkeit im Netzwerk)
-    centrality = nx.degree_centrality(G) if len(G.nodes) > 1 else {n["id"]: 1.0 for n in nodes}
-    
-    # Scores normalisieren und zuweisen
-    for node in nodes:
-        node["data"]["score"] = centrality.get(node["id"], 0.1)
-
-    return {"nodes": nodes, "edges": edges}
