@@ -70,7 +70,7 @@ const KeyLinesNode = ({ data }) => {
                 onClick={(e) => {
                   e.stopPropagation();
                   if (data.onSegmentClick && segment.category) {
-                    data.onSegmentClick(segment.category);
+                    data.onSegmentClick(segment.category, e); // Event e hinzugefügt
                   }
                 }}
                 onMouseEnter={(e) => e.target.setAttribute('stroke-width', '14')}

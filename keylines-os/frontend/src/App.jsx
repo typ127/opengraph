@@ -4,7 +4,8 @@ import ReactFlow, {
   useEdgesState, 
   Background, 
   Controls,
-  Panel
+  Panel,
+  useReactFlow
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import KeyLinesNode from './KeyLinesNode';
@@ -23,7 +24,9 @@ import {
   ListItem, 
   ListItemText,
   ListItemIcon,
-  Avatar
+  Avatar,
+  ListItemAvatar,
+  ListItemSecondaryAction
 } from '@mui/material';
 import { 
   AccountTree as TreeIcon, 
@@ -31,7 +34,9 @@ import {
   ElectricBolt as ForceIcon,
   Close as CloseIcon,
   Info as InfoIcon,
-  Category as TypeIcon
+  Category as TypeIcon,
+  Group as GroupIcon,
+  AddCircleOutline as AddIcon
 } from '@mui/icons-material';
 import * as Icons from '@mui/icons-material';
 
@@ -43,29 +48,20 @@ const nodeTypes = {
 const categoryMap = {
   "person": "blue", "mutant": "blue",
   "planet": "green",
-  "robot": "orange", "item": "orange",
+  "robot": "crimson",
+  "item": "orange",
   "entity": "purple", "science": "purple",
-};
-
-const edgeStyles = {
-  RULES: { stroke: '#d32f2f', strokeWidth: 3 },
-  CONQUERED: { stroke: '#d32f2f', strokeWidth: 3 },
-  PROTECTS: { stroke: '#2e7d32', strokeWidth: 2 },
-  GUIDES: { stroke: '#2e7d32', strokeWidth: 2, strokeDasharray: '5,5' },
-  LIVES_ON: { stroke: '#0288d1', strokeWidth: 1.5 },
-  CREATED: { stroke: '#7b1fa2', strokeWidth: 2 },
-  default: { stroke: '#bdbdbd', strokeWidth: 1.5 }
 };
 
 const typeColors = {
   blue: "#1976d2",
   green: "#4caf50",
+  crimson: "#dc143c",
   orange: "#ff9800",
   purple: "#9c27b0",
   other: "#9e9e9e"
 };
 
-// --- UTILS ---
 const deduplicate = (arr) => {
   const map = new Map();
   arr.forEach(item => map.set(item.id, item));
@@ -73,6 +69,15 @@ const deduplicate = (arr) => {
 };
 
 const getEdgeStyle = (type) => {
+  const edgeStyles = {
+    RULES: { stroke: '#d32f2f', strokeWidth: 3 },
+    CONQUERED: { stroke: '#d32f2f', strokeWidth: 3 },
+    PROTECTS: { stroke: '#2e7d32', strokeWidth: 2 },
+    GUIDES: { stroke: '#2e7d32', strokeWidth: 2, strokeDasharray: '5,5' },
+    LIVES_ON: { stroke: '#0288d1', strokeWidth: 1.5 },
+    CREATED: { stroke: '#7b1fa2', strokeWidth: 2 },
+    default: { stroke: '#bdbdbd', strokeWidth: 1.5 }
+  };
   return edgeStyles[type] || edgeStyles.default;
 };
 
@@ -109,19 +114,14 @@ const getForceLayout = (nodes, edges) => {
   if (nodes.length === 0) return [];
   const simNodes = nodes.map(n => ({ id: n.id, x: n.position.x, y: n.position.y }));
   const nodeIds = new Set(simNodes.map(n => n.id));
-  const simLinks = edges
-    .filter(e => nodeIds.has(e.source) && nodeIds.has(e.target))
-    .map(e => ({ source: e.source, target: e.target }));
-
+  const simLinks = edges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target)).map(e => ({ source: e.source, target: e.target }));
   const simulation = d3Force.forceSimulation(simNodes)
     .force('link', d3Force.forceLink(simLinks).id(d => d.id).distance(150).strength(0.5))
     .force('charge', d3Force.forceManyBody().strength(-500))
     .force('center', d3Force.forceCenter(400, 400))
     .force('collide', d3Force.forceCollide().radius(60))
     .stop();
-
   for (let i = 0; i < 300; ++i) simulation.tick();
-
   return nodes.map(node => {
     const sn = simNodes.find(s => s.id === node.id);
     return { ...node, position: { x: sn ? sn.x : node.position.x, y: sn ? sn.y : node.position.y } };
@@ -146,7 +146,6 @@ const getDescendants = (nodeId, edges, visited = new Set()) => {
 const integrateNewData = (currentNodes, currentEdges, newData, sourceNodeId, expandNodeFn) => {
   const sourceNode = currentNodes.find(n => n.id === sourceNodeId);
   const sourcePos = sourceNode ? sourceNode.position : { x: 400, y: 400 };
-  
   const nodesMap = new Map(currentNodes.map(n => [n.id, n]));
   const edgesMap = new Map(currentEdges.map(e => [e.id, e]));
 
@@ -155,14 +154,14 @@ const integrateNewData = (currentNodes, currentEdges, newData, sourceNodeId, exp
       const existing = nodesMap.get(newNode.id);
       nodesMap.set(newNode.id, {
         ...existing,
-        data: { ...existing.data, ...newNode.data, onSegmentClick: (cat) => expandNodeFn(newNode.id, cat) }
+        data: { ...existing.data, ...newNode.data, onSegmentClick: (cat, e) => expandNodeFn(newNode.id, cat, e) }
       });
     } else {
       nodesMap.set(newNode.id, {
         ...newNode,
         type: 'keylines',
         position: { ...sourcePos },
-        data: { ...newNode.data, onSegmentClick: (cat) => expandNodeFn(newNode.id, cat) }
+        data: { ...newNode.data, onSegmentClick: (cat, e) => expandNodeFn(newNode.id, cat, e) }
       });
     }
   });
@@ -180,17 +179,18 @@ const integrateNewData = (currentNodes, currentEdges, newData, sourceNodeId, exp
     }
   });
 
-  return {
-    nodes: Array.from(nodesMap.values()),
-    edges: Array.from(edgesMap.values())
-  };
+  return { nodes: Array.from(nodesMap.values()), edges: Array.from(edgesMap.values()) };
 };
 
 export default function App() {
+  const { fitView } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [activeLayout, setActiveLayout] = useState('force');
   const [selectedNode, setSelectedNode] = useState(null);
+  const [selectedNodeNeighbors, setSelectedNodeNeighbors] = useState([]);
+  const [previewData, setPreviewData] = useState(null);
+  const [zoomLevel, setZoomLevel] = useState(1);
 
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
@@ -207,9 +207,20 @@ export default function App() {
     return nds;
   }, []);
 
-  const expandNode = useCallback(async (nodeId, filterCategory = null) => {
+  const expandNode = useCallback(async (nodeId, filterCategory = null, event = null) => {
     const currentNodes = nodesRef.current;
     const currentEdges = edgesRef.current;
+
+    if (filterCategory && event?.shiftKey) {
+      try {
+        const response = await fetch(`http://localhost:8000/expand/${nodeId}?filter_category=${filterCategory}`);
+        const data = await response.json();
+        const neighbors = data.nodes.filter(n => n.id !== nodeId);
+        setPreviewData({ category: filterCategory, sourceId: nodeId, nodes: neighbors });
+        setSelectedNode(null);
+        return;
+      } catch (e) { console.error(e); return; }
+    }
 
     if (filterCategory) {
       const directChildren = currentEdges
@@ -230,29 +241,71 @@ export default function App() {
     try {
       const response = await fetch(`http://localhost:8000/expand/${nodeId}${filterCategory ? `?filter_category=${filterCategory}` : ''}`);
       const data = await response.json();
-      
-      const { nodes: integratedNodes, edges: integratedEdges } = integrateNewData(
-        currentNodes, currentEdges, data, nodeId, expandNode
-      );
-
+      const { nodes: integratedNodes, edges: integratedEdges } = integrateNewData(currentNodes, currentEdges, data, nodeId, expandNode);
       setNodes(integratedNodes);
       setEdges(integratedEdges);
-
       setTimeout(() => {
-        setNodes(currentNds => applyLayout(integratedNodes, integratedEdges, activeLayoutRef.current));
+        setNodes(nds => applyLayout(integratedNodes, integratedEdges, activeLayoutRef.current));
+        setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
       }, 50);
     } catch (error) { console.error('Error expanding node:', error); }
-  }, [applyLayout]);
+  }, [applyLayout, fitView]);
+
+  const addSingleNode = useCallback((sourceId, targetNode) => {
+    const currentNodes = nodesRef.current;
+    const currentEdges = edgesRef.current;
+    
+    if (currentNodes.find(n => n.id === targetNode.id)) return;
+
+    const sourceNode = currentNodes.find(n => n.id === sourceId);
+    const sourcePos = sourceNode ? sourceNode.position : { x: 400, y: 400 };
+
+    const newNode = {
+      ...targetNode,
+      type: 'keylines',
+      position: { ...sourcePos },
+      data: { ...targetNode.data, onSegmentClick: (cat, e) => expandNode(targetNode.id, cat, e) }
+    };
+
+    const newEdge = {
+      id: `e-${sourceId}-manual-${targetNode.id}`,
+      source: sourceId,
+      target: targetNode.id,
+      animated: true,
+      style: getEdgeStyle('default')
+    };
+
+    const nextNodes = deduplicate([...currentNodes, newNode]);
+    const nextEdges = deduplicate([...currentEdges, newEdge]);
+
+    setNodes(nextNodes);
+    setEdges(nextEdges);
+
+    setTimeout(() => {
+      setNodes(nds => applyLayout(nds, nextEdges, activeLayoutRef.current));
+      setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
+    }, 50);
+  }, [expandNode, applyLayout, fitView]);
+
+  const openDetails = useCallback(async (node) => {
+    setSelectedNode(node);
+    setPreviewData(null);
+    try {
+      const response = await fetch(`http://localhost:8000/expand/${node.id}`);
+      const data = await response.json();
+      const neighbors = data.nodes.filter(n => n.id !== node.id);
+      setSelectedNodeNeighbors(neighbors);
+    } catch (e) { console.error(e); }
+  }, []);
 
   useEffect(() => {
-    const startHandler = (cat) => expandNode('n1', cat);
+    const startHandler = (cat, e) => expandNode('n1', cat, e);
     setNodes([{
       id: 'n1',
       type: 'keylines',
       position: { x: 400, y: 400 },
       data: { label: 'Hari Seldon', icon: 'Hub', type: 'Person', donut: [], score: 1.0, onSegmentClick: startHandler },
     }]);
-    
     fetch(`http://localhost:8000/expand/n1`).then(res => res.json()).then(data => {
       const startNodeData = data.nodes.find(n => n.id === 'n1');
       if (startNodeData) {
@@ -266,30 +319,34 @@ export default function App() {
   const onLayoutClick = (type) => {
     setActiveLayout(type);
     setNodes(nds => applyLayout(nds, edgesRef.current, type));
+    setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
+  };
+
+  const closeSidebar = () => {
+    setSelectedNode(null);
+    setPreviewData(null);
+    setSelectedNodeNeighbors([]);
   };
 
   const IconComponent = selectedNode ? Icons[selectedNode.data.icon] || Icons.HelpOutline : null;
-  const sidebarColor = selectedNode ? (typeColors[categoryMap[selectedNode.data.type?.toLowerCase()]] || typeColors.other) : typeColors.other;
+  const sidebarColor = selectedNode ? (typeColors[categoryMap[selectedNode.data.type?.toLowerCase()]] || typeColors.other) : 
+                       previewData ? typeColors[previewData.category] : typeColors.other;
 
   return (
-    <Box sx={{ 
-      width: '100vw', 
-      height: '100vh', 
-      background: '#f5f5f5', 
-      display: 'flex',
-      fontFamily: '"Open Sans", sans-serif' 
-    }}>
+    <Box sx={{ width: '100vw', height: '100vh', background: '#f5f5f5', display: 'flex', fontFamily: '"Open Sans", sans-serif' }}>
       <style>{`
         .react-flow__node { transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); will-change: transform; }
         .react-flow__node.dragging { transition: none !important; }
+        .react-flow__edge-textwrapper { transition: opacity 0.3s ease; opacity: ${zoomLevel > 0.6 ? 1 : 0}; }
       `}</style>
       <ReactFlow
         nodes={nodes}
-        edges={edges}
+        edges={edges.map(edge => ({...edge, label: zoomLevel > 0.6 ? (edge.data?.type?.replace("_", " ").toLowerCase()) : ""}))}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onNodeClick={(e, n) => { setSelectedNode(n); expandNode(n.id); }}
-        onPaneClick={() => setSelectedNode(null)}
+        onNodeClick={(e, n) => e.shiftKey ? openDetails(n) : expandNode(n.id)}
+        onPaneClick={closeSidebar}
+        onMove={(e, v) => setZoomLevel(v.zoom)}
         nodeTypes={nodeTypes}
         defaultEdgeOptions={{ type: 'straight' }}
         fitView
@@ -307,26 +364,91 @@ export default function App() {
         </Panel>
       </ReactFlow>
 
-      <Drawer anchor="right" open={!!selectedNode} variant="persistent" sx={{ width: 350, '& .MuiDrawer-paper': { width: 350, borderLeft: `4px solid ${sidebarColor}` } }}>
-        {selectedNode && (
-          <Box sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-              <Avatar sx={{ bgcolor: sidebarColor, width: 64, height: 64 }}><IconComponent sx={{ fontSize: 32 }} /></Avatar>
-              <IconButton onClick={() => setSelectedNode(null)}><CloseIcon /></IconButton>
-            </Box>
-            <Typography variant="h5" sx={{ fontWeight: 'bold' }}>{selectedNode.data.label}</Typography>
-            <Typography variant="subtitle1" color="text.secondary">ID: {selectedNode.id}</Typography>
-            <Divider sx={{ my: 2 }} />
-            <List>
-              <ListItem sx={{ px: 0 }}><ListItemIcon><TypeIcon /></ListItemIcon><ListItemText primary="Type" secondary={selectedNode.data.type} /></ListItem>
-              <ListItem sx={{ px: 0 }}><ListItemIcon><Icons.Info /></ListItemIcon><ListItemText primary="Importance" secondary={(selectedNode.data.score * 100).toFixed(1) + "%"} /></ListItem>
-            </List>
-            <Box sx={{ mt: 4, p: 2, bgcolor: 'action.hover', borderRadius: 2 }}>
-              <Typography variant="caption" color="text.secondary">DATABASE DATA</Typography>
-              <pre style={{ fontSize: '11px', overflow: 'auto' }}>{JSON.stringify(selectedNode.data, (k, v) => k === 'onSegmentClick' ? undefined : v, 2)}</pre>
-            </Box>
+      {/* Sidebar */}
+      <Drawer anchor="right" open={!!selectedNode || !!previewData} onClose={closeSidebar} variant="temporary" sx={{ width: 350, '& .MuiDrawer-paper': { width: 350, borderLeft: `4px solid ${sidebarColor}`, boxShadow: -5 } }}>
+        <Box sx={{ p: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+            <Avatar sx={{ bgcolor: sidebarColor, width: 64, height: 64 }}>
+              {selectedNode ? <IconComponent sx={{ fontSize: 32 }} /> : <GroupIcon sx={{ fontSize: 32 }} />}
+            </Avatar>
+            <IconButton onClick={closeSidebar}><CloseIcon /></IconButton>
           </Box>
-        )}
+
+          {selectedNode && (
+            <>
+              <Typography variant="h5" sx={{ fontWeight: 'bold' }}>{selectedNode.data.label}</Typography>
+              <Typography variant="subtitle1" color="text.secondary">ID: {selectedNode.id}</Typography>
+              <Divider sx={{ my: 2 }} />
+              
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>ALL NEIGHBORS:</Typography>
+              <List>
+                {selectedNodeNeighbors.length === 0 && <Typography variant="body2" color="text.secondary">Loading neighbors...</Typography>}
+                {[...selectedNodeNeighbors]
+                  .sort((a, b) => (a.data.type || "").localeCompare(b.data.type || ""))
+                  .map(node => {
+                    const NodeIcon = Icons[node.data.icon] || Icons.HelpOutline;
+                  const isAlreadyOnCanvas = nodes.some(n => n.id === node.id);
+                  return (
+                    <ListItem key={node.id} sx={{ px: 0 }}>
+                      <ListItemAvatar>
+                        <Avatar sx={{ bgcolor: typeColors[categoryMap[node.data.type?.toLowerCase()]] || typeColors.other, width: 32, height: 32 }}>
+                          <NodeIcon sx={{ fontSize: 18 }} />
+                        </Avatar>
+                      </ListItemAvatar>
+                      <ListItemText primary={node.data.label} secondary={node.data.type} />
+                      <ListItemSecondaryAction>
+                        <IconButton 
+                          edge="end" 
+                          color="primary" 
+                          disabled={isAlreadyOnCanvas}
+                          onClick={() => addSingleNode(selectedNode.id, node)}
+                        >
+                          {isAlreadyOnCanvas ? <Icons.Check /> : <AddIcon />}
+                        </IconButton>
+                      </ListItemSecondaryAction>
+                    </ListItem>
+                  );
+                })}
+              </List>
+            </>
+          )}
+
+          {previewData && (
+            <>
+              <Typography variant="h5" sx={{ fontWeight: 'bold' }}>{previewData.category.toUpperCase()} Group</Typography>
+              <Typography variant="subtitle1" color="text.secondary">{previewData.nodes.length} Neighbors found</Typography>
+              <Divider sx={{ my: 2 }} />
+              <List>
+                {[...previewData.nodes]
+                  .sort((a, b) => (a.data.type || "").localeCompare(b.data.type || ""))
+                  .map(node => {
+                    const NodeIcon = Icons[node.data.icon] || Icons.HelpOutline;
+                  const isAlreadyOnCanvas = nodes.some(n => n.id === node.id);
+                  return (
+                    <ListItem key={node.id} sx={{ px: 0 }}>
+                      <ListItemAvatar>
+                        <Avatar sx={{ bgcolor: sidebarColor, width: 32, height: 32 }}>
+                          <NodeIcon sx={{ fontSize: 18 }} />
+                        </Avatar>
+                      </ListItemAvatar>
+                      <ListItemText primary={node.data.label} secondary={node.data.type} />
+                      <ListItemSecondaryAction>
+                        <IconButton 
+                          edge="end" 
+                          color="primary" 
+                          disabled={isAlreadyOnCanvas}
+                          onClick={() => addSingleNode(previewData.sourceId, node)}
+                        >
+                          {isAlreadyOnCanvas ? <Icons.Check /> : <AddIcon />}
+                        </IconButton>
+                      </ListItemSecondaryAction>
+                    </ListItem>
+                  );
+                })}
+              </List>
+            </>
+          )}
+        </Box>
       </Drawer>
     </Box>
   );
