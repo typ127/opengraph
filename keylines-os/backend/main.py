@@ -150,9 +150,30 @@ async def expand(node_id: str, use_mock: bool = Query(False), filter_category: s
                 }
             
             if e and id_n and id_m:
+                # Eindeutige ID durch Einbeziehung des Typs
+                # Bei GQLAlchemy/Memgraph ist der Typ oft in '_type' oder über 'type(e)' in Cypher erreichbar
+                # Da wir hier das Objekt haben, nutzen wir die sicherste Methode:
+                rel_type = "RELATES_TO"
+                if hasattr(e, "_type"):
+                    rel_type = e._type
+                elif hasattr(e, "type"):
+                    rel_type = e.type
+                
                 edges.append({
-                    "id": f"e-{id_n}-{id_m}",
-                    "source": id_n, "target": id_m, "animated": True
+                    "id": f"e-{id_n}-{rel_type}-{id_m}",
+                    "source": id_n, "target": id_m, 
+                    "label": rel_type.replace("_", " ").lower(),
+                    "data": {"type": rel_type},
+                    "animated": rel_type in ["TRAVELS_WITH", "CONNECTS", "FOLLOWS"]
                 })
 
-    return process_with_social_algorithms(list(nodes_dict.values()), edges)
+    # De-duplizierung der Ergebnisse (da die Query durch mn-Joins Zeilen verdoppelt)
+    unique_nodes = list(nodes_dict.values())
+    unique_edges = []
+    seen_edge_ids = set()
+    for e in edges:
+        if e["id"] not in seen_edge_ids:
+            unique_edges.append(e)
+            seen_edge_ids.add(e["id"])
+
+    return process_with_social_algorithms(unique_nodes, unique_edges)

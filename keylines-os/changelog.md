@@ -2,18 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.3.0] - 2026-02-26
+## [1.5.0] - 2026-02-26
 
 ### Added
-- **Donut Toggle Logic**: Donut segments now act as toggles. Clicking a segment once expands its category; clicking it again recursively collapses that entire branch.
-- **Advanced Hitbox Precision**: Optimized SVG donuts with `pointer-events: stroke` and `fill: none`, ensuring that clicks and hover effects only trigger on the actual visible ring segments.
-- **Recursive Cleanup**: Implementing a `getDescendants` helper to ensure that collapsing a node or segment also removes all subsequent "child-of-child" nodes, keeping the canvas clean.
+- **Semantic Edge Visualization**: Connections now feature labels indicating their type (e.g., "lives on", "mentors").
+- **Smart Edge Styling**:
+    - Power/Authority relationships (`RULES`, `CONQUERED`) are highlighted in **Red**.
+    - Protective relationships (`PROTECTS`, `GUIDES`) are highlighted in **Green**.
+    - Affiliation/Origin (`LIVES_ON`) is highlighted in **Blue**.
+    - Dynamic animation for traveling/connecting relationships.
+- **Typography Overhaul**: Migrated the entire application UI and graph labels to the **Open Sans** font family for a cleaner, modern look.
 
-### Fixed
-- **Interaction Overlap**: Resolved a bug where inner transparent areas of the donut segments blocked clicks to lower segments.
-- **State Reliability**: Integrated `useRef` for nodes and edges to ensure the expansion/collapse logic always operates on the most current graph state.
+### Changed
+- **Improved Integration Map**: Refactored the internal data merging to use Map-based deduplication, providing a 100% guarantee against duplicate keys.
+- **Backend Edge Logic**: Enhanced relationship type extraction to reliably fetch Cypher types (e.g., `LIVES_ON`) from Memgraph objects.
 
-## [1.2.0] - 2026-02-26
+## [1.4.0] - 2026-02-26
 
 ## [1.0.0] - 2026-02-26
 

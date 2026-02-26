@@ -10,17 +10,36 @@ import 'reactflow/dist/style.css';
 import KeyLinesNode from './KeyLinesNode';
 import dagre from 'dagre';
 import * as d3Force from 'd3-force';
-import { ButtonGroup, IconButton, Paper, Tooltip } from '@mui/material';
+import { 
+  ButtonGroup, 
+  IconButton, 
+  Paper, 
+  Tooltip, 
+  Drawer, 
+  Box, 
+  Typography, 
+  Divider, 
+  List, 
+  ListItem, 
+  ListItemText,
+  ListItemIcon,
+  Avatar
+} from '@mui/material';
 import { 
   AccountTree as TreeIcon, 
   BlurCircular as CircularIcon, 
-  ElectricBolt as ForceIcon 
+  ElectricBolt as ForceIcon,
+  Close as CloseIcon,
+  Info as InfoIcon,
+  Category as TypeIcon
 } from '@mui/icons-material';
+import * as Icons from '@mui/icons-material';
 
 const nodeTypes = {
   keylines: KeyLinesNode,
 };
 
+// --- CONFIG ---
 const categoryMap = {
   "person": "blue", "mutant": "blue",
   "planet": "green",
@@ -28,23 +47,57 @@ const categoryMap = {
   "entity": "purple", "science": "purple",
 };
 
-// --- LAYOUT ENGINES ---
+const edgeStyles = {
+  RULES: { stroke: '#d32f2f', strokeWidth: 3 },
+  CONQUERED: { stroke: '#d32f2f', strokeWidth: 3 },
+  PROTECTS: { stroke: '#2e7d32', strokeWidth: 2 },
+  GUIDES: { stroke: '#2e7d32', strokeWidth: 2, strokeDasharray: '5,5' },
+  LIVES_ON: { stroke: '#0288d1', strokeWidth: 1.5 },
+  CREATED: { stroke: '#7b1fa2', strokeWidth: 2 },
+  default: { stroke: '#bdbdbd', strokeWidth: 1.5 }
+};
 
+const typeColors = {
+  blue: "#1976d2",
+  green: "#4caf50",
+  orange: "#ff9800",
+  purple: "#9c27b0",
+  other: "#9e9e9e"
+};
+
+// --- UTILS ---
+const deduplicate = (arr) => {
+  const map = new Map();
+  arr.forEach(item => map.set(item.id, item));
+  return Array.from(map.values());
+};
+
+const getEdgeStyle = (type) => {
+  return edgeStyles[type] || edgeStyles.default;
+};
+
+// --- LAYOUT ENGINES ---
 const getLayoutedElements = (nodes, edges, direction = 'TB') => {
+  if (nodes.length === 0) return [];
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
   dagreGraph.setGraph({ rankdir: direction });
   nodes.forEach((node) => dagreGraph.setNode(node.id, { width: 150, height: 100 }));
-  edges.forEach((edge) => dagreGraph.setEdge(edge.source, edge.target));
+  edges.forEach((edge) => {
+    if (dagreGraph.hasNode(edge.source) && dagreGraph.hasNode(edge.target)) {
+      dagreGraph.setEdge(edge.source, edge.target);
+    }
+  });
   dagre.layout(dagreGraph);
   return nodes.map((node) => {
-    const nodeWithPosition = dagreGraph.node(node.id);
-    return { ...node, position: { x: nodeWithPosition.x - 75, y: nodeWithPosition.y - 50 } };
+    const pos = dagreGraph.node(node.id);
+    return { ...node, position: { x: pos ? pos.x - 75 : node.position.x, y: pos ? pos.y - 50 : node.position.y } };
   });
 };
 
 const getCircularLayout = (nodes) => {
-  const radius = nodes.length * 40 + 100;
+  if (nodes.length === 0) return [];
+  const radius = Math.max(200, nodes.length * 40);
   const center = { x: 400, y: 400 };
   return nodes.map((node, index) => {
     const angle = (index / nodes.length) * 2 * Math.PI;
@@ -53,26 +106,39 @@ const getCircularLayout = (nodes) => {
 };
 
 const getForceLayout = (nodes, edges) => {
-  const simulationNodes = nodes.map(n => ({ ...n, x: n.position.x, y: n.position.y }));
-  const simulationLinks = edges.map(e => ({ ...e }));
-  const simulation = d3Force.forceSimulation(simulationNodes)
-    .force('link', d3Force.forceLink(simulationLinks).id(d => d.id).distance(150).strength(0.5))
+  if (nodes.length === 0) return [];
+  const simNodes = nodes.map(n => ({ id: n.id, x: n.position.x, y: n.position.y }));
+  const nodeIds = new Set(simNodes.map(n => n.id));
+  const simLinks = edges
+    .filter(e => nodeIds.has(e.source) && nodeIds.has(e.target))
+    .map(e => ({ source: e.source, target: e.target }));
+
+  const simulation = d3Force.forceSimulation(simNodes)
+    .force('link', d3Force.forceLink(simLinks).id(d => d.id).distance(150).strength(0.5))
     .force('charge', d3Force.forceManyBody().strength(-500))
     .force('center', d3Force.forceCenter(400, 400))
-    .force('collide', d3Force.forceCollide().radius(50))
+    .force('collide', d3Force.forceCollide().radius(60))
     .stop();
+
   for (let i = 0; i < 300; ++i) simulation.tick();
-  return simulationNodes.map(node => ({ ...nodes.find(n => n.id === node.id), position: { x: node.x, y: node.y } }));
+
+  return nodes.map(node => {
+    const sn = simNodes.find(s => s.id === node.id);
+    return { ...node, position: { x: sn ? sn.x : node.position.x, y: sn ? sn.y : node.position.y } };
+  });
 };
 
 // --- HELPER ---
-
-const getDescendants = (nodeId, edges) => {
-  let descendants = [];
+const getDescendants = (nodeId, edges, visited = new Set()) => {
+  if (visited.has(nodeId)) return [];
+  visited.add(nodeId);
   const children = edges.filter(edge => edge.source === nodeId).map(edge => edge.target);
+  let descendants = [];
   children.forEach(childId => {
-    descendants.push(childId);
-    descendants = [...descendants, ...getDescendants(childId, edges)];
+    if (!visited.has(childId)) {
+      descendants.push(childId);
+      descendants = [...descendants, ...getDescendants(childId, edges, visited)];
+    }
   });
   return Array.from(new Set(descendants));
 };
@@ -80,43 +146,59 @@ const getDescendants = (nodeId, edges) => {
 const integrateNewData = (currentNodes, currentEdges, newData, sourceNodeId, expandNodeFn) => {
   const sourceNode = currentNodes.find(n => n.id === sourceNodeId);
   const sourcePos = sourceNode ? sourceNode.position : { x: 400, y: 400 };
-  const initialRadius = 10;
   
-  const updatedNodes = currentNodes.map(node => {
-    const freshData = newData.nodes.find(n => n.id === node.id);
-    if (freshData) {
-      return { ...node, data: { ...node.data, ...freshData.data, onSegmentClick: (cat) => expandNodeFn(node.id, cat) } };
-    }
-    return node;
-  });
+  const nodesMap = new Map(currentNodes.map(n => [n.id, n]));
+  const edgesMap = new Map(currentEdges.map(e => [e.id, e]));
 
-  const reallyNewNodes = newData.nodes
-    .filter(newNode => !currentNodes.find(n => n.id === newNode.id))
-    .map((newNode, index, array) => {
-      const angle = (index / array.length) * 2 * Math.PI;
-      return {
+  newData.nodes.forEach(newNode => {
+    if (nodesMap.has(newNode.id)) {
+      const existing = nodesMap.get(newNode.id);
+      nodesMap.set(newNode.id, {
+        ...existing,
+        data: { ...existing.data, ...newNode.data, onSegmentClick: (cat) => expandNodeFn(newNode.id, cat) }
+      });
+    } else {
+      nodesMap.set(newNode.id, {
         ...newNode,
         type: 'keylines',
-        position: { x: sourcePos.x + initialRadius * Math.cos(angle), y: sourcePos.y + initialRadius * Math.sin(angle) },
+        position: { ...sourcePos },
         data: { ...newNode.data, onSegmentClick: (cat) => expandNodeFn(newNode.id, cat) }
-      };
-    });
+      });
+    }
+  });
 
-  const newEdges = newData.edges.filter(newEdge => !currentEdges.find(e => e.id === newEdge.id));
+  newData.edges.forEach(newEdge => {
+    if (!edgesMap.has(newEdge.id)) {
+      edgesMap.set(newEdge.id, {
+        ...newEdge,
+        style: getEdgeStyle(newEdge.data?.type),
+        labelStyle: { fill: '#666', fontWeight: 600, fontSize: '10px', fontFamily: '"Open Sans", sans-serif' },
+        labelBgStyle: { fill: '#f5f5f5', fillOpacity: 0.8 },
+        labelBgPadding: [4, 2],
+        labelBgBorderRadius: 4
+      });
+    }
+  });
 
-  return { nodes: [...updatedNodes, ...reallyNewNodes], edges: [...currentEdges, ...newEdges] };
+  return {
+    nodes: Array.from(nodesMap.values()),
+    edges: Array.from(edgesMap.values())
+  };
 };
 
 export default function App() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [activeLayout, setActiveLayout] = useState('force');
+  const [selectedNode, setSelectedNode] = useState(null);
 
-  // Refs um Closure-Probleme zu vermeiden
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
+  const activeLayoutRef = useRef(activeLayout);
+
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   useEffect(() => { edgesRef.current = edges; }, [edges]);
+  useEffect(() => { activeLayoutRef.current = activeLayout; }, [activeLayout]);
 
   const applyLayout = useCallback((nds, eds, type) => {
     if (type === 'hierarchical') return getLayoutedElements(nds, eds);
@@ -136,48 +218,31 @@ export default function App() {
         .filter(n => n && categoryMap[n.data.type?.toLowerCase()] === filterCategory);
 
       if (directChildren.length > 0) {
-        // --- COLLAPSE MODE ---
         const childIds = directChildren.map(n => n.id);
-        let allToCollapse = [...childIds];
-        childIds.forEach(id => { allToCollapse = [...allToCollapse, ...getDescendants(id, currentEdges)]; });
-        const uniqueToCollapse = Array.from(new Set(allToCollapse));
-
-        setNodes(nds => nds.filter(n => !uniqueToCollapse.includes(n.id)));
-        setEdges(eds => eds.filter(e => !uniqueToCollapse.includes(e.source) && !uniqueToCollapse.includes(e.target)));
+        const allToCollapse = new Set(childIds);
+        childIds.forEach(id => getDescendants(id, currentEdges).forEach(d => allToCollapse.add(d)));
+        setNodes(nds => nds.filter(n => !allToCollapse.has(n.id)));
+        setEdges(eds => eds.filter(e => !allToCollapse.has(e.source) && !allToCollapse.has(e.target)));
         return;
       }
     }
 
-    // --- EXPAND MODE ---
     try {
-      let url = `http://localhost:8000/expand/${nodeId}`;
-      if (filterCategory) url += `?filter_category=${filterCategory}`;
-      
-      const response = await fetch(url);
+      const response = await fetch(`http://localhost:8000/expand/${nodeId}${filterCategory ? `?filter_category=${filterCategory}` : ''}`);
       const data = await response.json();
       
-      let nextNodes, nextEdges;
-      
-      setNodes((nds) => {
-        const integrated = integrateNewData(nds, currentEdges, data, nodeId, expandNode);
-        nextNodes = integrated.nodes;
-        return [...nextNodes];
-      });
+      const { nodes: integratedNodes, edges: integratedEdges } = integrateNewData(
+        currentNodes, currentEdges, data, nodeId, expandNode
+      );
 
-      setEdges((eds) => {
-        const integrated = integrateNewData(currentNodes, eds, data, nodeId, expandNode);
-        nextEdges = integrated.edges;
-        return [...nextEdges];
-      });
+      setNodes(integratedNodes);
+      setEdges(integratedEdges);
 
       setTimeout(() => {
-        setNodes((nds) => applyLayout(nds, nextEdges, activeLayout));
+        setNodes(currentNds => applyLayout(integratedNodes, integratedEdges, activeLayoutRef.current));
       }, 50);
-
-    } catch (error) {
-      console.error('Error expanding node:', error);
-    }
-  }, [activeLayout, applyLayout]);
+    } catch (error) { console.error('Error expanding node:', error); }
+  }, [applyLayout]);
 
   useEffect(() => {
     const startHandler = (cat) => expandNode('n1', cat);
@@ -188,35 +253,34 @@ export default function App() {
       data: { label: 'Hari Seldon', icon: 'Hub', type: 'Person', donut: [], score: 1.0, onSegmentClick: startHandler },
     }]);
     
-    const fetchInitialData = async () => {
-      try {
-        const response = await fetch(`http://localhost:8000/expand/n1`);
-        const data = await response.json();
-        const startNodeData = data.nodes.find(n => n.id === 'n1');
-        if (startNodeData) {
-          setNodes((nds) => nds.map(node => 
-            node.id === 'n1' ? { ...node, data: { ...node.data, ...startNodeData.data, onSegmentClick: startHandler } } : node
-          ));
-        }
-      } catch (error) { console.error('Error loading initial donut:', error); }
-    };
-    fetchInitialData();
-  }, [expandNode, setNodes]);
+    fetch(`http://localhost:8000/expand/n1`).then(res => res.json()).then(data => {
+      const startNodeData = data.nodes.find(n => n.id === 'n1');
+      if (startNodeData) {
+        setNodes(nds => nds.map(node => 
+          node.id === 'n1' ? { ...node, data: { ...node.data, ...startNodeData.data, onSegmentClick: startHandler } } : node
+        ));
+      }
+    });
+  }, []);
 
-  const onLayoutClick = useCallback((type) => {
+  const onLayoutClick = (type) => {
     setActiveLayout(type);
-    setNodes((nds) => applyLayout(nds, edgesRef.current, type));
-  }, [applyLayout, setNodes]);
+    setNodes(nds => applyLayout(nds, edgesRef.current, type));
+  };
 
-  const onNodeClick = useCallback((event, node) => { expandNode(node.id); }, [expandNode]);
+  const IconComponent = selectedNode ? Icons[selectedNode.data.icon] || Icons.HelpOutline : null;
+  const sidebarColor = selectedNode ? (typeColors[categoryMap[selectedNode.data.type?.toLowerCase()]] || typeColors.other) : typeColors.other;
 
   return (
-    <div style={{ width: '100vw', height: '100vh', background: '#f5f5f5' }}>
+    <Box sx={{ 
+      width: '100vw', 
+      height: '100vh', 
+      background: '#f5f5f5', 
+      display: 'flex',
+      fontFamily: '"Open Sans", sans-serif' 
+    }}>
       <style>{`
-        .react-flow__node {
-          transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
-          will-change: transform;
-        }
+        .react-flow__node { transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); will-change: transform; }
         .react-flow__node.dragging { transition: none !important; }
       `}</style>
       <ReactFlow
@@ -224,7 +288,8 @@ export default function App() {
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onNodeClick={onNodeClick}
+        onNodeClick={(e, n) => { setSelectedNode(n); expandNode(n.id); }}
+        onPaneClick={() => setSelectedNode(null)}
         nodeTypes={nodeTypes}
         defaultEdgeOptions={{ type: 'straight' }}
         fitView
@@ -234,19 +299,35 @@ export default function App() {
         <Panel position="top-right">
           <Paper elevation={3} sx={{ p: 0.5, m: 2, bgcolor: 'rgba(255,255,255,0.9)', borderRadius: 2 }}>
             <ButtonGroup variant="text" size="small">
-              <Tooltip title="Hierarchical Layout" arrow>
-                <IconButton onClick={() => onLayoutClick('hierarchical')} color={activeLayout === 'hierarchical' ? 'secondary' : 'primary'}><TreeIcon /></IconButton>
-              </Tooltip>
-              <Tooltip title="Circular Layout" arrow>
-                <IconButton onClick={() => onLayoutClick('circular')} color={activeLayout === 'circular' ? 'secondary' : 'primary'}><CircularIcon /></IconButton>
-              </Tooltip>
-              <Tooltip title="Force Directed Layout" arrow>
-                <IconButton onClick={() => onLayoutClick('force')} color={activeLayout === 'force' ? 'secondary' : 'primary'}><ForceIcon /></IconButton>
-              </Tooltip>
+              <Tooltip title="Hierarchical"><IconButton onClick={() => onLayoutClick('hierarchical')} color={activeLayout === 'hierarchical' ? 'secondary' : 'primary'}><TreeIcon /></IconButton></Tooltip>
+              <Tooltip title="Circular"><IconButton onClick={() => onLayoutClick('circular')} color={activeLayout === 'circular' ? 'secondary' : 'primary'}><CircularIcon /></IconButton></Tooltip>
+              <Tooltip title="Force"><IconButton onClick={() => onLayoutClick('force')} color={activeLayout === 'force' ? 'secondary' : 'primary'}><ForceIcon /></IconButton></Tooltip>
             </ButtonGroup>
           </Paper>
         </Panel>
       </ReactFlow>
-    </div>
+
+      <Drawer anchor="right" open={!!selectedNode} variant="persistent" sx={{ width: 350, '& .MuiDrawer-paper': { width: 350, borderLeft: `4px solid ${sidebarColor}` } }}>
+        {selectedNode && (
+          <Box sx={{ p: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+              <Avatar sx={{ bgcolor: sidebarColor, width: 64, height: 64 }}><IconComponent sx={{ fontSize: 32 }} /></Avatar>
+              <IconButton onClick={() => setSelectedNode(null)}><CloseIcon /></IconButton>
+            </Box>
+            <Typography variant="h5" sx={{ fontWeight: 'bold' }}>{selectedNode.data.label}</Typography>
+            <Typography variant="subtitle1" color="text.secondary">ID: {selectedNode.id}</Typography>
+            <Divider sx={{ my: 2 }} />
+            <List>
+              <ListItem sx={{ px: 0 }}><ListItemIcon><TypeIcon /></ListItemIcon><ListItemText primary="Type" secondary={selectedNode.data.type} /></ListItem>
+              <ListItem sx={{ px: 0 }}><ListItemIcon><Icons.Info /></ListItemIcon><ListItemText primary="Importance" secondary={(selectedNode.data.score * 100).toFixed(1) + "%"} /></ListItem>
+            </List>
+            <Box sx={{ mt: 4, p: 2, bgcolor: 'action.hover', borderRadius: 2 }}>
+              <Typography variant="caption" color="text.secondary">DATABASE DATA</Typography>
+              <pre style={{ fontSize: '11px', overflow: 'auto' }}>{JSON.stringify(selectedNode.data, (k, v) => k === 'onSegmentClick' ? undefined : v, 2)}</pre>
+            </Box>
+          </Box>
+        )}
+      </Drawer>
+    </Box>
   );
 }
