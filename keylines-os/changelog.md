@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.11.0] - 2026-02-27
+
+### Added
+- **Node Deletion**: Introduced a "Remove from Canvas" button at the bottom of the Drawer, allowing users to prune specific nodes and their connected edges from the current exploration.
+
+### Changed
+- **Immersive Viewport**: Removed scrollbars from the main window and applied `overflow: hidden` to provide a true "Operating System" fullscreen experience.
+- **Restored Branding**: Reverted the search bar placeholder to "Search Asimov's Universe..." for consistency with the project's theme.
+
+### Fixed
+- **Layout Switcher**: Resolved a `ReferenceError` where `onLayoutClick` was missing after refactoring.
+- **JSX Integrity**: Fixed a syntax error involving an incorrectly closed `Paper` tag in the top-right panel.
+
 ## [1.10.0] - 2026-02-27
 
 ### Added
