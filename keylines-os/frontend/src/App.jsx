@@ -404,6 +404,55 @@ export default function App() {
     closeSidebar();
   }, [selectedNode, setNodes, setEdges, closeSidebar]);
 
+  const batchExpandNodes = useCallback(async (nodeIds) => {
+    const currentNodes = nodesRef.current;
+    const currentEdges = edgesRef.current;
+    
+    try {
+      // Alle Anfragen parallel starten
+      const promises = nodeIds.map(id => fetch(`http://localhost:8000/expand/${id}`).then(r => r.json()));
+      const allResults = await Promise.all(promises);
+      
+      let nextNodes = [...currentNodes];
+      let nextEdges = [...currentEdges];
+      
+      // Ergebnisse nacheinander integrieren
+      allResults.forEach((data, index) => {
+        const nodeId = nodeIds[index];
+        const integrated = integrateNewData(nextNodes, nextEdges, data, nodeId, expandNode);
+        nextNodes = integrated.nodes;
+        nextEdges = integrated.edges;
+      });
+      
+      // State nur einmal am Ende aktualisieren
+      setNodes(nextNodes);
+      setEdges(nextEdges);
+      
+      setTimeout(() => {
+        const layoutedNodes = applyLayout(nextNodes, nextEdges, activeLayoutRef.current);
+        setNodes(layoutedNodes);
+        setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
+      }, 50);
+    } catch (e) { console.error('Batch expansion failed:', e); }
+  }, [expandNode, applyLayout, fitView, setNodes, setEdges]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.code === 'Space' && 
+          document.activeElement.tagName !== 'INPUT' && 
+          document.activeElement.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        const nodeIds = nodesRef.current.map(n => n.id);
+        if (nodeIds.length > 0) {
+          batchExpandNodes(nodeIds);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [expandNode]);
+
   // --- MEMOS & UI LOGIC ---
   const visibleNodes = useMemo(() => {
     const hasHighlight = highlightedTypes.size > 0;
@@ -455,7 +504,7 @@ export default function App() {
           <Paper elevation={3} sx={{ p: 0.5, m: 2, display: 'flex', alignItems: 'center', gap: 1, bgcolor: 'rgba(255,255,255,0.95)', borderRadius: 2 }}>
             <Autocomplete sx={{ width: 400 }} size="small" options={searchResults} getOptionLabel={(o) => o.label} onInputChange={(e, v) => handleSearch(v)} onChange={(e, v) => onSelectSearchResult(v)} autoSelect renderInput={(params) => <TextField {...params} placeholder="Search Asimov's Universe..." variant="outlined" InputProps={{ ...params.InputProps, startAdornment: (<InputAdornment position="start"><SearchIcon fontSize="small" color="action" /></InputAdornment>), }} />} renderOption={(props, o) => (<ListItem {...props} key={o.id}><ListItemAvatar><Avatar sx={{ bgcolor: getHexColor(o.type), width: 24, height: 24 }}>{React.createElement(Icons[o.icon] || Icons.HelpOutline, { sx: { fontSize: 14 } })}</Avatar></ListItemAvatar><ListItemText primary={o.label} secondary={o.type} /></ListItem>)} />
             <Divider orientation="vertical" flexItem sx={{ my: 1 }} />
-            <Tooltip title="Clear Canvas" arrow><IconButton color="error" onClick={() => { setNodes([]); setEdges([]); setSelectedNode(null); setPreviewData(null); }}><ClearAllIcon /></IconButton></Tooltip>
+            <Tooltip title="Clear Canvas" arrow><IconButton color="error" onClick={() => { setNodes([]); setEdges([]); setSelectedNode(null); setPreviewData(null); }}><CloseIcon /></IconButton></Tooltip>
           </Paper>
         </Panel>
 
