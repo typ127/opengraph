@@ -135,12 +135,17 @@ const getForceLayout = (nodes, edges) => {
   const simNodes = nodes.map(n => ({ id: n.id, x: n.position.x, y: n.position.y }));
   const nodeIds = new Set(simNodes.map(n => n.id));
   const simLinks = edges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target)).map(e => ({ source: e.source, target: e.target }));
+  
+  // Moderate Abstoßung
+  const repulsion = nodes.length > 20 ? -1000 : -800;
+  
   const simulation = d3Force.forceSimulation(simNodes)
-    .force('link', d3Force.forceLink(simLinks).id(d => d.id).distance(150).strength(0.5))
-    .force('charge', d3Force.forceManyBody().strength(-500))
+    .force('link', d3Force.forceLink(simLinks).id(d => d.id).distance(200).strength(0.4))
+    .force('charge', d3Force.forceManyBody().strength(repulsion))
     .force('center', d3Force.forceCenter(400, 400))
-    .force('collide', d3Force.forceCollide().radius(60))
+    .force('collide', d3Force.forceCollide().radius(80))
     .stop();
+    
   for (let i = 0; i < 300; ++i) simulation.tick();
   return nodes.map(node => {
     const sn = simNodes.find(s => s.id === node.id);
@@ -202,6 +207,7 @@ export default function App() {
   const [hiddenTypes, setHiddenTypes] = useState(new Set());
   const [highlightedTypes, setHighlightedTypes] = useState(new Set());
   const [searchResults, setSearchResults] = useState([]);
+  const [isLayouting, setIsLayouting] = useState(false);
 
   // Refs
   const nodesRef = useRef(nodes);
@@ -313,13 +319,23 @@ export default function App() {
       const response = await fetch(`http://localhost:8000/expand/${nodeId}${filterCategory ? `?filter_category=${filterCategory}` : ''}`);
       const data = await response.json();
       const { nodes: integratedNodes, edges: integratedEdges } = integrateNewData(currentNodes, currentEdges, data, nodeId, expandNode);
+      
+      // Schritt 1: Knoten am Ursprungsort (Vorgänger) erscheinen lassen
       setNodes(integratedNodes);
       setEdges(integratedEdges);
+
+      // Schritt 2: Kurz warten und dann ins neue Layout "fliegen" lassen
       setTimeout(() => {
-        setNodes(nds => applyLayout(integratedNodes, integratedEdges, activeLayoutRef.current));
-        setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
-      }, 50);
-    } catch (error) { console.error(error); }
+        const layoutedNodes = applyLayout(integratedNodes, integratedEdges, activeLayoutRef.current);
+        setNodes(layoutedNodes);
+        
+        requestAnimationFrame(() => {
+          fitView({ duration: 800, padding: 0.2 });
+        });
+      }, 150);
+    } catch (error) { 
+      console.error(error); 
+    }
   }, [applyLayout, fitView, setNodes, setEdges]);
 
   const addSingleNode = useCallback((sourceId, targetNode) => {
@@ -409,14 +425,12 @@ export default function App() {
     const currentEdges = edgesRef.current;
     
     try {
-      // Alle Anfragen parallel starten
       const promises = nodeIds.map(id => fetch(`http://localhost:8000/expand/${id}`).then(r => r.json()));
       const allResults = await Promise.all(promises);
       
       let nextNodes = [...currentNodes];
       let nextEdges = [...currentEdges];
       
-      // Ergebnisse nacheinander integrieren
       allResults.forEach((data, index) => {
         const nodeId = nodeIds[index];
         const integrated = integrateNewData(nextNodes, nextEdges, data, nodeId, expandNode);
@@ -424,28 +438,61 @@ export default function App() {
         nextEdges = integrated.edges;
       });
       
-      // State nur einmal am Ende aktualisieren
+      // Schritt 1: Alle neuen Knoten an den Positionen ihrer Eltern hinzufügen
       setNodes(nextNodes);
       setEdges(nextEdges);
       
+      // Schritt 2: Fly-out ins neue Layout
       setTimeout(() => {
         const layoutedNodes = applyLayout(nextNodes, nextEdges, activeLayoutRef.current);
         setNodes(layoutedNodes);
-        setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
-      }, 50);
-    } catch (e) { console.error('Batch expansion failed:', e); }
+        
+        requestAnimationFrame(() => {
+          fitView({ duration: 800, padding: 0.2 });
+        });
+      }, 150);
+    } catch (e) { 
+      console.error('Batch expansion failed:', e); 
+    }
   }, [expandNode, applyLayout, fitView, setNodes, setEdges]);
+
+  const deleteSelectedElements = useCallback(() => {
+    const selectedNodes = nodesRef.current.filter(n => n.selected);
+    const selectedEdges = edgesRef.current.filter(e => e.selected);
+    
+    if (selectedNodes.length === 0 && selectedEdges.length === 0) return;
+
+    const nodeIdsToRemove = new Set(selectedNodes.map(n => n.id));
+    const edgeIdsToRemove = new Set(selectedEdges.map(e => e.id));
+
+    setNodes(nds => nds.filter(n => !nodeIdsToRemove.has(n.id)));
+    setEdges(eds => eds.filter(e => 
+      !edgeIdsToRemove.has(e.id) && 
+      !nodeIdsToRemove.has(e.source) && 
+      !nodeIdsToRemove.has(e.target)
+    ));
+
+    // Sidebar schließen, falls der gerade aktive Knoten gelöscht wurde
+    if (selectedNode && nodeIdsToRemove.has(selectedNode.id)) {
+      closeSidebar();
+    }
+  }, [selectedNode, setNodes, setEdges, closeSidebar]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.code === 'Space' && 
-          document.activeElement.tagName !== 'INPUT' && 
-          document.activeElement.tagName !== 'TEXTAREA') {
+      // Nicht auslösen in Input-Feldern
+      if (document.activeElement.tagName === 'INPUT' || 
+          document.activeElement.tagName === 'TEXTAREA') return;
+
+      if (e.code === 'Space') {
         e.preventDefault();
         const nodeIds = nodesRef.current.map(n => n.id);
-        if (nodeIds.length > 0) {
-          batchExpandNodes(nodeIds);
-        }
+        if (nodeIds.length > 0) batchExpandNodes(nodeIds);
+      }
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        deleteSelectedElements();
       }
     };
 
@@ -484,7 +531,10 @@ export default function App() {
     <Box sx={{ width: '100vw', height: '100vh', background: '#f5f5f5', display: 'flex', fontFamily: '"Open Sans", sans-serif', overflow: 'hidden' }}>
       <style>{`
         body { margin: 0; padding: 0; overflow: hidden; }
-        .react-flow__node { transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); will-change: transform; }
+        .react-flow__node { 
+          transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) !important; 
+          will-change: transform; 
+        }
         .react-flow__node.dragging { transition: none !important; }
         .react-flow__edge-textwrapper { transition: opacity 0.3s ease; opacity: ${zoomLevel > 0.6 ? 1 : 0}; }
       `}</style>
@@ -566,18 +616,58 @@ export default function App() {
               <>
                 <Typography variant="h5" sx={{ fontWeight: 'bold' }}>{selectedNode.data.label}</Typography>
                 <Divider sx={{ my: 2 }} />
+                <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic', color: 'text.secondary' }}>
+                  {selectedNode.data.description}
+                </Typography>
                 <List>
                   <ListItem sx={{ px: 0 }}><ListItemIcon><TypeIcon /></ListItemIcon><ListItemText primary="Type" secondary={selectedNode.data.type} /></ListItem>
                   <ListItem sx={{ px: 0 }}><ListItemIcon><InfoIcon /></ListItemIcon><ListItemText primary="Importance" secondary={(selectedNode.data.score * 100).toFixed(1) + "%"} /></ListItem>
                 </List>
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 2, mb: 1 }}>NEIGHBORS:</Typography>
-                <List>{selectedNodeNeighbors.map(node => (<ListItem key={node.id} sx={{ px: 0 }}><ListItemAvatar><Avatar sx={{ bgcolor: getHexColor(node.data.type), width: 32, height: 32 }}>{React.createElement(Icons[node.data.icon] || Icons.HelpOutline, { sx: { fontSize: 18 } })}</Avatar></ListItemAvatar><ListItemText primary={node.data.label} secondary={node.data.type} /><ListItemSecondaryAction><IconButton edge="end" color="primary" disabled={nodes.some(n => n.id === node.id)} onClick={() => addSingleNode(selectedNode.id, node)}>{nodes.some(n => n.id === node.id) ? <CheckIcon /> : <AddIcon />}</IconButton></ListItemSecondaryAction></ListItem>))}</List>
+                <List>
+                  {[...selectedNodeNeighbors]
+                    .sort((a, b) => (a.data.type || '').localeCompare(b.data.type || ''))
+                    .map(node => (
+                      <ListItem key={node.id} sx={{ px: 0 }}>
+                        <ListItemAvatar>
+                          <Avatar sx={{ bgcolor: getHexColor(node.data.type), width: 32, height: 32 }}>
+                            {React.createElement(Icons[node.data.icon] || Icons.HelpOutline, { sx: { fontSize: 18 } })}
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText primary={node.data.label} secondary={node.data.type} />
+                        <ListItemSecondaryAction>
+                          <IconButton edge="end" color="primary" disabled={nodes.some(n => n.id === node.id)} onClick={() => addSingleNode(selectedNode.id, node)}>
+                            {nodes.some(n => n.id === node.id) ? <CheckIcon /> : <AddIcon />}
+                          </IconButton>
+                        </ListItemSecondaryAction>
+                      </ListItem>
+                    ))}
+                </List>
               </>
             )}
             {previewData && (
               <>
                 <Typography variant="h5" sx={{ fontWeight: 'bold' }}>{previewData.category.toUpperCase()} Group</Typography>
-                <Divider sx={{ my: 2 }} /><List>{previewData.nodes.map(node => (<ListItem key={node.id} sx={{ px: 0 }}><ListItemAvatar><Avatar sx={{ bgcolor: sidebarColor, width: 32, height: 32 }}>{React.createElement(Icons[node.data.icon] || Icons.HelpOutline, { sx: { fontSize: 18 } })}</Avatar></ListItemAvatar><ListItemText primary={node.data.label} secondary={node.data.type} /><ListItemSecondaryAction><IconButton edge="end" color="primary" disabled={nodes.some(n => n.id === node.id)} onClick={() => addSingleNode(previewData.sourceId, node)}>{nodes.some(n => n.id === node.id) ? <CheckIcon /> : <AddIcon />}</IconButton></ListItemSecondaryAction></ListItem>))}</List>
+                <Divider sx={{ my: 2 }} />
+                <List>
+                  {[...previewData.nodes]
+                    .sort((a, b) => (a.data.type || '').localeCompare(b.data.type || ''))
+                    .map(node => (
+                      <ListItem key={node.id} sx={{ px: 0 }}>
+                        <ListItemAvatar>
+                          <Avatar sx={{ bgcolor: sidebarColor, width: 32, height: 32 }}>
+                            {React.createElement(Icons[node.data.icon] || Icons.HelpOutline, { sx: { fontSize: 18 } })}
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText primary={node.data.label} secondary={node.data.type} />
+                        <ListItemSecondaryAction>
+                          <IconButton edge="end" color="primary" disabled={nodes.some(n => n.id === node.id)} onClick={() => addSingleNode(previewData.sourceId, node)}>
+                            {nodes.some(n => n.id === node.id) ? <CheckIcon /> : <AddIcon />}
+                          </IconButton>
+                        </ListItemSecondaryAction>
+                      </ListItem>
+                    ))}
+                </List>
               </>
             )}
           </Box>

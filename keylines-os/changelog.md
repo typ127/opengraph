@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.15.0] - 2026-02-27
+
+### Added
+- **Fly-Out Expansion Animation**: Restored the signature expansion effect where new nodes emerge from their parent before sliding to their layout positions. This was achieved using a timed two-step state update (150ms delay) to ensure browser repaint.
+- **Aggressive Error Suppression**: Implemented a robust global error handler to intercept and suppress "ResizeObserver" loop errors. This prevents intrusive development overlays during complex layout transitions.
+
+### Changed
+- **Sidebar Sorting**: Neighbor lists and preview groups in the right Drawer are now automatically sorted alphabetically by **Entity Type**, making it easier to navigate large clusters.
+- **Refined Force Layout**: Optimized the `force-directed` layout parameters for a more balanced "airy" feel (Link distance: 200, Repulsion: -800, Collision: 80).
+- **CSS Animation Safety**: Applied `!important` to node transitions to ensure they aren't overridden by ReactFlow's internal style updates during rapid expansion.
+
+### Fixed
+- **ResizeObserver Loop Error**: Resolved the persistent runtime error caused by simultaneous node transitions and camera `fitView` adjustments.
+- **Development Overlay Block**: Configured the error handler to specifically target and hide Webpack and Next.js dev-server overlays that were blocking the UI.
+
+## [1.14.0] - 2026-02-27
+
+### Added
+- **Expanded Universe Data**: Massive expansion of the Asimov dataset (35+ nodes, 50+ edges), including characters like Preem Palver, Arcadia Darell, Bel Riose, and Cleon I.
+- **Rich Metadata**: Added a `description` field to all entities, providing deep lore, biographies, and historical context within the Sidebar.
+- **Dynamic Lore Integration**: Updated the import pipeline and API to support and display extended text metadata.
+
+### Changed
+- **Sidebar UX**: Redesigned the Drawer to feature entity descriptions prominently at the top, styled with italics for readability.
+
 ## [1.13.0] - 2026-02-27
 
 ### Added

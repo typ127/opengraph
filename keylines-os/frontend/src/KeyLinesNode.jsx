@@ -14,11 +14,15 @@ const KeyLinesNode = ({ data }) => {
   const center = size / 2;
   const circumference = 2 * Math.PI * radius;
 
-  const baseScale = 0.8;
-  const scale = baseScale + (score * 0.5);
+  const baseScale = 0.75;
+  const scale = baseScale + (score * 0.85); // Range: 0.75 to 1.6
 
   let cumulativeOffset = 0;
   const myColor = getHexColor(data.type);
+
+  // Dezenterer Glow-Effekt
+  const glowIntensity = score * 8;
+  const glowColor = myColor;
 
   return (
     <Box sx={{ 
@@ -26,9 +30,15 @@ const KeyLinesNode = ({ data }) => {
       flexDirection: 'column', 
       alignItems: 'center',
       transform: `scale(${scale})`,
-      transition: 'transform 0.3s ease-out'
+      transition: 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+      zIndex: Math.round(score * 10), 
     }}>
-      <div style={{ position: 'relative', width: size, height: size }}>
+      <div style={{ 
+        position: 'relative', 
+        width: size, 
+        height: size,
+        filter: score > 0.4 ? `drop-shadow(0 0 ${glowIntensity}px ${glowColor}88)` : 'none'
+      }}>
         {/* SVG Donut Ring */}
         <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', overflow: 'visible' }}>
           {donut.map((segment, index) => {
@@ -119,7 +129,17 @@ const KeyLinesNode = ({ data }) => {
       </div>
 
       {/* Label */}
-      <Typography variant="caption" sx={{ mt: 1, fontWeight: 'bold', color: '#333', textAlign: 'center' }}>
+      <Typography 
+        variant="caption" 
+        sx={{ 
+          mt: 1, 
+          fontWeight: 'bold', 
+          color: '#333', 
+          textAlign: 'center',
+          fontSize: score > 0.8 ? '0.8rem' : '0.75rem',
+          transition: 'font-size 0.3s ease'
+        }}
+      >
         {label}
       </Typography>
     </Box>

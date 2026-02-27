@@ -1,22 +1,36 @@
-id,label,type,icon,donut,planet,category
-n1,Hari Seldon,Person,Hub,100,Trantor,Psychohistorian
-n2,R. Daneel Olivaw,Robot,SmartButton,100,Aurora,Eternal Guardian
-n3,Elijah Baley,Person,Person,100,Earth,Detective
-n4,The Mule,Mutant,Warning,80;20,Gaia,Conqueror
-n5,Salvor Hardin,Person,Security,50;50,Terminus,Mayor
-n6,Trantor,Planet,Language,100,None,Empire Capital
-n7,Terminus,Planet,Public,100,None,Foundation Seat
-n8,Prime Radiant,Item,AutoGraph,100,None,Seldon Tool
-n9,Psychohistory,Science,AutoFixHigh,100,None,Mathematical Theory
-n10,Gaia,Planet,Public,100,None,Collective Mind
-n11,Aurora,Planet,LightMode,100,None,Spacer World
-n12,The Second Foundation,Entity,Groups,100,Trantor,Secret Society
-n13,Galactic Empire,Entity,Castle,100,Trantor,Political Power
-n14,Hober Mallow,Person,Business,90;10,Terminus,Merchant Prince
-n15,Bayta Darell,Person,Face,100,Terminus,Heroine
-n16,Visi-Sonor,Item,MusicNote,100,None,Musical Instrument
-n17,Solaria,Planet,WbSunny,100,None,Isolated World
-n18,Gladia Delmarre,Person,Face,100,Solaria,Spacer
-n19,Golan Trevize,Person,Explore,100,Terminus,Councilman
-n20,Janov Pelorat,Person,School,100,Terminus,Historian
-n21,Gaal Dornick,Person,School,100,Synnax,Mathematician
+id,label,type,icon,donut,planet,category,description
+n1,Hari Seldon,Person,Hub,100,Trantor,Psychohistorian,"The father of Psychohistory and founder of the two Foundations. He spent his life on Trantor developing the mathematical laws that predict the future of human society."
+n2,R. Daneel Olivaw,Robot,SmartButton,100,Aurora,Eternal Guardian,"An ancient humaniform robot who has protected humanity for nearly 20,000 years. He operates under the Zeroth Law: A robot may not harm humanity, or, by inaction, allow humanity to come to harm."
+n3,Elijah Baley,Person,Person,100,Earth,Detective,"A Plainclothesman from Earth who partnered with R. Daneel Olivaw to solve critical murders on Spacer worlds, eventually helping humanity spread to the stars once more."
+n4,The Mule,Mutant,Warning,80;20,Gaia,Conqueror,"A genetic mutant with the mental power to adjust the emotions of others. He nearly destroyed the Seldon Plan by conquering the Foundation before his eventual defeat."
+n5,Salvor Hardin,Person,Security,50;50,Terminus,Mayor,"The first Mayor of Terminus. Known for his quote: 'Violence is the last refuge of the incompetent.' He navigated the first two Seldon Crises through diplomacy and political maneuvering."
+n6,Trantor,Planet,Language,100,None,Empire Capital,"The heart of the Galactic Empire. An ecumenopolis covered by metal domes, housing 40 billion people until its Great Sack and eventual decay into a farming world."
+n7,Terminus,Planet,Public,100,None,Foundation Seat,"A metal-poor planet at the edge of the galaxy. Home to the First Foundation and its Encyclopedia Galactica project, designed to preserve human knowledge."
+n8,Prime Radiant,Item,AutoGraph,100,None,Seldon Tool,"A device that stores and displays the complex mathematical equations of Psychohistory. It is the primary tool used by the Second Foundation to track the Seldon Plan."
+n9,Psychohistory,Science,AutoFixHigh,100,None,Mathematical Theory,"A branch of mathematics that deals with the reactions of human conglomerates to fixed social and economic stimuli. It can only predict the behavior of large populations."
+n10,Gaia,Planet,Public,100,None,Collective Mind,"A planet where every living and non-living thing shares a common consciousness. It is the ultimate expression of unity and the alternative to Galaxia."
+n11,Aurora,Planet,LightMode,100,None,Spacer World,"The first Spacer world settled from Earth. It was once the center of robot technology and the home of Dr. Han Fastolfe."
+n12,The Second Foundation,Entity,Groups,100,Trantor,Secret Society,"A hidden group of mentalists established by Hari Seldon. Located 'at the other end of the galaxy' at Star's End, they protect the Seldon Plan from unforeseen deviations."
+n13,Galactic Empire,Entity,Castle,100,Trantor,Political Power,"The massive political entity that ruled the entire Milky Way for over 12,000 years before its inevitable collapse predicted by Seldon."
+n14,Hober Mallow,Person,Business,90;10,Terminus,Merchant Prince,"A master trader who became the first 'Merchant Prince' of the Foundation. He replaced religious influence with economic power as the Foundation's primary weapon."
+n15,Bayta Darell,Person,Face,100,Terminus,Heroine,"The woman who stopped the Mule. Her realization of the Mule's identity and her quick actions saved the Second Foundation from being discovered."
+n16,Visi-Sonor,Item,MusicNote,100,None,Musical Instrument,"A complex multi-sensory instrument that stimulates the optic and auditory nerves directly. It was used by the Mule to manipulate emotions under the guise of music."
+n17,Solaria,Planet,WbSunny,100,None,Isolated World,"The last of the fifty Spacer worlds. Its inhabitants lived in extreme isolation, served by thousands of robots, and eventually evolved into hermaphroditic mentalists."
+n18,Gladia Delmarre,Person,Face,100,Solaria,Spacer,"A Solarian woman who traveled to Aurora and eventually accompanied Elijah Baley and Daneel. She played a key role in the final days of the Spacer worlds."
+n19,Golan Trevize,Person,Explore,100,Terminus,Councilman,"A Councilman of the Foundation who possessed the uncanny ability to reach the right conclusion from incomplete data. He was chosen to decide the future of the galaxy."
+n20,Janov Pelorat,Person,School,100,Terminus,Historian,"A scholar who spent his life studying the origins of humanity. He accompanied Trevize on his journey to find Earth and the secret behind Gaia."
+n21,Gaal Dornick,Person,School,100,Synnax,Mathematician,"A young mathematician from Synnax who joined Hari Seldon on Trantor and witnessed the trial that led to the creation of the First Foundation."
+n22,Earth,Planet,Public,100,None,Origin of Humanity,"The long-forgotten cradle of mankind. By the time of the Foundation, it was a radioactive wasteland, its location lost to history until rediscovered by Trevize and Pelorat."
+n23,Preem Palver,Person,Hub,100,Trantor,First Speaker,"The 19th First Speaker of the Second Foundation. He operated under the guise of a simple farmer to successfully mislead the First Foundation and defeat the Mule's remnants."
+n24,Arcadia Darell,Person,Face,100,Terminus,Author,"The granddaughter of Bayta Darell. Her adventure as a stowaway helped resolve the mystery of the Second Foundation's location, though she was unknowingly manipulated."
+n25,Bel Riose,Person,Security,100,Siwenna,General,"The last great general of the Galactic Empire. He led a massive campaign against the Foundation, but his success led to his execution by a paranoid Emperor."
+n26,Cleon I,Person,Castle,100,Trantor,Emperor,"The last emperor of the Entun dynasty to rule over a relatively peaceful galaxy. He was the patron of Hari Seldon during the early years of Psychohistory."
+n27,Eto Demerzel,Person,SmartButton,100,Trantor,First Minister,"The enigmatic First Minister to Emperor Cleon I. In reality, he is R. Daneel Olivaw, using his position to help Seldon establish the Foundation."
+n28,Dors Venabili,Person,Face,100,Trantor,Historian,"A historian and wife of Hari Seldon. She was secretly a humaniform robot built by Daneel to protect Seldon while he developed Psychohistory."
+n29,Kalgan,Planet,Castle,100,None,Luxury World,"A planet that was once a resort world for the Empire. It became the capital of the Mule's temporary Union of Worlds."
+n30,Encyclopedia Galactica,Item,MenuBook,100,None,Knowledge Base,"A comprehensive collection of all human knowledge. The First Foundation was established under the pretense of creating this monumental work."
+n31,Siwenna,Planet,Public,100,None,Border World,"A former provincial capital at the edge of the Empire. It served as the staging ground for Bel Riose's attack on the Foundation."
+n32,Anacreon,Planet,Security,100,None,Four Kingdoms,"One of the first systems to break away from the Empire. It attempted to conquer Terminus during the first Seldon Crisis but was thwarted by Salvor Hardin."
+n33,Smyrno,Planet,Security,100,None,Four Kingdoms,"A rival to Anacreon among the Four Kingdoms. Like its neighbors, it eventually fell under the religious and economic influence of the Foundation."
+n34,Psychoprobe,Item,Psychology,100,None,Empire Tool,"A device used by Imperial authorities to extract memories and suppress unwanted mental patterns. It represents the coercive power of the declining Empire."
+n35,Wanda Seldon,Person,Face,100,Trantor,Mentalist,"The granddaughter of Hari Seldon who discovered her own mentalic abilities. She became the core of the group that would form the Second Foundation."

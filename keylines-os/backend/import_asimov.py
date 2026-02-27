@@ -24,6 +24,7 @@ def import_data():
         reader = csv.DictReader(f)
         for row in reader:
             donut_list = [int(x) for x in row['donut'].split(';')]
+            desc = row.get('description', '').replace("'", "\\'")
             query = f"""
             MERGE (n:Entity {{id: '{row['id']}'}})
             SET n.label = '{row['label']}',
@@ -31,7 +32,8 @@ def import_data():
                 n.icon = '{row['icon']}',
                 n.donut = {donut_list},
                 n.planet = '{row['planet']}',
-                n.category = '{row['category']}'
+                n.category = '{row['category']}',
+                n.description = '{desc}'
             """
             memgraph.execute(query)
             print(f"Imported Node: {row['label']}")

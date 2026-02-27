@@ -104,7 +104,8 @@ async def search(q: str = Query(...)):
                 "id": props.get("id"),
                 "label": props.get("label"),
                 "type": props.get("type"),
-                "icon": props.get("icon")
+                "icon": props.get("icon"),
+                "description": props.get("description", "")
             })
         return nodes
     except Exception as e:
@@ -194,6 +195,7 @@ async def expand(node_id: str, use_mock: bool = Query(False), filter_category: s
                     "label": p_n.get("label"), 
                     "icon": p_n.get("icon"),
                     "type": p_n.get("type"),
+                    "description": p_n.get("description", ""),
                     "donut": calculate_donut(n_neighbor_types)
                 }
             }
@@ -208,6 +210,7 @@ async def expand(node_id: str, use_mock: bool = Query(False), filter_category: s
                         "label": p_m.get("label"), 
                         "icon": p_m.get("icon"),
                         "type": p_m.get("type"),
+                        "description": p_m.get("description", ""),
                         "donut": calculate_donut(m_neighbor_types)
                     }
                 }
