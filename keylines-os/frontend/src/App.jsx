@@ -52,7 +52,12 @@ import {
   Download as DownloadIcon,
   FilterCenterFocus as DrillDownIcon,
   Check as CheckIcon,
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  Psychology as AlgorithmIcon,
+  Hub as DegreeIcon,
+  Animation as BetweennessIcon,
+  Star as PageRankIcon,
+  Stream as ClosenessIcon
 } from '@mui/icons-material';
 import * as Icons from '@mui/icons-material';
 
@@ -80,6 +85,20 @@ const getEdgeStyle = (type) => {
     default: { stroke: '#bdbdbd', strokeWidth: 1.5 }
   };
   return edgeStyles[type] || edgeStyles.default;
+};
+
+const getDescendants = (nodeId, edges, visited = new Set()) => {
+  if (visited.has(nodeId)) return [];
+  visited.add(nodeId);
+  const children = edges.filter(edge => edge.source === nodeId).map(edge => edge.target);
+  let descendants = [];
+  children.forEach(childId => {
+    if (!visited.has(childId)) {
+      descendants.push(childId);
+      descendants = [...descendants, ...getDescendants(childId, edges, visited)];
+    }
+  });
+  return descendants;
 };
 
 // --- LAYOUT ENGINES ---
@@ -129,20 +148,6 @@ const getForceLayout = (nodes, edges) => {
   });
 };
 
-const getDescendants = (nodeId, edges, visited = new Set()) => {
-  if (visited.has(nodeId)) return [];
-  visited.add(nodeId);
-  const children = edges.filter(edge => edge.source === nodeId).map(edge => edge.target);
-  let descendants = [];
-  children.forEach(childId => {
-    if (!visited.has(childId)) {
-      descendants.push(childId);
-      descendants = [...descendants, ...getDescendants(childId, edges, visited)];
-    }
-  });
-  return descendants;
-};
-
 const integrateNewData = (currentNodes, currentEdges, newData, sourceNodeId, expandNodeFn) => {
   const sourceNode = currentNodes.find(n => n.id === sourceNodeId);
   const sourcePos = sourceNode ? sourceNode.position : { x: 400, y: 400 };
@@ -189,6 +194,7 @@ export default function App() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [activeLayout, setActiveLayout] = useState('force');
+  const [activeAlgorithm, setActiveAlgorithm] = useState('degree');
   const [selectedNode, setSelectedNode] = useState(null);
   const [selectedNodeNeighbors, setSelectedNodeNeighbors] = useState([]);
   const [previewData, setPreviewData] = useState(null);
@@ -221,6 +227,30 @@ export default function App() {
     setNodes(nds => applyLayout(nds, edgesRef.current, type));
     setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
   }, [applyLayout, fitView, setNodes]);
+
+  const onAnalyze = useCallback(async (algorithm) => {
+    setActiveAlgorithm(algorithm);
+    try {
+      const response = await fetch('http://localhost:8000/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          nodes: nodesRef.current.map(n => ({ id: n.id, data: n.data })), 
+          edges: edgesRef.current.map(e => ({ source: e.source, target: e.target })),
+          algorithm 
+        })
+      });
+      const data = await response.json();
+      
+      setNodes(nds => nds.map(node => {
+        const analyzed = data.nodes.find(an => an.id === node.id);
+        if (analyzed) {
+          return { ...node, data: { ...node.data, score: analyzed.data.score } };
+        }
+        return node;
+      }));
+    } catch (e) { console.error('Analyze error:', e); }
+  }, [setNodes]);
 
   const onExport = useCallback(() => {
     const reactFlowElement = document.querySelector('.react-flow');
@@ -464,6 +494,13 @@ export default function App() {
               <Tooltip title="Hierarchical"><IconButton onClick={() => onLayoutClick('hierarchical')} color={activeLayout === 'hierarchical' ? 'secondary' : 'primary'}><TreeIcon /></IconButton></Tooltip>
               <Tooltip title="Circular"><IconButton onClick={() => onLayoutClick('circular')} color={activeLayout === 'circular' ? 'secondary' : 'primary'}><CircularIcon /></IconButton></Tooltip>
               <Tooltip title="Force"><IconButton onClick={() => onLayoutClick('force')} color={activeLayout === 'force' ? 'secondary' : 'primary'}><ForceIcon /></IconButton></Tooltip>
+            </ButtonGroup>
+            <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+            <ButtonGroup variant="text" size="small">
+              <Tooltip title="Degree Centrality"><IconButton onClick={() => onAnalyze('degree')} color={activeAlgorithm === 'degree' ? 'secondary' : 'primary'}><DegreeIcon /></IconButton></Tooltip>
+              <Tooltip title="Betweenness Centrality"><IconButton onClick={() => onAnalyze('betweenness')} color={activeAlgorithm === 'betweenness' ? 'secondary' : 'primary'}><BetweennessIcon /></IconButton></Tooltip>
+              <Tooltip title="Closeness Centrality"><IconButton onClick={() => onAnalyze('closeness')} color={activeAlgorithm === 'closeness' ? 'secondary' : 'primary'}><ClosenessIcon /></IconButton></Tooltip>
+              <Tooltip title="PageRank"><IconButton onClick={() => onAnalyze('pagerank')} color={activeAlgorithm === 'pagerank' ? 'secondary' : 'primary'}><PageRankIcon /></IconButton></Tooltip>
             </ButtonGroup>
             <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
             <Tooltip title="Export PNG" arrow><IconButton onClick={onExport} color="primary"><DownloadIcon /></IconButton></Tooltip>

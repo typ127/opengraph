@@ -1,8 +1,9 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 import networkx as nx
 from gqlalchemy import Memgraph
 import os
+from typing import List, Dict, Any
 
 app = FastAPI()
 
@@ -34,7 +35,7 @@ def get_props(ent):
     if not ent: return {}
     return getattr(ent, "properties", getattr(ent, "_properties", {}))
 
-def process_with_social_algorithms(nodes, edges):
+def process_with_social_algorithms(nodes, edges, algorithm: str = "degree"):
     """Berechnet Centrality Scores mit NetworkX für das Visual-Scaling."""
     if not nodes:
         return {"nodes": [], "edges": []}
@@ -43,14 +44,47 @@ def process_with_social_algorithms(nodes, edges):
     for e in edges:
         G.add_edge(e["source"], e["target"])
     
-    # Centrality berechnen (Wichtigkeit im Netzwerk)
-    centrality = nx.degree_centrality(G) if len(G.nodes) > 1 else {n["id"]: 1.0 for n in nodes}
+    # Sicherstellen, dass alle Knoten im Graph sind (auch isolierte)
+    for n in nodes:
+        if n["id"] not in G:
+            G.add_node(n["id"])
+
+    scores = {}
+    try:
+        if algorithm == "betweenness":
+            scores = nx.betweenness_centrality(G)
+        elif algorithm == "pagerank":
+            scores = nx.pagerank(G, alpha=0.85)
+        elif algorithm == "closeness":
+            scores = nx.closeness_centrality(G)
+        elif algorithm == "eigenvector":
+            scores = nx.eigenvector_centrality(G, max_iter=1000)
+        else: # default: degree
+            scores = nx.degree_centrality(G)
+    except Exception as e:
+        print(f"Algorithm error ({algorithm}): {e}")
+        # Fallback auf Degree Centrality
+        scores = nx.degree_centrality(G)
     
-    # Scores normalisieren und zuweisen
-    for node in nodes:
-        node["data"]["score"] = centrality.get(node["id"], 0.1)
+    # Scores normalisieren (0.0 bis 1.0)
+    if scores:
+        max_val = max(scores.values()) if scores.values() else 1.0
+        if max_val == 0: max_val = 1.0
+        
+        for node in nodes:
+            # Score im data-Objekt speichern für KeyLinesNode.jsx
+            raw_score = scores.get(node["id"], 0.0)
+            node["data"]["score"] = raw_score / max_val
 
     return {"nodes": nodes, "edges": edges}
+
+@app.post("/analyze")
+async def analyze(data: Dict[str, Any] = Body(...)):
+    """Berechnet Metriken für den aktuellen Graphen auf dem Frontend."""
+    nodes = data.get("nodes", [])
+    edges = data.get("edges", [])
+    algorithm = data.get("algorithm", "degree")
+    return process_with_social_algorithms(nodes, edges, algorithm)
 
 @app.get("/search")
 async def search(q: str = Query(...)):

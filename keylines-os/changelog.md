@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.12.0] - 2026-02-27
+
+### Added
+- **Social Graph Algorithms**: Integrated backend support for advanced graph metrics:
+  - **Degree Centrality**: Identifies the most connected hubs.
+  - **Betweenness Centrality**: Highlights bridge nodes that control information flow.
+  - **Closeness Centrality**: Measures how "near" a node is to all other nodes.
+  - **PageRank**: Ranks nodes based on the importance of their neighbors.
+- **Dynamic Node Scaling**: Node sizes now automatically adjust based on the selected algorithm's score, providing instant visual feedback on network importance.
+- **Algorithm Toolbar**: Added a dedicated toolbar in the top-right panel for switching between centrality metrics.
+
+### Changed
+- **Enhanced Node Data**: Updated node schema to support real-time score injection from the `/analyze` endpoint.
+
+### Fixed
+- **Layout Recovery**: Restored missing layout engine functions (`getForceLayout`, `getCircularLayout`, `getLayoutedElements`) that were accidentally removed during refactoring.
+- **Handler Stability**: Ensured all algorithm and layout handlers are properly scoped within `useCallback`.
+
 ## [1.11.0] - 2026-02-27
 
 ### Added
