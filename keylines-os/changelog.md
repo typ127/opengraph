@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.17.0] - 2026-02-27
+
+### Added
+- **Synchronized Edge Animation**: Implemented CSS transitions for SVG edge paths (`d` attribute). Connections now fluidly follow nodes during layout changes instead of jumping to the end position.
+- **Label Motion**: Edge labels now animate their position (`transform`) in sync with the nodes and edges, creating a cohesive "liquid" graph experience.
+- **Improved Edge Fade-In**: Refined the timing of new edge appearances (200ms delay + 1s fade) to prevent visual clutter during the rapid node expansion phase.
+
+### Changed
+- **Animation Performance**: Optimized CSS transitions to use hardware-accelerated properties where possible for smoother high-node-count interactions.
+
 ## [1.16.0] - 2026-02-27
 
 ### Added

@@ -254,6 +254,7 @@ const integrateNewData = (currentNodes, currentEdges, newData, sourceNodeId, exp
     if (!edgesMap.has(newEdge.id)) {
       edgesMap.set(newEdge.id, {
         ...newEdge,
+        data: { ...newEdge.data, isNew: true },
         style: getEdgeStyle(newEdge.data?.type),
         labelStyle: { fill: '#666', fontWeight: 600, fontSize: '10px', fontFamily: '"Open Sans", sans-serif' },
         labelBgStyle: { fill: '#f5f5f5', fillOpacity: 0.8 },
@@ -409,6 +410,14 @@ export default function App() {
           fitView({ duration: 800, padding: 0.2 });
         });
       }, 150);
+
+      // Schritt 3: Kanten verzögert einblenden (wenn die Knoten fast da sind)
+      setTimeout(() => {
+        setEdges(integratedEdges.map(e => ({
+          ...e,
+          data: { ...e.data, isNew: false }
+        })));
+      }, 200);
     } catch (error) { 
       console.error(error); 
     }
@@ -527,6 +536,14 @@ export default function App() {
           fitView({ duration: 800, padding: 0.2 });
         });
       }, 150);
+
+      // Schritt 3: Kanten verzögert einblenden
+      setTimeout(() => {
+        setEdges(nextEdges.map(e => ({
+          ...e,
+          data: { ...e.data, isNew: false }
+        })));
+      }, 200);
     } catch (e) { 
       console.error('Batch expansion failed:', e); 
     }
@@ -605,7 +622,21 @@ export default function App() {
       const sourceNode = nodes.find(n => n.id === edge.source);
       const targetNode = nodes.find(n => n.id === edge.target);
       const isHighlighted = hasHighlight ? (highlightedTypes.has(sourceNode?.data.type) || highlightedTypes.has(targetNode?.data.type)) : true;
-      return { ...edge, label: zoomLevel > 0.6 ? (edge.data?.type?.replace("_", " ").toLowerCase()) : "", style: { ...edge.style, opacity: hasHighlight ? (isHighlighted ? 0.8 : 0.1) : 1, transition: 'opacity 0.3s ease' } };
+      
+      // Wenn die Kante neu ist, setzen wir die Opacity auf 0 für den Fade-In
+      const isNew = edge.data?.isNew;
+      const highlightOpacity = hasHighlight ? (isHighlighted ? 0.8 : 0.1) : 1;
+      const finalOpacity = isNew ? 0 : highlightOpacity;
+
+      return { 
+        ...edge, 
+        label: zoomLevel > 0.6 ? (edge.data?.type?.replace("_", " ").toLowerCase()) : "", 
+        style: { 
+          ...edge.style, 
+          opacity: finalOpacity, 
+          transition: isNew ? 'none' : 'opacity 1.0s ease-in-out, stroke 0.3s ease' 
+        } 
+      };
     });
   }, [edges, visibleNodes, zoomLevel, highlightedTypes, nodes]);
 
@@ -626,7 +657,17 @@ export default function App() {
           will-change: transform; 
         }
         .react-flow__node.dragging { transition: none !important; }
-        .react-flow__edge-textwrapper { transition: opacity 0.3s ease; opacity: ${zoomLevel > 0.6 ? 1 : 0}; }
+        
+        /* Kantenpfade animieren */
+        .react-flow__edge-path {
+          transition: d 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        
+        /* Kanten-Beschriftungen animieren */
+        .react-flow__edge-textwrapper { 
+          transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease; 
+          opacity: ${zoomLevel > 0.6 ? 1 : 0}; 
+        }
       `}</style>
       
       <ReactFlow
