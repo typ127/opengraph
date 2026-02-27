@@ -57,7 +57,9 @@ import {
   Hub as DegreeIcon,
   Animation as BetweennessIcon,
   Star as PageRankIcon,
-  Stream as ClosenessIcon
+  Stream as ClosenessIcon,
+  GridView as GridIcon,
+  Adjust as ConcentricIcon
 } from '@mui/icons-material';
 import * as Icons from '@mui/icons-material';
 
@@ -107,12 +109,24 @@ const getLayoutedElements = (nodes, edges, direction = 'TB') => {
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
   dagreGraph.setGraph({ rankdir: direction });
+  
+  const selectedIds = new Set(nodes.filter(n => n.selected).map(n => n.id));
+
   nodes.forEach((node) => dagreGraph.setNode(node.id, { width: 150, height: 100 }));
+  
   edges.forEach((edge) => {
     if (dagreGraph.hasNode(edge.source) && dagreGraph.hasNode(edge.target)) {
-      dagreGraph.setEdge(edge.source, edge.target);
+      // Wenn der Zielknoten ausgewählt ist (und der Quellknoten nicht), 
+      // kehren wir die Kante für das Layout um. Dadurch wird der ausgewählte Knoten
+      // zum "Ursprung" (Top) in der Hierarchie.
+      if (selectedIds.has(edge.target) && !selectedIds.has(edge.source)) {
+        dagreGraph.setEdge(edge.target, edge.source);
+      } else {
+        dagreGraph.setEdge(edge.source, edge.target);
+      }
     }
   });
+
   dagre.layout(dagreGraph);
   return nodes.map((node) => {
     const pos = dagreGraph.node(node.id);
@@ -151,6 +165,66 @@ const getForceLayout = (nodes, edges) => {
     const sn = simNodes.find(s => s.id === node.id);
     return { ...node, position: { x: sn ? sn.x : node.position.x, y: sn ? sn.y : node.position.y } };
   });
+};
+
+const getGridLayout = (nodes) => {
+  if (nodes.length === 0) return [];
+  const count = nodes.length;
+  const cols = Math.ceil(Math.sqrt(count));
+  const spacing = 250;
+  return nodes.map((node, index) => {
+    const row = Math.floor(index / cols);
+    const col = index % cols;
+    return { ...node, position: { x: col * spacing, y: row * spacing } };
+  });
+};
+
+const getConcentricLayout = (nodes) => {
+  if (nodes.length === 0) return [];
+  
+  // Sortiere Knoten nach Score (Wichtigkeit)
+  const sortedNodes = [...nodes].sort((a, b) => (b.data?.score || 0) - (a.data?.score || 0));
+  
+  const center = { x: 400, y: 400 };
+  const layoutedNodes = [];
+  
+  // Definiere Ring-Kapazitäten
+  const ringCapacities = [1, 5, 12, 20, 30];
+  let nodeIndex = 0;
+  
+  ringCapacities.forEach((capacity, ringIndex) => {
+    const radius = ringIndex * 250;
+    const countInRing = Math.min(capacity, sortedNodes.length - nodeIndex);
+    
+    for (let i = 0; i < countInRing; i++) {
+      const node = sortedNodes[nodeIndex++];
+      const angle = (i / countInRing) * 2 * Math.PI;
+      layoutedNodes.push({
+        ...node,
+        position: {
+          x: center.x + radius * Math.cos(angle),
+          y: center.y + radius * Math.sin(angle)
+        }
+      });
+    }
+  });
+  
+  // Restliche Knoten in den äußeren Ring
+  const outerRadius = ringCapacities.length * 250;
+  const remainingCount = sortedNodes.length - nodeIndex;
+  for (let i = 0; i < remainingCount; i++) {
+    const node = sortedNodes[nodeIndex++];
+    const angle = (i / remainingCount) * 2 * Math.PI;
+    layoutedNodes.push({
+      ...node,
+      position: {
+        x: center.x + outerRadius * Math.cos(angle),
+        y: center.y + outerRadius * Math.sin(angle)
+      }
+    });
+  }
+  
+  return layoutedNodes;
 };
 
 const integrateNewData = (currentNodes, currentEdges, newData, sourceNodeId, expandNodeFn) => {
@@ -225,6 +299,8 @@ export default function App() {
     if (type === 'hierarchical') return getLayoutedElements(nds, eds);
     if (type === 'circular') return getCircularLayout(nds);
     if (type === 'force') return getForceLayout(nds, eds);
+    if (type === 'grid') return getGridLayout(nds);
+    if (type === 'concentric') return getConcentricLayout(nds);
     return nds;
   }, []);
 
@@ -492,7 +568,21 @@ export default function App() {
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
-        deleteSelectedElements();
+        if (e.shiftKey) {
+          // Drill down: Nur selektierte Knoten behalten
+          const selectedNodes = nodesRef.current.filter(n => n.selected);
+          const selectedIds = new Set(selectedNodes.map(n => n.id));
+          if (selectedIds.size > 0) {
+            setNodes(selectedNodes);
+            setEdges(eds => eds.filter(edge => selectedIds.has(edge.source) && selectedIds.has(edge.target)));
+            // Sidebar schließen, falls der gerade aktive Knoten nicht mehr da ist
+            if (selectedNode && !selectedIds.has(selectedNode.id)) {
+              closeSidebar();
+            }
+          }
+        } else {
+          deleteSelectedElements();
+        }
       }
     };
 
@@ -552,7 +642,7 @@ export default function App() {
         {/* PANELS */}
         <Panel position="top-center">
           <Paper elevation={3} sx={{ p: 0.5, m: 2, display: 'flex', alignItems: 'center', gap: 1, bgcolor: 'rgba(255,255,255,0.95)', borderRadius: 2 }}>
-            <Autocomplete sx={{ width: 400 }} size="small" options={searchResults} getOptionLabel={(o) => o.label} onInputChange={(e, v) => handleSearch(v)} onChange={(e, v) => onSelectSearchResult(v)} autoSelect renderInput={(params) => <TextField {...params} placeholder="Search Asimov's Universe..." variant="outlined" InputProps={{ ...params.InputProps, startAdornment: (<InputAdornment position="start"><SearchIcon fontSize="small" color="action" /></InputAdornment>), }} />} renderOption={(props, o) => (<ListItem {...props} key={o.id}><ListItemAvatar><Avatar sx={{ bgcolor: getHexColor(o.type), width: 24, height: 24 }}>{React.createElement(Icons[o.icon] || Icons.HelpOutline, { sx: { fontSize: 14 } })}</Avatar></ListItemAvatar><ListItemText primary={o.label} secondary={o.type} /></ListItem>)} />
+            <Autocomplete sx={{ width: 400 }} size="small" options={searchResults} getOptionLabel={(o) => o.label} onInputChange={(e, v) => handleSearch(v)} onChange={(e, v) => onSelectSearchResult(v)} autoSelect renderInput={(params) => <TextField {...params} placeholder="Search the Asimov Universe!" variant="outlined" InputProps={{ ...params.InputProps, startAdornment: (<InputAdornment position="start"><SearchIcon fontSize="small" color="action" /></InputAdornment>), }} />} renderOption={(props, o) => (<ListItem {...props} key={o.id}><ListItemAvatar><Avatar sx={{ bgcolor: getHexColor(o.type), width: 24, height: 24 }}>{React.createElement(Icons[o.icon] || Icons.HelpOutline, { sx: { fontSize: 14 } })}</Avatar></ListItemAvatar><ListItemText primary={o.label} secondary={o.type} /></ListItem>)} />
             <Divider orientation="vertical" flexItem sx={{ my: 1 }} />
             <Tooltip title="Clear Canvas" arrow><IconButton color="error" onClick={() => { setNodes([]); setEdges([]); setSelectedNode(null); setPreviewData(null); }}><CloseIcon /></IconButton></Tooltip>
           </Paper>
@@ -593,6 +683,8 @@ export default function App() {
               <Tooltip title="Hierarchical"><IconButton onClick={() => onLayoutClick('hierarchical')} color={activeLayout === 'hierarchical' ? 'secondary' : 'primary'}><TreeIcon /></IconButton></Tooltip>
               <Tooltip title="Circular"><IconButton onClick={() => onLayoutClick('circular')} color={activeLayout === 'circular' ? 'secondary' : 'primary'}><CircularIcon /></IconButton></Tooltip>
               <Tooltip title="Force"><IconButton onClick={() => onLayoutClick('force')} color={activeLayout === 'force' ? 'secondary' : 'primary'}><ForceIcon /></IconButton></Tooltip>
+              <Tooltip title="Grid"><IconButton onClick={() => onLayoutClick('grid')} color={activeLayout === 'grid' ? 'secondary' : 'primary'}><GridIcon /></IconButton></Tooltip>
+              <Tooltip title="Concentric"><IconButton onClick={() => onLayoutClick('concentric')} color={activeLayout === 'concentric' ? 'secondary' : 'primary'}><ConcentricIcon /></IconButton></Tooltip>
             </ButtonGroup>
             <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
             <ButtonGroup variant="text" size="small">

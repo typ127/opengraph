@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.0] - 2026-02-27
+
+### Added
+- **New Layout Engines**: Introduced `Grid` and `Concentric` layout options. The Concentric layout automatically uses node centrality scores to place important entities at the center.
+- **Selection-Based Hierarchical Layout**: The hierarchical layout now places selected nodes at the top of the tree, allowing users to define the root of the hierarchy dynamically.
+- **Shift + Delete (Inverted Deletion)**: Implemented a powerful shortcut to remove everything *except* the currently selected nodes, acting as a quick keyboard-driven "Drill Down".
+
+### Changed
+- **Semantic Category Labeling**: Switched category internal IDs from color names to semantic labels (e.g., "Science Group", "People Group"). This improves readability in the Sidebar and data consistency.
+- **Refined Branding**: Updated the search bar placeholder to "Search the Asimov Universe!" for a more engaging user experience.
+
+### Fixed
+- **Category Consistency**: Unified the mapping for "Science" and "Entity" types to ensure they always appear under the same semantic group in the UI.
+
 ## [1.15.0] - 2026-02-27
 
 ### Added
