@@ -2,20 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.8.0] - 2026-02-26
+## [1.10.0] - 2026-02-27
 
 ### Added
-- **Global Search**: A centered search bar with autocomplete allows finding characters and entities directly. Selecting a result automatically adds it to the canvas and centers the camera.
-- **Batch Type Expansion**: Added an "Expand All" button to each entry in the histogram panel, allowing users to expand all visible nodes of a specific type with a single click.
-- **Instant MUI Tooltips**: Replaced native tooltips with Material-UI Tooltips on donut segments. Configured with zero delay and a 12px offset for a premium, responsive feel.
-- **Dynamic Type Labels in Tooltips**: Donut tooltips now show specific entity types and their counts (e.g., "PERSON (3), MUTANT (1)").
-- **Empty Start State**: The application now starts with a clean canvas, encouraging discovery via search.
+- **PNG Export**: Users can now download the current graph view as a high-resolution PNG image. The export logic automatically hides UI panels and controls for a clean capture.
+- **Drill Down Mechanism**: Added a "Drill Down" button to the histogram. It allows users to permanently remove all non-highlighted nodes from the canvas to focus on specific subsets.
+- **Multi-Type Highlighting**: Enabled `Shift + Click` on histogram labels to highlight multiple entity types simultaneously.
+- **Advanced CSS Security Handling**: Configured `crossorigin` attributes for external stylesheets (Google Fonts) to ensure consistent text rendering during image export.
+
+### Changed
+- **Codebase Refactoring**: Completely restructured `App.jsx` to improve component scope stability and prevent runtime reference errors.
+- **Enhanced Sidebar Reliability**: Improved data checking in the neighbor list to prevent crashes during rapid expansions.
 
 ### Fixed
-- **Backend Search Robustness**: Switched search logic to `CONTAINS` for better character matching across different database versions.
-- **Search Error Handling**: Refactored `main.py` to fix syntax errors and ensure reliable autocomplete responses.
+- **SVG Export Security**: Resolved `SecurityError` during PNG generation caused by Cross-Origin CSS rules.
+- **Handler Scope**: Fixed `ReferenceError` issues related to `onExport` and other handler functions.
 
-## [1.7.0] - 2026-02-26
+## [1.9.0] - 2026-02-26
+
+### Added
+- **Interactive Highlighting**: Clicking a type label or bar in the histogram now highlights all corresponding nodes on the canvas by dimming out unrelated elements (opacity reduction).
+- **Centered Search Interface**: Moved the search bar to a prominent `top-center` position for better accessibility.
+- **Clear Canvas Button**: Integrated a red `ClearAll` button next to the search bar to instantly reset the entire exploration.
+- **Auto-Select on Search**: Pressing `Enter` in the search field now automatically selects the first result, adds it to the canvas, and centers the camera.
+
+### Changed
+- **Advanced Histogram Interaction**: Refactored event handling in the filter panel to separate "Visibility Toggling" (Checkbox) from "Focus Highlighting" (Label click).
+- **Refined UI Feedback**: Added hover states and selection backgrounds to histogram entries to signal interactivity.
+
+### Fixed
+- **Event Bubbling**: Resolved a conflict where clicking histogram labels would unintentionally trigger checkboxes.
+- **Search reliability**: Optimized Backend `search` logic to be case-insensitive and robust against special characters.
+
+## [1.8.0] - 2026-02-26
 
 ## [1.0.0] - 2026-02-26
 

@@ -3,14 +3,16 @@ import ReactFlow, {
   useNodesState, 
   useEdgesState, 
   Background, 
-  Controls,
-  Panel,
+  Controls, 
+  Panel, 
   useReactFlow
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import KeyLinesNode from './KeyLinesNode';
 import dagre from 'dagre';
 import * as d3Force from 'd3-force';
+import { toPng } from 'html-to-image';
+import download from 'downloadjs';
 import { 
   ButtonGroup, 
   IconButton, 
@@ -32,21 +34,24 @@ import {
   FormGroup,
   Autocomplete,
   TextField,
-  InputAdornment
+  InputAdornment,
+  Button
 } from '@mui/material';
 import { 
   AccountTree as TreeIcon, 
   BlurCircular as CircularIcon, 
   ElectricBolt as ForceIcon,
-  Close as CloseIcon,
-  Info as InfoIcon,
+  Close as CloseIcon, 
+  Info as InfoIcon, 
   Category as TypeIcon,
-  Group as GroupIcon,
-  AddCircleOutline as AddIcon,
+  Group as GroupIcon, 
+  AddCircleOutline as AddIcon, 
   FilterList as FilterIcon,
-  Search as SearchIcon,
-  ClearAll as ClearAllIcon,
-  ControlPointDuplicate as ExpandAllIcon
+  Search as SearchIcon, 
+  ClearAll as ClearAllIcon, 
+  Download as DownloadIcon,
+  FilterCenterFocus as DrillDownIcon,
+  Check as CheckIcon
 } from '@mui/icons-material';
 import * as Icons from '@mui/icons-material';
 
@@ -56,6 +61,7 @@ const nodeTypes = {
   keylines: KeyLinesNode,
 };
 
+// --- GLOBAL UTILS ---
 const deduplicate = (arr) => {
   const map = new Map();
   arr.forEach(item => map.set(item.id, item));
@@ -122,7 +128,6 @@ const getForceLayout = (nodes, edges) => {
   });
 };
 
-// --- HELPER ---
 const getDescendants = (nodeId, edges, visited = new Set()) => {
   if (visited.has(nodeId)) return [];
   visited.add(nodeId);
@@ -134,7 +139,7 @@ const getDescendants = (nodeId, edges, visited = new Set()) => {
       descendants = [...descendants, ...getDescendants(childId, edges, visited)];
     }
   });
-  return Array.from(new Set(descendants));
+  return descendants;
 };
 
 const integrateNewData = (currentNodes, currentEdges, newData, sourceNodeId, expandNodeFn) => {
@@ -178,6 +183,8 @@ const integrateNewData = (currentNodes, currentEdges, newData, sourceNodeId, exp
 
 export default function App() {
   const { fitView, setCenter } = useReactFlow();
+  
+  // State
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [activeLayout, setActiveLayout] = useState('force');
@@ -186,23 +193,54 @@ export default function App() {
   const [previewData, setPreviewData] = useState(null);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [hiddenTypes, setHiddenTypes] = useState(new Set());
-  
+  const [highlightedTypes, setHighlightedTypes] = useState(new Set());
   const [searchResults, setSearchResults] = useState([]);
-  const [searchValue, setSearchValue] = useState("");
 
+  // Refs
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
   const activeLayoutRef = useRef(activeLayout);
-
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   useEffect(() => { edgesRef.current = edges; }, [edges]);
   useEffect(() => { activeLayoutRef.current = activeLayout; }, [activeLayout]);
+
+  // --- HANDLERS ---
 
   const applyLayout = useCallback((nds, eds, type) => {
     if (type === 'hierarchical') return getLayoutedElements(nds, eds);
     if (type === 'circular') return getCircularLayout(nds);
     if (type === 'force') return getForceLayout(nds, eds);
     return nds;
+  }, []);
+
+  const onExport = useCallback(() => {
+    const reactFlowElement = document.querySelector('.react-flow');
+    if (!reactFlowElement) return;
+    
+    // Controls ausblenden
+    const controls = document.querySelector('.react-flow__controls');
+    if (controls) controls.style.display = 'none';
+
+    toPng(reactFlowElement, {
+      backgroundColor: '#f5f5f5',
+      // Wichtig: Wir filtern Elemente, die den Export stören könnten
+      filter: (node) => {
+        if (node?.classList?.contains('react-flow__panel')) return false;
+        return true;
+      },
+      // Cache-Busting für Bilder
+      cacheBust: true,
+    })
+    .then((dataUrl) => {
+      download(dataUrl, `keylines-export-${new Date().toISOString().slice(0,10)}.png`);
+    })
+    .catch((err) => {
+      console.error('Export failed:', err);
+      alert('Export failed due to browser security restrictions. Try again or check the console.');
+    })
+    .finally(() => {
+      if (controls) controls.style.display = 'flex';
+    });
   }, []);
 
   const expandNode = useCallback(async (nodeId, filterCategory = null, event = null) => {
@@ -221,11 +259,7 @@ export default function App() {
     }
 
     if (filterCategory) {
-      const directChildren = currentEdges
-        .filter(e => e.source === nodeId)
-        .map(e => currentNodes.find(n => n.id === e.target))
-        .filter(n => n && categoryMap[n.data.type?.toLowerCase()] === filterCategory);
-
+      const directChildren = currentEdges.filter(e => e.source === nodeId).map(e => currentNodes.find(n => n.id === e.target)).filter(n => n && categoryMap[n.data.type?.toLowerCase()] === filterCategory);
       if (directChildren.length > 0) {
         const childIds = directChildren.map(n => n.id);
         const allToCollapse = new Set(childIds);
@@ -246,33 +280,23 @@ export default function App() {
         setNodes(nds => applyLayout(integratedNodes, integratedEdges, activeLayoutRef.current));
         setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
       }, 50);
-    } catch (error) { console.error('Error expanding node:', error); }
-  }, [applyLayout, fitView]);
-
-  const expandAllOfType = useCallback(async (typeName) => {
-    const nodesToExpand = nodesRef.current.filter(n => n.data.type === typeName);
-    for (const node of nodesToExpand) {
-      await expandNode(node.id);
-    }
-  }, [expandNode]);
+    } catch (error) { console.error(error); }
+  }, [applyLayout, fitView, setNodes, setEdges]);
 
   const addSingleNode = useCallback((sourceId, targetNode) => {
     const currentNodes = nodesRef.current;
     const currentEdges = edgesRef.current;
     if (currentNodes.find(n => n.id === targetNode.id)) return;
     const sourceNode = currentNodes.find(n => n.id === sourceId);
-    const sourcePos = sourceNode ? sourceNode.position : { x: 400, y: 400 };
-    const newNode = { ...targetNode, type: 'keylines', position: { ...sourcePos }, data: { ...targetNode.data, onSegmentClick: (cat, e) => expandNode(targetNode.id, cat, e) } };
+    const newNode = { ...targetNode, type: 'keylines', position: { ...(sourceNode?.position || {x:400,y:400}) }, data: { ...targetNode.data, onSegmentClick: (cat, e) => expandNode(targetNode.id, cat, e) } };
     const newEdge = { id: `e-${sourceId}-manual-${targetNode.id}`, source: sourceId, target: targetNode.id, animated: true, style: getEdgeStyle('default') };
-    const nextNodes = deduplicate([...currentNodes, newNode]);
-    const nextEdges = deduplicate([...currentEdges, newEdge]);
-    setNodes(nextNodes);
-    setEdges(nextEdges);
+    setNodes(nds => deduplicate([...nds, newNode]));
+    setEdges(eds => deduplicate([...eds, newEdge]));
     setTimeout(() => {
-      setNodes(nds => applyLayout(nds, nextEdges, activeLayoutRef.current));
+      setNodes(nds => applyLayout(nds, edgesRef.current, activeLayoutRef.current));
       setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
     }, 50);
-  }, [expandNode, applyLayout, fitView]);
+  }, [expandNode, applyLayout, fitView, setNodes, setEdges]);
 
   const openDetails = useCallback(async (node) => {
     setSelectedNode(node);
@@ -280,13 +304,30 @@ export default function App() {
     try {
       const response = await fetch(`http://localhost:8000/expand/${node.id}`);
       const data = await response.json();
-      const neighbors = data.nodes.filter(n => n.id !== node.id);
-      setSelectedNodeNeighbors(neighbors);
+      setSelectedNodeNeighbors(data.nodes.filter(n => n.id !== node.id));
     } catch (e) { console.error(e); }
   }, []);
 
+  const onDrillDown = useCallback(() => {
+    if (highlightedTypes.size === 0) return;
+    setNodes((nds) => {
+      const remainingNodes = nds.filter(n => highlightedTypes.has(n.data.type));
+      const remainingIds = new Set(remainingNodes.map(n => n.id));
+      setEdges((eds) => eds.filter(e => remainingIds.has(e.source) && remainingIds.has(e.target)));
+      setHighlightedTypes(new Set());
+      return remainingNodes;
+    });
+  }, [highlightedTypes, setNodes, setEdges]);
+
+  const toggleHighlight = useCallback((type, isShift) => {
+    setHighlightedTypes(prev => {
+      const next = new Set(isShift ? prev : []);
+      if (next.has(type)) next.delete(type); else next.add(type);
+      return next;
+    });
+  }, []);
+
   const handleSearch = async (val) => {
-    setSearchValue(val);
     if (val.length < 2) { setSearchResults([]); return; }
     try {
       const response = await fetch(`http://localhost:8000/search?q=${val}`);
@@ -297,7 +338,7 @@ export default function App() {
 
   const onSelectSearchResult = async (nodeInfo) => {
     if (!nodeInfo) return;
-    let existing = nodes.find(n => n.id === nodeInfo.id);
+    let existing = nodesRef.current.find(n => n.id === nodeInfo.id);
     if (!existing) {
       const response = await fetch(`http://localhost:8000/expand/${nodeInfo.id}`);
       const data = await response.json();
@@ -316,30 +357,24 @@ export default function App() {
     }
   };
 
-  useEffect(() => {}, []);
+  // --- MEMOS & UI LOGIC ---
+  const visibleNodes = useMemo(() => {
+    const hasHighlight = highlightedTypes.size > 0;
+    return nodes.filter(n => !hiddenTypes.has(n.data.type)).map(n => ({
+      ...n, style: { ...n.style, opacity: hasHighlight ? (highlightedTypes.has(n.data.type) ? 1 : 0.2) : 1, transition: 'opacity 0.3s ease' }
+    }));
+  }, [nodes, hiddenTypes, highlightedTypes]);
 
-  const onLayoutClick = (type) => {
-    setActiveLayout(type);
-    setNodes(nds => applyLayout(nds, edgesRef.current, type));
-    setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
-  };
-
-  const toggleType = (typeName) => {
-    setHiddenTypes(prev => {
-      const next = new Set(prev);
-      if (next.has(typeName)) next.delete(typeName);
-      else next.add(typeName);
-      return next;
-    });
-  };
-
-  const closeSidebar = () => { setSelectedNode(null); setPreviewData(null); setSelectedNodeNeighbors([]); };
-
-  const visibleNodes = useMemo(() => nodes.filter(n => !hiddenTypes.has(n.data.type)), [nodes, hiddenTypes]);
   const visibleEdges = useMemo(() => {
     const nodeIds = new Set(visibleNodes.map(n => n.id));
-    return edges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target)).map(edge => ({...edge, label: zoomLevel > 0.6 ? (edge.data?.type?.replace("_", " ").toLowerCase()) : ""}));
-  }, [edges, visibleNodes, zoomLevel]);
+    const hasHighlight = highlightedTypes.size > 0;
+    return edges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target)).map(edge => {
+      const sourceNode = nodes.find(n => n.id === edge.source);
+      const targetNode = nodes.find(n => n.id === edge.target);
+      const isHighlighted = hasHighlight ? (highlightedTypes.has(sourceNode?.data.type) || highlightedTypes.has(targetNode?.data.type)) : true;
+      return { ...edge, label: zoomLevel > 0.6 ? (edge.data?.type?.replace("_", " ").toLowerCase()) : "", style: { ...edge.style, opacity: hasHighlight ? (isHighlighted ? 0.8 : 0.1) : 1, transition: 'opacity 0.3s ease' } };
+    });
+  }, [edges, visibleNodes, zoomLevel, highlightedTypes, nodes]);
 
   const stats = useMemo(() => {
     const counts = {};
@@ -347,6 +382,7 @@ export default function App() {
     return Object.entries(counts).sort((a, b) => b[1] - a[1]);
   }, [nodes]);
 
+  const closeSidebar = () => { setSelectedNode(null); setPreviewData(null); setSelectedNodeNeighbors([]); };
   const sidebarColor = selectedNode ? getHexColor(selectedNode.data.type) : previewData ? typeColors[previewData.category] : typeColors.other;
 
   return (
@@ -356,218 +392,88 @@ export default function App() {
         .react-flow__node.dragging { transition: none !important; }
         .react-flow__edge-textwrapper { transition: opacity 0.3s ease; opacity: ${zoomLevel > 0.6 ? 1 : 0}; }
       `}</style>
+      
       <ReactFlow
-        nodes={visibleNodes}
-        edges={visibleEdges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
+        nodes={visibleNodes} edges={visibleEdges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
         onNodeClick={(e, n) => e.shiftKey ? openDetails(n) : expandNode(n.id)}
-        onPaneClick={closeSidebar}
+        onPaneClick={() => { closeSidebar(); setHighlightedTypes(new Set()); }}
         onMove={(e, v) => setZoomLevel(v.zoom)}
-        nodeTypes={nodeTypes}
-        defaultEdgeOptions={{ type: 'straight' }}
-        fitView
+        nodeTypes={nodeTypes} defaultEdgeOptions={{ type: 'straight' }} fitView
       >
         <Background />
         <Controls />
         
-        {/* TOP CENTER: SEARCH & CLEAR */}
+        {/* PANELS */}
         <Panel position="top-center">
           <Paper elevation={3} sx={{ p: 0.5, m: 2, display: 'flex', alignItems: 'center', gap: 1, bgcolor: 'rgba(255,255,255,0.95)', borderRadius: 2 }}>
-            <Autocomplete
-              sx={{ width: 400 }}
-              size="small"
-              options={searchResults}
-              getOptionLabel={(option) => option.label}
-              onInputChange={(e, val) => handleSearch(val)}
-              onChange={(e, val) => onSelectSearchResult(val)}
-              autoSelect
-              selectOnFocus
-              handleHomeEndKeys
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  placeholder="Search Asimov's Universe..."
-                  variant="outlined"
-                  InputProps={{
-                    ...params.InputProps,
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon fontSize="small" color="action" />
-                      </InputAdornment>
-                    ),
-                  }}
-                />
-              )}
-              renderOption={(props, option) => (
-                <ListItem {...props} key={option.id}>
-                  <ListItemAvatar>
-                    <Avatar sx={{ bgcolor: getHexColor(option.type), width: 24, height: 24 }}>
-                      {React.createElement(Icons[option.icon] || Icons.HelpOutline, { sx: { fontSize: 14 } })}
-                    </Avatar>
-                  </ListItemAvatar>
-                  <ListItemText primary={option.label} secondary={option.type} />
-                </ListItem>
-              )}
-            />
+            <Autocomplete sx={{ width: 400 }} size="small" options={searchResults} getOptionLabel={(o) => o.label} onInputChange={(e, v) => handleSearch(v)} onChange={(e, v) => onSelectSearchResult(v)} autoSelect renderInput={(params) => <TextField {...params} placeholder="Search characters..." variant="outlined" InputProps={{ ...params.InputProps, startAdornment: (<InputAdornment position="start"><SearchIcon fontSize="small" color="action" /></InputAdornment>), }} />} renderOption={(props, o) => (<ListItem {...props} key={o.id}><ListItemAvatar><Avatar sx={{ bgcolor: getHexColor(o.type), width: 24, height: 24 }}>{React.createElement(Icons[o.icon] || Icons.HelpOutline, { sx: { fontSize: 14 } })}</Avatar></ListItemAvatar><ListItemText primary={o.label} secondary={o.type} /></ListItem>)} />
             <Divider orientation="vertical" flexItem sx={{ my: 1 }} />
-            <Tooltip title="Clear Canvas" arrow>
-              <IconButton 
-                color="error" 
-                onClick={() => {
-                  setNodes([]);
-                  setEdges([]);
-                  setSearchValue("");
-                  setSelectedNode(null);
-                  setPreviewData(null);
-                }}
-              >
-                <ClearAllIcon />
-              </IconButton>
-            </Tooltip>
+            <Tooltip title="Clear Canvas" arrow><IconButton color="error" onClick={() => { setNodes([]); setEdges([]); setSelectedNode(null); setPreviewData(null); }}><ClearAllIcon /></IconButton></Tooltip>
           </Paper>
         </Panel>
 
-        {/* TOP LEFT: FILTERS & HISTOGRAM */}
         <Panel position="top-left">
           <Paper elevation={3} sx={{ p: 2, m: 2, width: 220, bgcolor: 'rgba(255,255,255,0.9)', borderRadius: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <FilterIcon size="small" sx={{ mr: 1, color: 'text.secondary' }} />
-              <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>Entity Types</Typography>
-            </Box>
-            
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}><FilterIcon size="small" sx={{ mr: 1, color: 'text.secondary' }} /><Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>Entity Types</Typography></Box>
             <FormGroup>
               {stats.map(([type, count]) => {
                 const color = getHexColor(type);
                 const maxCount = Math.max(...stats.map(s => s[1]), 1);
-                const barWidth = (count / maxCount) * 100;
-
+                const isHighlighted = highlightedTypes.has(type);
                 return (
-                  <Box key={type} sx={{ mb: 1.5 }}>
+                  <Box key={type} sx={{ mb: 1.5, p: 0.5, borderRadius: 1, bgcolor: isHighlighted ? 'action.selected' : 'transparent', transition: 'background-color 0.2s' }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                      <FormControlLabel
-                        control={
-                          <Checkbox 
-                            size="small" 
-                            checked={!hiddenTypes.has(type)} 
-                            onChange={() => toggleType(type)}
-                            sx={{ color: color, '&.Mui-checked': { color: color }, py: 0 }}
-                          />
-                        }
-                        label={<Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.7rem' }}>{type.toUpperCase()}</Typography>}
-                        sx={{ m: 0 }}
-                      />
+                      <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
+                        <Checkbox size="small" checked={!hiddenTypes.has(type)} onChange={() => setHiddenTypes(prev => { const n = new Set(prev); if (n.has(type)) n.delete(type); else n.add(type); return n; })} sx={{ color: color, '&.Mui-checked': { color: color }, p: 0.5 }} />
+                        <Typography variant="caption" onClick={(e) => toggleHighlight(type, e.shiftKey)} sx={{ fontWeight: 600, fontSize: '0.7rem', cursor: 'pointer', ml: 0.5, flexGrow: 1, userSelect: 'none', '&:hover': { color: color } }}>{type.toUpperCase()}</Typography>
+                      </Box>
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', mr: 0.5 }}>{count}</Typography>
-                        <Tooltip title={`Expand all ${type}s`} arrow>
-                          <IconButton size="small" sx={{ p: 0 }} onClick={() => expandAllOfType(type)}>
-                            <AddIcon sx={{ fontSize: 16, color: color }} />
-                          </IconButton>
-                        </Tooltip>
+                        <Tooltip title="Expand all" arrow><IconButton size="small" sx={{ p: 0 }} onClick={() => { const ns = nodesRef.current.filter(n => n.data.type === type); ns.forEach(node => expandNode(node.id)); }}><AddIcon sx={{ fontSize: 16, color: color }} /></IconButton></Tooltip>
                       </Box>
                     </Box>
-                    <Box sx={{ height: 4, width: '100%', bgcolor: 'action.hover', borderRadius: 1, overflow: 'hidden' }}>
-                      <Box sx={{ height: '100%', width: `${barWidth}%`, bgcolor: color, transition: 'width 0.5s ease' }} />
-                    </Box>
+                    <Box sx={{ height: 4, width: '100%', bgcolor: 'action.hover', borderRadius: 1, overflow: 'hidden', cursor: 'pointer' }} onClick={(e) => toggleHighlight(type, e.shiftKey)}><Box sx={{ height: '100%', width: `${(count/maxCount)*100}%`, bgcolor: color, transition: 'width 0.5s ease' }} /></Box>
                   </Box>
                 );
               })}
             </FormGroup>
+            {highlightedTypes.size > 0 && (<Button fullWidth variant="outlined" size="small" startIcon={<DrillDownIcon />} onClick={onDrillDown} sx={{ mt: 2, fontSize: '0.65rem' }}>Drill Down</Button>)}
           </Paper>
         </Panel>
 
         <Panel position="top-right">
-          <Paper elevation={3} sx={{ p: 0.5, m: 2, bgcolor: 'rgba(255,255,255,0.9)', borderRadius: 2 }}>
+          <Paper elevation={3} sx={{ p: 0.5, m: 2, display: 'flex', gap: 0.5, bgcolor: 'rgba(255,255,255,0.9)', borderRadius: 2 }}>
             <ButtonGroup variant="text" size="small">
               <Tooltip title="Hierarchical"><IconButton onClick={() => onLayoutClick('hierarchical')} color={activeLayout === 'hierarchical' ? 'secondary' : 'primary'}><TreeIcon /></IconButton></Tooltip>
               <Tooltip title="Circular"><IconButton onClick={() => onLayoutClick('circular')} color={activeLayout === 'circular' ? 'secondary' : 'primary'}><CircularIcon /></IconButton></Tooltip>
               <Tooltip title="Force"><IconButton onClick={() => onLayoutClick('force')} color={activeLayout === 'force' ? 'secondary' : 'primary'}><ForceIcon /></IconButton></Tooltip>
             </ButtonGroup>
+            <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+            <Tooltip title="Export PNG" arrow><IconButton onClick={onExport} color="primary"><DownloadIcon /></IconButton></Tooltip>
           </Paper>
         </Panel>
       </ReactFlow>
 
+      {/* DRAWER */}
       <Drawer anchor="right" open={!!selectedNode || !!previewData} onClose={closeSidebar} variant="temporary" sx={{ width: 350, '& .MuiDrawer-paper': { width: 350, borderLeft: `4px solid ${sidebarColor}`, boxShadow: -5 } }}>
         <Box sx={{ p: 3 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-            <Avatar sx={{ bgcolor: sidebarColor, width: 64, height: 64 }}>
-              {selectedNode ? React.createElement(Icons[selectedNode.data.icon] || Icons.HelpOutline, { sx: { fontSize: 32 } }) : <GroupIcon sx={{ fontSize: 32 }} />}
-            </Avatar>
-            <IconButton onClick={closeSidebar}><CloseIcon /></IconButton>
-          </Box>
-
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}><Avatar sx={{ bgcolor: sidebarColor, width: 64, height: 64 }}>{selectedNode ? React.createElement(Icons[selectedNode.data.icon] || Icons.HelpOutline, { sx: { fontSize: 32 } }) : <GroupIcon sx={{ fontSize: 32 }} />}</Avatar><IconButton onClick={closeSidebar}><CloseIcon /></IconButton></Box>
           {selectedNode && (
             <>
               <Typography variant="h5" sx={{ fontWeight: 'bold' }}>{selectedNode.data.label}</Typography>
-              <Typography variant="subtitle1" color="text.secondary">ID: {selectedNode.id}</Typography>
               <Divider sx={{ my: 2 }} />
-              
-              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>ALL NEIGHBORS:</Typography>
               <List>
-                {selectedNodeNeighbors.length === 0 && <Typography variant="body2" color="text.secondary">Loading neighbors...</Typography>}
-                {[...selectedNodeNeighbors]
-                  .sort((a, b) => (a.data.type || "").localeCompare(b.data.type || ""))
-                  .map(node => {
-                    const NodeIcon = Icons[node.data.icon] || Icons.HelpOutline;
-                  const isAlreadyOnCanvas = nodes.some(n => n.id === node.id);
-                  return (
-                    <ListItem key={node.id} sx={{ px: 0 }}>
-                      <ListItemAvatar>
-                        <Avatar sx={{ bgcolor: getHexColor(node.data.type), width: 32, height: 32 }}>
-                          <NodeIcon sx={{ fontSize: 18 }} />
-                        </Avatar>
-                      </ListItemAvatar>
-                      <ListItemText primary={node.data.label} secondary={node.data.type} />
-                      <ListItemSecondaryAction>
-                        <IconButton 
-                          edge="end" 
-                          color="primary" 
-                          disabled={isAlreadyOnCanvas}
-                          onClick={() => addSingleNode(selectedNode.id, node)}
-                        >
-                          {isAlreadyOnCanvas ? <Icons.Check /> : <AddIcon />}
-                        </IconButton>
-                      </ListItemSecondaryAction>
-                    </ListItem>
-                  );
-                })}
+                <ListItem sx={{ px: 0 }}><ListItemIcon><TypeIcon /></ListItemIcon><ListItemText primary="Type" secondary={selectedNode.data.type} /></ListItem>
+                <ListItem sx={{ px: 0 }}><ListItemIcon><InfoIcon /></ListItemIcon><ListItemText primary="Importance" secondary={(selectedNode.data.score * 100).toFixed(1) + "%"} /></ListItem>
               </List>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 2, mb: 1 }}>NEIGHBORS:</Typography>
+              <List>{selectedNodeNeighbors.map(node => (<ListItem key={node.id} sx={{ px: 0 }}><ListItemAvatar><Avatar sx={{ bgcolor: getHexColor(node.data.type), width: 32, height: 32 }}>{React.createElement(Icons[node.data.icon] || Icons.HelpOutline, { sx: { fontSize: 18 } })}</Avatar></ListItemAvatar><ListItemText primary={node.data.label} secondary={node.data.type} /><ListItemSecondaryAction><IconButton edge="end" color="primary" disabled={nodes.some(n => n.id === node.id)} onClick={() => addSingleNode(selectedNode.id, node)}>{nodes.some(n => n.id === node.id) ? <CheckIcon /> : <AddIcon />}</IconButton></ListItemSecondaryAction></ListItem>))}</List>
             </>
           )}
-
           {previewData && (
             <>
               <Typography variant="h5" sx={{ fontWeight: 'bold' }}>{previewData.category.toUpperCase()} Group</Typography>
-              <Typography variant="subtitle1" color="text.secondary">{previewData.nodes.length} Neighbors found</Typography>
-              <Divider sx={{ my: 2 }} />
-              <List>
-                {[...previewData.nodes]
-                  .sort((a, b) => (a.data.type || "").localeCompare(b.data.type || ""))
-                  .map(node => {
-                    const NodeIcon = Icons[node.data.icon] || Icons.HelpOutline;
-                  const isAlreadyOnCanvas = nodes.some(n => n.id === node.id);
-                  return (
-                    <ListItem key={node.id} sx={{ px: 0 }}>
-                      <ListItemAvatar>
-                        <Avatar sx={{ bgcolor: sidebarColor, width: 32, height: 32 }}>
-                          <NodeIcon sx={{ fontSize: 18 }} />
-                        </Avatar>
-                      </ListItemAvatar>
-                      <ListItemText primary={node.data.label} secondary={node.data.type} />
-                      <ListItemSecondaryAction>
-                        <IconButton 
-                          edge="end" 
-                          color="primary" 
-                          disabled={isAlreadyOnCanvas}
-                          onClick={() => addSingleNode(previewData.sourceId, node)}
-                        >
-                          {isAlreadyOnCanvas ? <Icons.Check /> : <AddIcon />}
-                        </IconButton>
-                      </ListItemSecondaryAction>
-                    </ListItem>
-                  );
-                })}
-              </List>
+              <Divider sx={{ my: 2 }} /><List>{previewData.nodes.map(node => (<ListItem key={node.id} sx={{ px: 0 }}><ListItemAvatar><Avatar sx={{ bgcolor: sidebarColor, width: 32, height: 32 }}>{React.createElement(Icons[node.data.icon] || Icons.HelpOutline, { sx: { fontSize: 18 } })}</Avatar></ListItemAvatar><ListItemText primary={node.data.label} secondary={node.data.type} /><ListItemSecondaryAction><IconButton edge="end" color="primary" disabled={nodes.some(n => n.id === node.id)} onClick={() => addSingleNode(previewData.sourceId, node)}>{nodes.some(n => n.id === node.id) ? <CheckIcon /> : <AddIcon />}</IconButton></ListItemSecondaryAction></ListItem>))}</List>
             </>
           )}
         </Box>
