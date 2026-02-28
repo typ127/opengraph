@@ -17,7 +17,7 @@ export const COLORS = {
 
 // --- ORIGINAL SATURATED NODE CATEGORY COLORS ---
 export const NODE_CATEGORIES = {
-  people: '#1976d2',
+  person: '#1976d2',
   planet: '#4caf50',
   mutant: '#dc143c',
   robot: '#00bfff',

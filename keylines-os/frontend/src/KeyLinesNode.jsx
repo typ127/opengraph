@@ -135,13 +135,14 @@ const KeyLinesNode = ({ data }) => {
         sx={{ 
           mt: 1, 
           fontWeight: 'bold', 
-          color: COLORS.nodeLabel, 
+          color: label ? COLORS.nodeLabel : 'rgba(255,255,255,0.3)', 
           textAlign: 'center',
           fontSize: score > 0.8 ? '0.8rem' : '0.75rem',
-          transition: 'font-size 0.3s ease'
+          transition: 'all 0.3s ease',
+          fontStyle: label ? 'normal' : 'italic'
         }}
       >
-        {label}
+        {label || '[Unnamed]'}
       </Typography>
     </Box>
   );

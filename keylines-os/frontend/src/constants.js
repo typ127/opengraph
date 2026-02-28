@@ -1,7 +1,7 @@
 import { NODE_CATEGORIES } from './theme';
 
 export const categoryMap = {
-  "person": "people", 
+  "person": "person", 
   "mutant": "mutant",
   "planet": "planet",
   "robot": "robot",
@@ -11,7 +11,7 @@ export const categoryMap = {
 };
 
 export const typeColors = {
-  people: NODE_CATEGORIES.people,
+  person: NODE_CATEGORIES.person,
   planet: NODE_CATEGORIES.planet,
   mutant: NODE_CATEGORIES.mutant,
   robot: NODE_CATEGORIES.robot,

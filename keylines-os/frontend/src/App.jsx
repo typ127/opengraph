@@ -244,6 +244,7 @@ export default function App() {
   const [highlightedTypes, setHighlightedTypes] = useState(new Set());
   const [searchResults, setSearchResults] = useState([]);
   const [isLeftDrawerOpen, setIsLeftDrawerOpen] = useState(false);
+  const [isEditingNode, setIsEditingNode] = useState(false);
 
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
@@ -252,7 +253,25 @@ export default function App() {
   useEffect(() => { edgesRef.current = edges; }, [edges]);
   useEffect(() => { activeLayoutRef.current = activeLayout; }, [activeLayout]);
 
-  const closeSidebar = useCallback(() => { setSelectedNode(null); setPreviewData(null); setSelectedNodeNeighbors([]); }, []);
+  const updateNodeData = useCallback((nodeId, newData) => {
+    setNodes((nds) =>
+      nds.map((node) => {
+        if (node.id === nodeId) {
+          return { ...node, data: { ...node.data, ...newData } };
+        }
+        return node;
+      })
+    );
+    // Auch den lokalen State des selektierten Knotens aktualisieren
+    setSelectedNode(prev => prev && prev.id === nodeId ? { ...prev, data: { ...prev.data, ...newData } } : prev);
+  }, [setNodes]);
+
+  const closeSidebar = useCallback(() => { 
+    setSelectedNode(null); 
+    setPreviewData(null); 
+    setSelectedNodeNeighbors([]); 
+    setIsEditingNode(false);
+  }, []);
 
   const applyLayout = useCallback((nds, eds, type) => {
     if (type === 'hierarchical') return getLayoutedElements(nds, eds);
@@ -350,7 +369,9 @@ export default function App() {
   }, [expandNode, applyLayout, fitView, setNodes, setEdges]);
 
   const openDetails = useCallback(async (node) => {
-    setSelectedNode(node); setPreviewData(null);
+    setSelectedNode(node); 
+    setPreviewData(null);
+    setIsEditingNode(false);
     try {
       const response = await fetch(`http://localhost:8000/expand/${node.id}`);
       const data = await response.json();
@@ -469,13 +490,24 @@ export default function App() {
     if (!type) return;
     const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
     const nodeId = `new-${Date.now()}`;
-    const iconMap = { people: 'Person', planet: 'Public', robot: 'Android', mutant: 'Psychology', item: 'AutoStories', science: 'Science' };
+    const iconMap = { person: 'Person', planet: 'Public', robot: 'Android', mutant: 'Psychology', item: 'AutoStories', science: 'Science' };
     const newNode = {
       id: nodeId, type: 'keylines', position,
-      data: { label: `New ${type.charAt(0).toUpperCase() + type.slice(1)}`, type, icon: iconMap[type] || 'HelpOutline', description: 'New entity.', score: 0.5, onSegmentClick: (cat, e) => expandNode(nodeId, cat, e) },
+      data: { 
+        label: '', 
+        type, 
+        icon: iconMap[type] || 'HelpOutline', 
+        description: '', 
+        score: 0.5, 
+        onSegmentClick: (cat, e) => expandNode(nodeId, cat, e) 
+      },
     };
     setNodes((nds) => nds.concat(newNode));
-    setTimeout(() => openDetails(newNode), 50);
+    // Sofort selektieren und in den Edit-Modus schalten
+    setTimeout(() => {
+      openDetails(newNode);
+      setIsEditingNode(true);
+    }, 50);
   }, [setNodes, expandNode, openDetails, screenToFlowPosition]);
 
   const visibleNodes = useMemo(() => {
@@ -603,7 +635,7 @@ export default function App() {
                 sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', border: `1px solid rgba(255,255,255,0.05)`, borderRadius: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'grab', transition: 'all 0.2s ease', '&:hover': { bgcolor: 'rgba(255,255,255,0.07)', borderColor: NODE_CATEGORIES[cat], transform: 'translateY(-2px)', boxShadow: `0 4px 10px ${NODE_CATEGORIES[cat]}33` } }}
               >
                 <Avatar sx={{ bgcolor: NODE_CATEGORIES[cat], width: 32, height: 32, mb: 1 }}>
-                  {cat === 'people' ? <PersonIcon sx={{ fontSize: 18, color: '#fff' }} /> : 
+                  {cat === 'person' ? <PersonIcon sx={{ fontSize: 18, color: '#fff' }} /> : 
                    cat === 'planet' ? <PublicIcon sx={{ fontSize: 18, color: '#fff' }} /> : 
                    cat === 'robot' ? <AndroidIcon sx={{ fontSize: 18, color: '#fff' }} /> : 
                    cat === 'item' ? <ItemIcon sx={{ fontSize: 18, color: '#fff' }} /> :
@@ -638,31 +670,101 @@ export default function App() {
       <Drawer anchor="right" open={!!selectedNode || !!previewData} onClose={closeSidebar} variant="temporary" sx={{ width: 350, '& .MuiDrawer-paper': { width: 350, borderLeft: `4px solid ${sidebarColor}`, boxShadow: -5, bgcolor: COLORS.paper } }}>
         <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
           <Box sx={{ flexGrow: 1, overflowY: 'auto' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}><Avatar sx={{ bgcolor: sidebarColor, width: 64, height: 64, boxShadow: '0 0 20px ' + sidebarColor + '44' }}>{selectedNode ? React.createElement(Icons[selectedNode.data.icon] || Icons.HelpOutline, { sx: { fontSize: 32, color: '#fff' } }) : <GroupIcon sx={{ fontSize: 32, color: '#fff' }} />}</Avatar><IconButton onClick={closeSidebar}><CloseIcon /></IconButton></Box>
-            {selectedNode && (
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Avatar sx={{ bgcolor: sidebarColor, width: 64, height: 64, boxShadow: '0 0 20px ' + sidebarColor + '44' }}>
+                  {selectedNode ? React.createElement(Icons[selectedNode.data.icon] || Icons.HelpOutline, { sx: { fontSize: 32, color: '#fff' } }) : <GroupIcon sx={{ fontSize: 32, color: '#fff' }} />}
+                </Avatar>
+                {selectedNode && (
+                  <Tooltip title={isEditingNode ? "View Info" : "Edit Properties"}>
+                    <IconButton 
+                      onClick={() => setIsEditingNode(!isEditingNode)} 
+                      sx={{ bgcolor: 'rgba(255,255,255,0.05)', '&:hover': { bgcolor: isEditingNode ? `${COLORS.secondary}22` : `${COLORS.primary}22` } }}
+                    >
+                      {isEditingNode ? <Icons.Visibility sx={{ fontSize: 20, color: COLORS.secondary }} /> : <Icons.Edit sx={{ fontSize: 20, color: COLORS.primary }} />}
+                    </IconButton>
+                  </Tooltip>
+                )}
+              </Box>
+              <IconButton onClick={closeSidebar}><CloseIcon /></IconButton>
+            </Box>
+
+            {selectedNode && isEditingNode ? (
+              <>
+                <Typography variant="caption" sx={{ color: COLORS.primary, fontWeight: 'bold', letterSpacing: 1, display: 'block', mb: 2 }}>EDIT ENTITY</Typography>
+                <TextField
+                  fullWidth label="Label" variant="outlined" size="small"
+                  autoFocus
+                  placeholder="Enter name..."
+                  value={selectedNode.data.label || ''}
+                  onChange={(e) => updateNodeData(selectedNode.id, { label: e.target.value })}
+                  onKeyDown={(e) => { if (e.key === 'Enter') closeSidebar(); }}
+                  sx={{ mb: 2 }}
+                />
+                <TextField
+                  fullWidth label="Description" variant="outlined" size="small" multiline rows={4}
+                  placeholder="Enter details..."
+                  value={selectedNode.data.description || ''}
+                  onChange={(e) => updateNodeData(selectedNode.id, { description: e.target.value })}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) closeSidebar(); }}
+                  sx={{ mb: 3 }}
+                />
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 1, display: 'block' }}>CHOOSE ICON</Typography>
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 3 }}>
+                  {['Person', 'Android', 'Public', 'Science', 'AutoStories', 'Psychology', 'Hub', 'Star'].map(iconName => (
+                    <IconButton 
+                      key={iconName} size="small" 
+                      onClick={() => updateNodeData(selectedNode.id, { icon: iconName })}
+                      sx={{ 
+                        bgcolor: selectedNode.data.icon === iconName ? `${COLORS.primary}22` : 'transparent',
+                        border: `1px solid ${selectedNode.data.icon === iconName ? COLORS.primary : 'rgba(255,255,255,0.1)'}`,
+                        color: selectedNode.data.icon === iconName ? COLORS.primary : 'rgba(255,255,255,0.5)'
+                      }}
+                    >
+                      {React.createElement(Icons[iconName], { sx: { fontSize: 18 } })}
+                    </IconButton>
+                  ))}
+                </Box>
+              </>
+            ) : selectedNode ? (
               <>
                 <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#fff' }}>{selectedNode.data.label}</Typography>
                 <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
-                <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic', color: 'rgba(255,255,255,0.7)' }}>{selectedNode.data.description}</Typography>
+                <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic', color: 'rgba(255,255,255,0.7)' }}>
+                  {selectedNode.data.description}
+                </Typography>
                 <List>
                   <ListItem sx={{ px: 0 }}><ListItemIcon><TypeIcon sx={{ color: sidebarColor }} /></ListItemIcon><ListItemText primary="Type" secondary={selectedNode.data.type} secondaryTypographyProps={{ style: { color: 'rgba(255,255,255,0.5)' } }} /></ListItem>
                   <ListItem sx={{ px: 0 }}><ListItemIcon><InfoIcon sx={{ color: sidebarColor }} /></ListItemIcon><ListItemText primary="Importance" secondary={(selectedNode.data.score * 100).toFixed(1) + "%"} secondaryTypographyProps={{ style: { color: 'rgba(255,255,255,0.5)' } }} /></ListItem>
                 </List>
-                <Typography variant="caption" color="rgba(255,255,255,0.4)" display="block" sx={{ mt: 2, mb: 1, fontWeight: 'bold', letterSpacing: 1 }}>NEIGHBORS:</Typography>
+              </>
+            ) : null}
+
+            {(selectedNode || previewData) && (
+              <>
+                <Typography variant="caption" color="rgba(255,255,255,0.4)" display="block" sx={{ mt: 2, mb: 1, fontWeight: 'bold', letterSpacing: 1 }}>
+                  {previewData ? `${previewData.category.toUpperCase()} GROUP` : "NEIGHBORS"}
+                </Typography>
                 <List>
-                  {[...selectedNodeNeighbors].sort((a, b) => (a.data.type || '').localeCompare(b.data.type || '')).map(node => (
-                    <ListItem key={node.id} sx={{ px: 0 }}>
-                      <ListItemAvatar><Avatar sx={{ bgcolor: getHexColor(node.data.type), width: 32, height: 32 }}>{React.createElement(Icons[node.data.icon] || Icons.HelpOutline, { sx: { fontSize: 18, color: '#fff' } })}</Avatar></ListItemAvatar>
-                      <ListItemText primary={node.data.label} secondary={node.data.type} primaryTypographyProps={{ style: { fontSize: '0.9rem' } }} secondaryTypographyProps={{ style: { fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' } }} />
-                      <ListItemSecondaryAction><IconButton edge="end" color="primary" disabled={nodes.some(n => n.id === node.id)} onClick={() => addSingleNode(selectedNode.id, node)}>{nodes.some(n => n.id === node.id) ? <CheckIcon sx={{ color: 'success.main' }} /> : <AddIcon />}</IconButton></ListItemSecondaryAction>
-                    </ListItem>
-                  ))}
+                  {(previewData ? previewData.nodes : selectedNodeNeighbors)
+                    .sort((a, b) => (a.data.type || '').localeCompare(b.data.type || ''))
+                    .map(node => (
+                      <ListItem key={node.id} sx={{ px: 0 }}>
+                        <ListItemAvatar><Avatar sx={{ bgcolor: getHexColor(node.data.type), width: 32, height: 32 }}>{React.createElement(Icons[node.data.icon] || Icons.HelpOutline, { sx: { fontSize: 18, color: '#fff' } })}</Avatar></ListItemAvatar>
+                        <ListItemText primary={node.data.label} secondary={node.data.type} primaryTypographyProps={{ style: { fontSize: '0.9rem' } }} secondaryTypographyProps={{ style: { fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' } }} />
+                        <ListItemSecondaryAction><IconButton edge="end" color="primary" disabled={nodes.some(n => n.id === node.id)} onClick={() => addSingleNode(selectedNode?.id || previewData?.sourceId, node)}>{nodes.some(n => n.id === node.id) ? <CheckIcon sx={{ color: 'success.main' }} /> : <AddIcon />}</IconButton></ListItemSecondaryAction>
+                      </ListItem>
+                    ))}
                 </List>
               </>
             )}
           </Box>
-        </Box>
-      </Drawer>
-    </Box>
-  );
-}
+                    {selectedNode && (
+                      <Box sx={{ pt: 2 }}><Divider sx={{ mb: 2, borderColor: 'rgba(255,255,255,0.1)' }} /><Button variant="outlined" color="error" fullWidth startIcon={<DeleteIcon />} onClick={onDeleteNode} sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 'bold', borderColor: 'rgba(211, 47, 47, 0.5)' }}>Remove from Canvas</Button></Box>
+                    )}
+                  </Box>
+                </Drawer>
+              </Box>
+            );
+          }
+          
