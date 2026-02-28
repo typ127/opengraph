@@ -100,9 +100,6 @@ const KeyLinesNode = ({ data }) => {
               </Tooltip>
             );
           })}
-          {donut.length === 0 && (
-            <circle cx={center} cy={center} r={radius} fill="none" stroke="#e0e0e0" strokeWidth="2" />
-          )}
         </svg>
 
         {/* Central Icon */}

@@ -33,7 +33,12 @@ MOCK_DATA = {
 
 def get_props(ent):
     if not ent: return {}
-    return getattr(ent, "properties", getattr(ent, "_properties", {}))
+    # GQLAlchemy Node Objekte haben oft 'properties' oder '_properties'
+    if hasattr(ent, "properties"): return ent.properties
+    if hasattr(ent, "_properties"): return ent._properties
+    # Falls es ein Dictionary ist (direkt aus Cypher)
+    if isinstance(ent, dict): return ent
+    return {}
 
 def process_with_social_algorithms(nodes, edges, algorithm: str = "degree"):
     """Berechnet Centrality Scores mit NetworkX für das Visual-Scaling."""
@@ -86,28 +91,70 @@ async def analyze(data: Dict[str, Any] = Body(...)):
     algorithm = data.get("algorithm", "degree")
     return process_with_social_algorithms(nodes, edges, algorithm)
 
+@app.post("/upsert-node")
+async def upsert_node(node_data: Dict[str, Any] = Body(...)):
+    """Erstellt oder aktualisiert einen Knoten in der Datenbank."""
+    props = node_data.get("data", {})
+    node_id = node_data.get("id")
+    label = props.get("label", "")
+    node_type = props.get("type", "other")
+    icon = props.get("icon", "HelpOutline")
+    description = props.get("description", "")
+
+    print(f"UPSERT NODE: {node_id} (Label: '{label}')")
+
+    # Strings für Cypher vorbereiten (Escaping von Hochkommas)
+    safe_label = label.replace("'", "\\'")
+    safe_description = description.replace("'", "\\'")
+
+    # Cypher Query: MERGE findet den Knoten anhand der ID oder erstellt ihn.
+    # Wir stellen sicher, dass der Knoten das Label :Entity erhält (wie im Import-Skript).
+    query = f"""
+    MERGE (n:Entity {{id: '{node_id}'}})
+    SET n.label = '{safe_label}',
+        n.type = '{node_type}',
+        n.icon = '{icon}',
+        n.description = '{safe_description}'
+    RETURN n;
+    """
+    try:
+        memgraph.execute(query)
+        print(f"SUCCESSfully upserted {node_id}")
+        return {"status": "success", "id": node_id}
+    except Exception as e:
+        print(f"Upsert error: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.delete("/delete-node/{node_id}")
+async def delete_node(node_id: str):
+    """Löscht einen Knoten und alle seine Kanten permanent aus der Datenbank."""
+    query = f"MATCH (n {{id: '{node_id}'}}) DETACH DELETE n;"
+    try:
+        memgraph.execute(query)
+        print(f"DELETED node {node_id} from DB")
+        return {"status": "success", "id": node_id}
+    except Exception as e:
+        print(f"Delete error: {e}")
+        return {"status": "error", "message": str(e)}
+
 @app.get("/search")
 async def search(q: str = Query(...)):
-    print(f"Searching for: {q}")
+    print(f"SEARCH REQUEST: '{q}'")
+    # Query-Parameter für Cypher vorbereiten
+    safe_q = q.replace("'", "\\'")
+    
+    # Suche in Label und Typ, Rückgabe der Props direkt aus Cypher (ohne Label-Zwang)
     query = f"""
     MATCH (n)
-    WHERE toLower(n.label) CONTAINS toLower('{q}')
-    RETURN n LIMIT 15;
+    WHERE toLower(coalesce(n.label, "")) CONTAINS toLower('{safe_q}') 
+       OR toLower(coalesce(n.type, "")) CONTAINS toLower('{safe_q}')
+    RETURN n.id as id, n.label as label, n.type as type, n.icon as icon, n.description as description
+    LIMIT 15;
     """
     try:
         results = list(memgraph.execute_and_fetch(query))
-        nodes = []
-        for row in results:
-            node = row['n']
-            props = get_props(node)
-            nodes.append({
-                "id": props.get("id"),
-                "label": props.get("label"),
-                "type": props.get("type"),
-                "icon": props.get("icon"),
-                "description": props.get("description", "")
-            })
-        return nodes
+        print(f"FOUND {len(results)} matches for '{q}': {results}")
+        return results
     except Exception as e:
         print(f"Search error: {e}")
         return []

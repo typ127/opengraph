@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.19.0] - 2026-02-27
+
+### Added
+- **Toolbox (Node Templates)**: Introduced a persistent left drawer containing templates for `person`, `robot`, `planet`, etc. Users can now build the graph manually via **Drag & Drop**.
+- **Interactive Node Editor**: Added an Edit Mode to the right drawer. Includes live-editing for labels and descriptions, plus a custom icon picker.
+- **Backend Persistence (UPSERT/DELETE)**: Implemented full CRUD operations for nodes. Changes are automatically saved to Memgraph, and nodes can be permanently deleted from the database.
+- **Smart "Escape" Handling**: Implemented a draft system. Pressing `Escape` while editing reverts changes for existing nodes or removes un-persisted "draft" nodes from the canvas.
+- **Unified Toolbar Alignment**: Consistently aligned all top-level UI elements (Toolbox toggle, Search, Layouts, Algorithms, Histogram) at the top of the viewport.
+
+### Changed
+- **Optimized Search**: The search engine is now more robust, handling case-insensitivity, special characters, and missing labels by falling back to entity types.
+- **UX Refinements**: 
+  - Isolated nodes from search now automatically align to the right of existing elements to prevent overlapping.
+  - Removed the "empty ring" visual for nodes without relationships for a cleaner aesthetic.
+  - Disabled CSS transitions during node dragging for precise, non-floating movement.
+
+### Fixed
+- **Sync Consistency**: Unified category naming (e.g., using `person` instead of `people`) to match the backend database schema perfectly.
+
 ## [1.18.0] - 2026-02-27
 
 ### Added

@@ -245,6 +245,7 @@ export default function App() {
   const [searchResults, setSearchResults] = useState([]);
   const [isLeftDrawerOpen, setIsLeftDrawerOpen] = useState(false);
   const [isEditingNode, setIsEditingNode] = useState(false);
+  const [editSnapshot, setEditSnapshot] = useState(null);
 
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
@@ -266,12 +267,109 @@ export default function App() {
     setSelectedNode(prev => prev && prev.id === nodeId ? { ...prev, data: { ...prev.data, ...newData } } : prev);
   }, [setNodes]);
 
-  const closeSidebar = useCallback(() => { 
+  const persistNode = useCallback(async (node) => {
+    if (!node) return;
+    console.log("PERSISTING NODE:", node.id, node.data.label);
+    
+    // Draft-Flag entfernen, da wir jetzt speichern
+    const nodeToPersist = {
+      ...node,
+      data: { ...node.data, isDraft: false }
+    };
+
+    try {
+      await fetch('http://localhost:8000/upsert-node', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: nodeToPersist.id, data: nodeToPersist.data })
+      });
+      
+      // Lokal das Flag ebenfalls löschen
+      setNodes(nds => nds.map(n => n.id === node.id ? nodeToPersist : n));
+    } catch (e) {
+      console.error("Persist error:", e);
+    }
+  }, [setNodes]);
+
+  const closeSidebar = useCallback((skipPersist = false) => { 
+    // Wenn wir im Edit-Modus waren, speichern wir die Änderungen (außer beim Löschen oder Abbrechen)
+    if (selectedNode && isEditingNode && !skipPersist) {
+      persistNode(selectedNode);
+    }
     setSelectedNode(null); 
     setPreviewData(null); 
     setSelectedNodeNeighbors([]); 
     setIsEditingNode(false);
-  }, []);
+    setEditSnapshot(null);
+  }, [selectedNode, isEditingNode, persistNode]);
+
+  const cancelEditing = useCallback(() => {
+    if (!selectedNode) return;
+    
+    // Fall 1: Echter, ungespeicherter Entwurf -> Löschen
+    if (selectedNode.data.isDraft) {
+      setNodes(nds => nds.filter(n => n.id !== selectedNode.id));
+    } 
+    // Fall 2: Existierender Knoten (bereits in DB oder geladen) -> Revert auf Snapshot
+    else if (editSnapshot) {
+      setNodes(nds => nds.map(node => 
+        node.id === selectedNode.id ? { ...node, data: { ...node.data, ...editSnapshot } } : node
+      ));
+    }
+    
+    closeSidebar(true);
+  }, [selectedNode, editSnapshot, setNodes, closeSidebar]);
+
+  const deleteNodePermanently = useCallback(async (nodeId) => {
+    if (!window.confirm("Do you really want to delete this entity permanently from the database?")) return;
+    
+    try {
+      await fetch(`http://localhost:8000/delete-node/${nodeId}`, { method: 'DELETE' });
+      setNodes(nds => nds.filter(n => n.id !== nodeId));
+      setEdges(eds => eds.filter(e => e.source !== nodeId && e.target !== nodeId));
+      closeSidebar(true); // Persistierung explizit überspringen
+    } catch (e) {
+      console.error("Delete error:", e);
+    }
+  }, [setNodes, setEdges, closeSidebar]);
+
+  const openDetails = useCallback(async (node, forceEdit = false) => {
+    // Wenn wir gerade einen anderen Knoten editiert haben, speichern wir diesen erst
+    if (selectedNode && isEditingNode && selectedNode.id !== node.id) {
+      persistNode(selectedNode);
+    }
+    
+    setSelectedNode(node); 
+    setPreviewData(null);
+    setIsEditingNode(forceEdit);
+    
+    // Snapshot für mögliches Revert (Escape) erstellen
+    if (forceEdit) {
+      setEditSnapshot({ label: node.data.label, description: node.data.description, icon: node.data.icon });
+    } else {
+      setEditSnapshot(null);
+    }
+    
+    // Keine Nachbarn laden, wenn es ein brandneuer Knoten ist
+    if (node.id.toString().startsWith('new-')) {
+      setSelectedNodeNeighbors([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:8000/expand/${node.id}`);
+      const data = await response.json();
+      setSelectedNodeNeighbors(data.nodes.filter(n => n.id !== node.id));
+    } catch (e) { console.error(e); }
+  }, [selectedNode, isEditingNode, persistNode]);
+
+  const handleDrawerClose = useCallback((event, reason) => {
+    if (reason === 'escapeKeyDown' && isEditingNode) {
+      cancelEditing();
+    } else {
+      closeSidebar();
+    }
+  }, [isEditingNode, cancelEditing, closeSidebar]);
 
   const applyLayout = useCallback((nds, eds, type) => {
     if (type === 'hierarchical') return getLayoutedElements(nds, eds);
@@ -368,17 +466,6 @@ export default function App() {
     }, 50);
   }, [expandNode, applyLayout, fitView, setNodes, setEdges]);
 
-  const openDetails = useCallback(async (node) => {
-    setSelectedNode(node); 
-    setPreviewData(null);
-    setIsEditingNode(false);
-    try {
-      const response = await fetch(`http://localhost:8000/expand/${node.id}`);
-      const data = await response.json();
-      setSelectedNodeNeighbors(data.nodes.filter(n => n.id !== node.id));
-    } catch (e) { console.error(e); }
-  }, []);
-
   const onDrillDown = useCallback(() => {
     if (highlightedTypes.size === 0) return;
     setNodes((nds) => {
@@ -413,16 +500,34 @@ export default function App() {
       const data = await response.json();
       const fullNode = data.nodes.find(n => n.id === nodeInfo.id);
       if (fullNode) {
-        const newNode = { ...fullNode, type: 'keylines', position: { x: 400, y: 400 }, data: { ...fullNode.data, onSegmentClick: (cat, e) => expandNode(fullNode.id, cat, e) } };
+        const currentNodes = nodesRef.current;
+        let newPos = { x: 400, y: 400 };
+        
+        if (currentNodes.length > 0) {
+          const maxX = Math.max(...currentNodes.map(n => n.position.x));
+          const rightmostNode = currentNodes.reduce((prev, curr) => (prev.position.x > curr.position.x) ? prev : curr);
+          newPos = { x: maxX + 200, y: rightmostNode.position.y };
+        }
+
+        const newNode = { 
+          ...fullNode, 
+          type: 'keylines', 
+          position: newPos, 
+          data: { ...fullNode.data, onSegmentClick: (cat, e) => expandNode(fullNode.id, cat, e) } 
+        };
+        
         setNodes(nds => deduplicate([...nds, newNode]));
         existing = newNode;
+        
+        // Kamera sanft auf den neuen Bereich ausrichten
+        setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
       }
     }
     if (existing) {
       setTimeout(() => {
         const nodePos = nodesRef.current.find(n => n.id === nodeInfo.id)?.position;
         if (nodePos) setCenter(nodePos.x, nodePos.y, { zoom: 1.2, duration: 800 });
-      }, 100);
+      }, 200);
     }
   };
 
@@ -499,14 +604,14 @@ export default function App() {
         icon: iconMap[type] || 'HelpOutline', 
         description: '', 
         score: 0.5, 
+        isDraft: true,
         onSegmentClick: (cat, e) => expandNode(nodeId, cat, e) 
       },
     };
     setNodes((nds) => nds.concat(newNode));
     // Sofort selektieren und in den Edit-Modus schalten
     setTimeout(() => {
-      openDetails(newNode);
-      setIsEditingNode(true);
+      openDetails(newNode, true);
     }, 50);
   }, [setNodes, expandNode, openDetails, screenToFlowPosition]);
 
@@ -570,7 +675,29 @@ export default function App() {
       {/* UNIFIED GLOBAL TOOLBAR (CENTER) */}
       <Box sx={{ position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 1200 }}>
         <Paper elevation={3} sx={{ pl: 2, pr: 1, height: topBarHeight, display: 'flex', alignItems: 'center', gap: 1, bgcolor: 'rgba(30, 30, 30, 0.9)', borderRadius: 2, border: `1px solid ${COLORS.panelBorder}` }}>
-          <Autocomplete sx={{ width: 300, ml: 0.5 }} size="small" options={searchResults} getOptionLabel={(o) => o.label} onInputChange={(e, v) => handleSearch(v)} onChange={(e, v) => onSelectSearchResult(v)} autoSelect renderInput={(params) => <TextField {...params} placeholder="Search Universe..." variant="outlined" InputProps={{ ...params.InputProps, startAdornment: (<InputAdornment position="start"><SearchIcon fontSize="small" color="action" /></InputAdornment>), }} />} renderOption={(props, o) => (<ListItem {...props} key={o.id}><ListItemAvatar><Avatar sx={{ bgcolor: getHexColor(o.type), width: 24, height: 24 }}>{React.createElement(Icons[o.icon] || Icons.HelpOutline, { sx: { fontSize: 14 } })}</Avatar></ListItemAvatar><ListItemText primary={o.label} secondary={o.type} /></ListItem>)} />
+          <Autocomplete 
+            sx={{ width: 300, ml: 0.5 }} 
+            size="small" 
+            options={searchResults} 
+            getOptionLabel={(o) => o.label || o.type || 'Unknown'} 
+            onInputChange={(e, v) => handleSearch(v)} 
+            onChange={(e, v) => onSelectSearchResult(v)} 
+            autoSelect 
+            renderInput={(params) => <TextField {...params} placeholder="Search Universe..." variant="outlined" InputProps={{ ...params.InputProps, startAdornment: (<InputAdornment position="start"><SearchIcon fontSize="small" color="action" /></InputAdornment>), }} />} 
+            renderOption={(props, o) => {
+              const { key, ...otherProps } = props;
+              return (
+                <ListItem key={o.id || key} {...otherProps}>
+                  <ListItemAvatar>
+                    <Avatar sx={{ bgcolor: getHexColor(o.type), width: 24, height: 24 }}>
+                      {React.createElement(Icons[o.icon] || Icons.HelpOutline, { sx: { fontSize: 14 } })}
+                    </Avatar>
+                  </ListItemAvatar>
+                  <ListItemText primary={o.label || `[${o.type}]`} secondary={o.type} />
+                </ListItem>
+              );
+            }} 
+          />
           <Tooltip title="Clear Canvas"><IconButton size="small" color="error" onClick={() => { setNodes([]); setEdges([]); setSelectedNode(null); setPreviewData(null); }}><CloseIcon /></IconButton></Tooltip>
           <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
           <ButtonGroup variant="text" size="small">
@@ -667,7 +794,7 @@ export default function App() {
         </ReactFlow>
       </Box>
 
-      <Drawer anchor="right" open={!!selectedNode || !!previewData} onClose={closeSidebar} variant="temporary" sx={{ width: 350, '& .MuiDrawer-paper': { width: 350, borderLeft: `4px solid ${sidebarColor}`, boxShadow: -5, bgcolor: COLORS.paper } }}>
+      <Drawer anchor="right" open={!!selectedNode || !!previewData} onClose={handleDrawerClose} variant="temporary" sx={{ width: 350, '& .MuiDrawer-paper': { width: 350, borderLeft: `4px solid ${sidebarColor}`, boxShadow: -5, bgcolor: COLORS.paper } }}>
         <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
           <Box sx={{ flexGrow: 1, overflowY: 'auto' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
@@ -678,7 +805,14 @@ export default function App() {
                 {selectedNode && (
                   <Tooltip title={isEditingNode ? "View Info" : "Edit Properties"}>
                     <IconButton 
-                      onClick={() => setIsEditingNode(!isEditingNode)} 
+                      onClick={() => {
+                        if (!isEditingNode) {
+                          setEditSnapshot({ label: selectedNode.data.label, description: selectedNode.data.description, icon: selectedNode.data.icon });
+                        } else {
+                          setEditSnapshot(null);
+                        }
+                        setIsEditingNode(!isEditingNode);
+                      }} 
                       sx={{ bgcolor: 'rgba(255,255,255,0.05)', '&:hover': { bgcolor: isEditingNode ? `${COLORS.secondary}22` : `${COLORS.primary}22` } }}
                     >
                       {isEditingNode ? <Icons.Visibility sx={{ fontSize: 20, color: COLORS.secondary }} /> : <Icons.Edit sx={{ fontSize: 20, color: COLORS.primary }} />}
@@ -686,7 +820,7 @@ export default function App() {
                   </Tooltip>
                 )}
               </Box>
-              <IconButton onClick={closeSidebar}><CloseIcon /></IconButton>
+              <IconButton onClick={() => closeSidebar()}><CloseIcon /></IconButton>
             </Box>
 
             {selectedNode && isEditingNode ? (
@@ -698,7 +832,10 @@ export default function App() {
                   placeholder="Enter name..."
                   value={selectedNode.data.label || ''}
                   onChange={(e) => updateNodeData(selectedNode.id, { label: e.target.value })}
-                  onKeyDown={(e) => { if (e.key === 'Enter') closeSidebar(); }}
+                  onKeyDown={(e) => { 
+                    if (e.key === 'Enter') closeSidebar(); 
+                    if (e.key === 'Escape') cancelEditing();
+                  }}
                   sx={{ mb: 2 }}
                 />
                 <TextField
@@ -706,7 +843,10 @@ export default function App() {
                   placeholder="Enter details..."
                   value={selectedNode.data.description || ''}
                   onChange={(e) => updateNodeData(selectedNode.id, { description: e.target.value })}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) closeSidebar(); }}
+                  onKeyDown={(e) => { 
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) closeSidebar(); 
+                    if (e.key === 'Escape') cancelEditing();
+                  }}
                   sx={{ mb: 3 }}
                 />
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 1, display: 'block' }}>CHOOSE ICON</Typography>
@@ -725,6 +865,17 @@ export default function App() {
                     </IconButton>
                   ))}
                 </Box>
+
+                <Button 
+                  variant="outlined" 
+                  color="error" 
+                  fullWidth 
+                  startIcon={<Icons.DeleteForever />} 
+                  onClick={() => deleteNodePermanently(selectedNode.id)}
+                  sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 'bold', mb: 2, borderColor: 'rgba(211, 47, 47, 0.3)' }}
+                >
+                  Delete from Database
+                </Button>
               </>
             ) : selectedNode ? (
               <>
