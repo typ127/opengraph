@@ -1,3 +1,5 @@
+import { NODE_CATEGORIES } from './theme';
+
 export const categoryMap = {
   "person": "people", 
   "mutant": "mutant",
@@ -9,13 +11,13 @@ export const categoryMap = {
 };
 
 export const typeColors = {
-  people: "#1976d2",
-  planet: "#4caf50",
-  mutant: "#dc143c",
-  robot: "#00bfff",
-  item: "#ff9800",
-  science: "#9c27b0",
-  other: "#9e9e9e"
+  people: NODE_CATEGORIES.people,
+  planet: NODE_CATEGORIES.planet,
+  mutant: NODE_CATEGORIES.mutant,
+  robot: NODE_CATEGORIES.robot,
+  item: NODE_CATEGORIES.item,
+  science: NODE_CATEGORIES.science,
+  other: NODE_CATEGORIES.other
 };
 
 export const getHexColor = (type) => {

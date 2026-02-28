@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.18.0] - 2026-02-27
+
+### Added
+- **Default Dark Theme**: Implemented a comprehensive dark grey (`#121212`) aesthetic as the new system standard, providing a professional and immersive "Operating System" feel.
+- **Centralized Theme Management**: Extracted all UI, node, and edge colors into a dedicated `theme.js` file, allowing for rapid global style adjustments.
+- **Themed UI Components**: Custom-styled ReactFlow Controls, Background patterns, and MUI Panels to align with the new dark aesthetic.
+
+### Changed
+- **Refined Color Palette**: Integrated `DeepSkyBlue` and `HotPink` as primary and secondary accent colors.
+- **Optimized Visibility**: Updated node labels, search field borders, and panel outlines for maximum readability and a cleaner look on dark backgrounds.
+- **Animation Timing**: Further refined the edge appearance delay (200ms) for a snappier, more responsive feel during graph growth.
+
 ## [1.17.0] - 2026-02-27
 
 ### Added

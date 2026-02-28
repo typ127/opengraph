@@ -64,6 +64,7 @@ import {
 import * as Icons from '@mui/icons-material';
 
 import { categoryMap, typeColors, getHexColor } from './constants';
+import { COLORS, EDGE_TYPES } from './theme';
 
 const nodeTypes = {
   keylines: KeyLinesNode,
@@ -78,13 +79,13 @@ const deduplicate = (arr) => {
 
 const getEdgeStyle = (type) => {
   const edgeStyles = {
-    RULES: { stroke: '#d32f2f', strokeWidth: 3 },
-    CONQUERED: { stroke: '#d32f2f', strokeWidth: 3 },
-    PROTECTS: { stroke: '#2e7d32', strokeWidth: 2 },
-    GUIDES: { stroke: '#2e7d32', strokeWidth: 2, strokeDasharray: '5,5' },
-    LIVES_ON: { stroke: '#0288d1', strokeWidth: 1.5 },
-    CREATED: { stroke: '#7b1fa2', strokeWidth: 2 },
-    default: { stroke: '#bdbdbd', strokeWidth: 1.5 }
+    RULES: { stroke: EDGE_TYPES.rules, strokeWidth: 3 },
+    CONQUERED: { stroke: EDGE_TYPES.conquered, strokeWidth: 3 },
+    PROTECTS: { stroke: EDGE_TYPES.protects, strokeWidth: 2 },
+    GUIDES: { stroke: EDGE_TYPES.guides, strokeWidth: 2, strokeDasharray: '5,5' },
+    LIVES_ON: { stroke: EDGE_TYPES.livesOn, strokeWidth: 1.5 },
+    CREATED: { stroke: EDGE_TYPES.created, strokeWidth: 2 },
+    default: { stroke: EDGE_TYPES.default, strokeWidth: 1.5 }
   };
   return edgeStyles[type] || edgeStyles.default;
 };
@@ -256,8 +257,8 @@ const integrateNewData = (currentNodes, currentEdges, newData, sourceNodeId, exp
         ...newEdge,
         data: { ...newEdge.data, isNew: true },
         style: getEdgeStyle(newEdge.data?.type),
-        labelStyle: { fill: '#666', fontWeight: 600, fontSize: '10px', fontFamily: '"Open Sans", sans-serif' },
-        labelBgStyle: { fill: '#f5f5f5', fillOpacity: 0.8 },
+        labelStyle: { fill: '#eceff1', fontWeight: 600, fontSize: '10px', fontFamily: '"Open Sans", sans-serif' },
+        labelBgStyle: { fill: '#0a1929', fillOpacity: 0.8 },
         labelBgPadding: [4, 2],
         labelBgBorderRadius: 4
       });
@@ -344,7 +345,7 @@ export default function App() {
     if (controls) controls.style.display = 'none';
 
     toPng(reactFlowElement, {
-      backgroundColor: '#f5f5f5',
+      backgroundColor: '#0a1929',
       // Wichtig: Wir filtern Elemente, die den Export stören könnten
       filter: (node) => {
         if (node?.classList?.contains('react-flow__panel')) return false;
@@ -649,9 +650,9 @@ export default function App() {
   const sidebarColor = selectedNode ? getHexColor(selectedNode.data.type) : previewData ? typeColors[previewData.category] : typeColors.other;
 
   return (
-    <Box sx={{ width: '100vw', height: '100vh', background: '#f5f5f5', display: 'flex', fontFamily: '"Open Sans", sans-serif', overflow: 'hidden' }}>
+    <Box sx={{ width: '100vw', height: '100vh', bgcolor: 'background.default', display: 'flex', fontFamily: '"Open Sans", sans-serif', overflow: 'hidden' }}>
       <style>{`
-        body { margin: 0; padding: 0; overflow: hidden; }
+        body { margin: 0; padding: 0; overflow: hidden; background: ${COLORS.background}; }
         .react-flow__node { 
           transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) !important; 
           will-change: transform; 
@@ -668,6 +669,26 @@ export default function App() {
           transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease; 
           opacity: ${zoomLevel > 0.6 ? 1 : 0}; 
         }
+        
+        .react-flow__edge-text { fill: ${COLORS.nodeLabel} !important; }
+        .react-flow__edge-textbg { fill: ${COLORS.background} !important; fill-opacity: 0.8 !important; }
+
+        /* ReactFlow Controls Theme */
+        .react-flow__controls {
+          box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+        .react-flow__controls-button {
+          background: ${COLORS.paper} !important;
+          border-bottom: 1px solid ${COLORS.panelBorder} !important;
+          fill: ${COLORS.textSecondary} !important;
+        }
+        .react-flow__controls-button:hover {
+          background: #2a2a2a !important;
+          fill: ${COLORS.primary} !important;
+        }
+        .react-flow__controls-button svg {
+          fill: currentColor !important;
+        }
       `}</style>
       
       <ReactFlow
@@ -677,12 +698,12 @@ export default function App() {
         onMove={(e, v) => setZoomLevel(v.zoom)}
         nodeTypes={nodeTypes} defaultEdgeOptions={{ type: 'straight' }} fitView
       >
-        <Background />
-        <Controls />
+        <Background color="#333" variant="dots" gap={20} size={1} />
+        <Controls showInteractive={false} />
         
         {/* PANELS */}
         <Panel position="top-center">
-          <Paper elevation={3} sx={{ p: 0.5, m: 2, display: 'flex', alignItems: 'center', gap: 1, bgcolor: 'rgba(255,255,255,0.95)', borderRadius: 2 }}>
+          <Paper elevation={3} sx={{ p: 0.5, m: 2, display: 'flex', alignItems: 'center', gap: 1, bgcolor: 'rgba(30, 30, 30, 0.9)', borderRadius: 2, border: `1px solid ${COLORS.panelBorder}` }}>
             <Autocomplete sx={{ width: 400 }} size="small" options={searchResults} getOptionLabel={(o) => o.label} onInputChange={(e, v) => handleSearch(v)} onChange={(e, v) => onSelectSearchResult(v)} autoSelect renderInput={(params) => <TextField {...params} placeholder="Search the Asimov Universe!" variant="outlined" InputProps={{ ...params.InputProps, startAdornment: (<InputAdornment position="start"><SearchIcon fontSize="small" color="action" /></InputAdornment>), }} />} renderOption={(props, o) => (<ListItem {...props} key={o.id}><ListItemAvatar><Avatar sx={{ bgcolor: getHexColor(o.type), width: 24, height: 24 }}>{React.createElement(Icons[o.icon] || Icons.HelpOutline, { sx: { fontSize: 14 } })}</Avatar></ListItemAvatar><ListItemText primary={o.label} secondary={o.type} /></ListItem>)} />
             <Divider orientation="vertical" flexItem sx={{ my: 1 }} />
             <Tooltip title="Clear Canvas" arrow><IconButton color="error" onClick={() => { setNodes([]); setEdges([]); setSelectedNode(null); setPreviewData(null); }}><CloseIcon /></IconButton></Tooltip>
@@ -690,7 +711,7 @@ export default function App() {
         </Panel>
 
         <Panel position="top-left">
-          <Paper elevation={3} sx={{ p: 2, m: 2, width: 220, bgcolor: 'rgba(255,255,255,0.9)', borderRadius: 2 }}>
+          <Paper elevation={3} sx={{ p: 2, m: 2, width: 220, bgcolor: 'rgba(30, 30, 30, 0.9)', borderRadius: 2, border: `1px solid ${COLORS.panelBorder}` }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}><FilterIcon size="small" sx={{ mr: 1, color: 'text.secondary' }} /><Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>Entity Types</Typography></Box>
             <FormGroup>
               {stats.map(([type, count]) => {
@@ -698,7 +719,7 @@ export default function App() {
                 const maxCount = Math.max(...stats.map(s => s[1]), 1);
                 const isHighlighted = highlightedTypes.has(type);
                 return (
-                  <Box key={type} sx={{ mb: 1.5, p: 0.5, borderRadius: 1, bgcolor: isHighlighted ? 'action.selected' : 'transparent', transition: 'background-color 0.2s' }}>
+                  <Box key={type} sx={{ mb: 1.5, p: 0.5, borderRadius: 1, bgcolor: isHighlighted ? 'rgba(0, 191, 255, 0.1)' : 'transparent', transition: 'background-color 0.2s' }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
                         <Checkbox size="small" checked={!hiddenTypes.has(type)} onChange={() => setHiddenTypes(prev => { const n = new Set(prev); if (n.has(type)) n.delete(type); else n.add(type); return n; })} sx={{ color: color, '&.Mui-checked': { color: color }, p: 0.5 }} />
@@ -709,7 +730,7 @@ export default function App() {
                         <Tooltip title="Expand all" arrow><IconButton size="small" sx={{ p: 0 }} onClick={() => { const ns = nodesRef.current.filter(n => n.data.type === type); ns.forEach(node => expandNode(node.id)); }}><AddIcon sx={{ fontSize: 16, color: color }} /></IconButton></Tooltip>
                       </Box>
                     </Box>
-                    <Box sx={{ height: 4, width: '100%', bgcolor: 'action.hover', borderRadius: 1, overflow: 'hidden', cursor: 'pointer' }} onClick={(e) => toggleHighlight(type, e.shiftKey)}><Box sx={{ height: '100%', width: `${(count/maxCount)*100}%`, bgcolor: color, transition: 'width 0.5s ease' }} /></Box>
+                    <Box sx={{ height: 4, width: '100%', bgcolor: 'rgba(0, 191, 255, 0.05)', borderRadius: 1, overflow: 'hidden', cursor: 'pointer' }} onClick={(e) => toggleHighlight(type, e.shiftKey)}><Box sx={{ height: '100%', width: `${(count/maxCount)*100}%`, bgcolor: color, transition: 'width 0.5s ease' }} /></Box>
                   </Box>
                 );
               })}
@@ -719,7 +740,7 @@ export default function App() {
         </Panel>
 
         <Panel position="top-right">
-          <Paper elevation={3} sx={{ p: 0.5, m: 2, display: 'flex', gap: 0.5, bgcolor: 'rgba(255,255,255,0.9)', borderRadius: 2 }}>
+          <Paper elevation={3} sx={{ p: 0.5, m: 2, display: 'flex', gap: 0.5, bgcolor: 'rgba(30, 30, 30, 0.9)', borderRadius: 2, border: `1px solid ${COLORS.panelBorder}` }}>
             <ButtonGroup variant="text" size="small">
               <Tooltip title="Hierarchical"><IconButton onClick={() => onLayoutClick('hierarchical')} color={activeLayout === 'hierarchical' ? 'secondary' : 'primary'}><TreeIcon /></IconButton></Tooltip>
               <Tooltip title="Circular"><IconButton onClick={() => onLayoutClick('circular')} color={activeLayout === 'circular' ? 'secondary' : 'primary'}><CircularIcon /></IconButton></Tooltip>
@@ -741,22 +762,22 @@ export default function App() {
       </ReactFlow>
 
       {/* DRAWER */}
-      <Drawer anchor="right" open={!!selectedNode || !!previewData} onClose={closeSidebar} variant="temporary" sx={{ width: 350, '& .MuiDrawer-paper': { width: 350, borderLeft: `4px solid ${sidebarColor}`, boxShadow: -5 } }}>
+      <Drawer anchor="right" open={!!selectedNode || !!previewData} onClose={closeSidebar} variant="temporary" sx={{ width: 350, '& .MuiDrawer-paper': { width: 350, borderLeft: `4px solid ${sidebarColor}`, boxShadow: -5, bgcolor: COLORS.paper } }}>
         <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
           <Box sx={{ flexGrow: 1, overflowY: 'auto' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}><Avatar sx={{ bgcolor: sidebarColor, width: 64, height: 64 }}>{selectedNode ? React.createElement(Icons[selectedNode.data.icon] || Icons.HelpOutline, { sx: { fontSize: 32 } }) : <GroupIcon sx={{ fontSize: 32 }} />}</Avatar><IconButton onClick={closeSidebar}><CloseIcon /></IconButton></Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}><Avatar sx={{ bgcolor: sidebarColor, width: 64, height: 64, boxShadow: '0 0 20px ' + sidebarColor + '44' }}>{selectedNode ? React.createElement(Icons[selectedNode.data.icon] || Icons.HelpOutline, { sx: { fontSize: 32, color: '#fff' } }) : <GroupIcon sx={{ fontSize: 32, color: '#fff' }} />}</Avatar><IconButton onClick={closeSidebar}><CloseIcon /></IconButton></Box>
             {selectedNode && (
               <>
-                <Typography variant="h5" sx={{ fontWeight: 'bold' }}>{selectedNode.data.label}</Typography>
-                <Divider sx={{ my: 2 }} />
-                <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic', color: 'text.secondary' }}>
+                <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#fff' }}>{selectedNode.data.label}</Typography>
+                <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
+                <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic', color: 'rgba(255,255,255,0.7)' }}>
                   {selectedNode.data.description}
                 </Typography>
                 <List>
-                  <ListItem sx={{ px: 0 }}><ListItemIcon><TypeIcon /></ListItemIcon><ListItemText primary="Type" secondary={selectedNode.data.type} /></ListItem>
-                  <ListItem sx={{ px: 0 }}><ListItemIcon><InfoIcon /></ListItemIcon><ListItemText primary="Importance" secondary={(selectedNode.data.score * 100).toFixed(1) + "%"} /></ListItem>
+                  <ListItem sx={{ px: 0 }}><ListItemIcon><TypeIcon sx={{ color: sidebarColor }} /></ListItemIcon><ListItemText primary="Type" secondary={selectedNode.data.type} secondaryTypographyProps={{ style: { color: 'rgba(255,255,255,0.5)' } }} /></ListItem>
+                  <ListItem sx={{ px: 0 }}><ListItemIcon><InfoIcon sx={{ color: sidebarColor }} /></ListItemIcon><ListItemText primary="Importance" secondary={(selectedNode.data.score * 100).toFixed(1) + "%"} secondaryTypographyProps={{ style: { color: 'rgba(255,255,255,0.5)' } }} /></ListItem>
                 </List>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 2, mb: 1 }}>NEIGHBORS:</Typography>
+                <Typography variant="caption" color="rgba(255,255,255,0.4)" display="block" sx={{ mt: 2, mb: 1, fontWeight: 'bold', letterSpacing: 1 }}>NEIGHBORS:</Typography>
                 <List>
                   {[...selectedNodeNeighbors]
                     .sort((a, b) => (a.data.type || '').localeCompare(b.data.type || ''))
@@ -764,13 +785,13 @@ export default function App() {
                       <ListItem key={node.id} sx={{ px: 0 }}>
                         <ListItemAvatar>
                           <Avatar sx={{ bgcolor: getHexColor(node.data.type), width: 32, height: 32 }}>
-                            {React.createElement(Icons[node.data.icon] || Icons.HelpOutline, { sx: { fontSize: 18 } })}
+                            {React.createElement(Icons[node.data.icon] || Icons.HelpOutline, { sx: { fontSize: 18, color: '#fff' } })}
                           </Avatar>
                         </ListItemAvatar>
-                        <ListItemText primary={node.data.label} secondary={node.data.type} />
+                        <ListItemText primary={node.data.label} secondary={node.data.type} primaryTypographyProps={{ style: { fontSize: '0.9rem' } }} secondaryTypographyProps={{ style: { fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' } }} />
                         <ListItemSecondaryAction>
                           <IconButton edge="end" color="primary" disabled={nodes.some(n => n.id === node.id)} onClick={() => addSingleNode(selectedNode.id, node)}>
-                            {nodes.some(n => n.id === node.id) ? <CheckIcon /> : <AddIcon />}
+                            {nodes.some(n => n.id === node.id) ? <CheckIcon sx={{ color: 'success.main' }} /> : <AddIcon />}
                           </IconButton>
                         </ListItemSecondaryAction>
                       </ListItem>
@@ -780,8 +801,8 @@ export default function App() {
             )}
             {previewData && (
               <>
-                <Typography variant="h5" sx={{ fontWeight: 'bold' }}>{previewData.category.toUpperCase()} Group</Typography>
-                <Divider sx={{ my: 2 }} />
+                <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#fff' }}>{previewData.category.toUpperCase()} Group</Typography>
+                <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
                 <List>
                   {[...previewData.nodes]
                     .sort((a, b) => (a.data.type || '').localeCompare(b.data.type || ''))
@@ -789,13 +810,13 @@ export default function App() {
                       <ListItem key={node.id} sx={{ px: 0 }}>
                         <ListItemAvatar>
                           <Avatar sx={{ bgcolor: sidebarColor, width: 32, height: 32 }}>
-                            {React.createElement(Icons[node.data.icon] || Icons.HelpOutline, { sx: { fontSize: 18 } })}
+                            {React.createElement(Icons[node.data.icon] || Icons.HelpOutline, { sx: { fontSize: 18, color: '#fff' } })}
                           </Avatar>
                         </ListItemAvatar>
-                        <ListItemText primary={node.data.label} secondary={node.data.type} />
+                        <ListItemText primary={node.data.label} secondary={node.data.type} primaryTypographyProps={{ style: { fontSize: '0.9rem' } }} secondaryTypographyProps={{ style: { fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' } }} />
                         <ListItemSecondaryAction>
                           <IconButton edge="end" color="primary" disabled={nodes.some(n => n.id === node.id)} onClick={() => addSingleNode(previewData.sourceId, node)}>
-                            {nodes.some(n => n.id === node.id) ? <CheckIcon /> : <AddIcon />}
+                            {nodes.some(n => n.id === node.id) ? <CheckIcon sx={{ color: 'success.main' }} /> : <AddIcon />}
                           </IconButton>
                         </ListItemSecondaryAction>
                       </ListItem>
@@ -806,14 +827,14 @@ export default function App() {
           </Box>
           {selectedNode && (
             <Box sx={{ pt: 2 }}>
-              <Divider sx={{ mb: 2 }} />
+              <Divider sx={{ mb: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
               <Button 
                 variant="outlined" 
                 color="error" 
                 fullWidth 
                 startIcon={<DeleteIcon />} 
                 onClick={onDeleteNode}
-                sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 'bold' }}
+                sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 'bold', borderColor: 'rgba(211, 47, 47, 0.5)' }}
               >
                 Remove from Canvas
               </Button>

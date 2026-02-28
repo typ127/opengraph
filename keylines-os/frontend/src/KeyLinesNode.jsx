@@ -4,6 +4,7 @@ import * as Icons from '@mui/icons-material';
 import { Typography, Box, Tooltip } from '@mui/material';
 
 import { getHexColor } from './constants';
+import { COLORS } from './theme';
 
 const KeyLinesNode = ({ data }) => {
   const { label, icon, donut = [], score = 1.0 } = data;
@@ -118,7 +119,7 @@ const KeyLinesNode = ({ data }) => {
           width: 34,
           height: 34,
           boxShadow: 2,
-          border: '2px solid white'
+          border: `2px solid ${COLORS.background}`
         }}>
           <IconComponent sx={{ fontSize: 24, color: 'white' }} />
         </Box>
@@ -134,7 +135,7 @@ const KeyLinesNode = ({ data }) => {
         sx={{ 
           mt: 1, 
           fontWeight: 'bold', 
-          color: '#333', 
+          color: COLORS.nodeLabel, 
           textAlign: 'center',
           fontSize: score > 0.8 ? '0.8rem' : '0.75rem',
           transition: 'font-size 0.3s ease'
