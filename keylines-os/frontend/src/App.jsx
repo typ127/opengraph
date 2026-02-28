@@ -36,7 +36,8 @@ import {
   Autocomplete,
   TextField,
   InputAdornment,
-  Button
+  Button,
+  Switch
 } from '@mui/material';
 import { 
   AccountTree as TreeIcon, 
@@ -54,6 +55,7 @@ import {
   FilterCenterFocus as DrillDownIcon,
   Check as CheckIcon,
   Delete as DeleteIcon,
+  Settings as SettingsIcon,
   Psychology as AlgorithmIcon,
   Hub as DegreeIcon,
   Animation as BetweennessIcon,
@@ -234,31 +236,48 @@ const getConcentricLayout = (nodes) => {
   return layoutedNodes;
 };
 
-const integrateNewData = (currentNodes, currentEdges, newData, sourceNodeId, expandNodeFn) => {
-  const sourceNode = currentNodes.find(n => n.id === sourceNodeId);
-  const sourcePos = sourceNode ? sourceNode.position : { x: 400, y: 400 };
-  const nodesMap = new Map(currentNodes.map(n => [n.id, n]));
-  const edgesMap = new Map(currentEdges.map(e => [e.id, e]));
-  newData.nodes.forEach(newNode => {
-    if (nodesMap.has(newNode.id)) {
-      const existing = nodesMap.get(newNode.id);
-      nodesMap.set(newNode.id, { ...existing, data: { ...existing.data, ...newNode.data, onSegmentClick: (cat, e) => expandNodeFn(newNode.id, cat, e) } });
-    } else {
-      nodesMap.set(newNode.id, { ...newNode, type: 'keylines', position: { ...sourcePos }, data: { ...newNode.data, onSegmentClick: (cat, e) => expandNodeFn(newNode.id, cat, e) } });
-    }
-  });
-  newData.edges.forEach(newEdge => {
-    if (!edgesMap.has(newEdge.id)) {
-      edgesMap.set(newEdge.id, {
-        ...newEdge, data: { ...newEdge.data, isNew: true }, style: getEdgeStyle(newEdge.data?.type),
-        labelStyle: { fill: COLORS.nodeLabel, fontWeight: 600, fontSize: '10px', fontFamily: '"Open Sans", sans-serif' },
-        labelBgStyle: { fill: COLORS.background, fillOpacity: 0.8 }, labelBgPadding: [4, 2], labelBgBorderRadius: 4
-      });
-    }
-  });
-  return { nodes: Array.from(nodesMap.values()), edges: Array.from(edgesMap.values()) };
-};
-
+  const integrateNewData = (currentNodes, currentEdges, newData, sourceNodeId, expandNodeFn, enableEdgeColoring, enableDonuts) => {
+    const sourceNode = currentNodes.find(n => n.id === sourceNodeId);
+    const sourcePos = sourceNode ? sourceNode.position : { x: 400, y: 400 };
+    const nodesMap = new Map(currentNodes.map(n => [n.id, n]));
+    const edgesMap = new Map(currentEdges.map(e => [e.id, e]));
+    newData.nodes.forEach(newNode => {
+      if (nodesMap.has(newNode.id)) {
+        const existing = nodesMap.get(newNode.id);
+        nodesMap.set(newNode.id, { 
+          ...existing, 
+          data: { 
+            ...existing.data, 
+            ...newNode.data, 
+            showDonuts: enableDonuts,
+            onSegmentClick: (cat, e) => expandNodeFn(newNode.id, cat, e) 
+          } 
+        });
+      } else {
+        nodesMap.set(newNode.id, { 
+          ...newNode, 
+          type: 'keylines', 
+          position: { ...sourcePos }, 
+          data: { 
+            ...newNode.data, 
+            showDonuts: enableDonuts,
+            onSegmentClick: (cat, e) => expandNodeFn(newNode.id, cat, e) 
+          } 
+        });
+      }
+    });
+    newData.edges.forEach(newEdge => {
+      if (!edgesMap.has(newEdge.id)) {
+        edgesMap.set(newEdge.id, {
+          ...newEdge, data: { ...newEdge.data, isNew: true }, 
+          style: getEdgeStyle(enableEdgeColoring ? (newEdge.data?.type || 'default') : 'default'),
+          labelStyle: { fill: COLORS.nodeLabel, fontWeight: 600, fontSize: '10px', fontFamily: '"Open Sans", sans-serif' },
+          labelBgStyle: { fill: COLORS.background, fillOpacity: 0.8 }, labelBgPadding: [4, 2], labelBgBorderRadius: 4
+        });
+      }
+    });
+    return { nodes: Array.from(nodesMap.values()), edges: Array.from(edgesMap.values()) };
+  };
 export default function App() {
   const { fitView, setCenter, screenToFlowPosition } = useReactFlow();
   
@@ -267,14 +286,20 @@ export default function App() {
   const [activeLayout, setActiveLayout] = useState('force');
   const [activeAlgorithm, setActiveAlgorithm] = useState('degree');
   const [selectedNode, setSelectedNode] = useState(null);
+  const [selectedEdge, setSelectedEdge] = useState(null);
   const [selectedNodeNeighbors, setSelectedNodeNeighbors] = useState([]);
   const [previewData, setPreviewData] = useState(null);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [hiddenTypes, setHiddenTypes] = useState(new Set());
   const [highlightedTypes, setHighlightedTypes] = useState(new Set());
   const [searchResults, setSearchResults] = useState([]);
-  const [isLeftDrawerOpen, setIsLeftDrawerOpen] = useState(false);
-  const [isEditingNode, setIsEditingNode] = useState(false);
+      const [isLeftDrawerOpen, setIsLeftDrawerOpen] = useState(false);
+      const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+          const [enableEdgeColoring, setEnableEdgeColoring] = useState(true);
+          const [enableDonuts, setEnableDonuts] = useState(true);
+          
+          const [isEditingNode, setIsEditingNode] = useState(false);
+      
   const [editSnapshot, setEditSnapshot] = useState(null);
 
   const nodesRef = useRef(nodes);
@@ -282,9 +307,23 @@ export default function App() {
   const activeLayoutRef = useRef(activeLayout);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   useEffect(() => { edgesRef.current = edges; }, [edges]);
-  useEffect(() => { activeLayoutRef.current = activeLayout; }, [activeLayout]);
-
-  // Funktion zum manuellen Anpassen der Kamera an neue Knotenpositionen,
+      useEffect(() => { activeLayoutRef.current = activeLayout; }, [activeLayout]);
+  
+          useEffect(() => {
+            setEdges(eds => eds.map(edge => ({
+              ...edge,
+              style: getEdgeStyle(enableEdgeColoring ? (edge.data?.type || 'default') : 'default')
+            })));
+          }, [enableEdgeColoring, setEdges]);
+      
+          useEffect(() => {
+            setNodes(nds => nds.map(node => ({
+              ...node,
+              data: { ...node.data, showDonuts: enableDonuts }
+            })));
+          }, [enableDonuts, setNodes]);
+      
+    // Funktion zum manuellen Anpassen der Kamera an neue Knotenpositionen,
   // ignoriert CSS-Animationen für mehr Präzision.
   const fitToNodes = useCallback((nds) => {
     if (nds.length === 0) return;
@@ -333,19 +372,19 @@ export default function App() {
     }
   }, [setNodes]);
 
-  const closeSidebar = useCallback((skipPersist = false) => { 
-    // Wenn wir im Edit-Modus waren, speichern wir die Änderungen (außer beim Löschen oder Abbrechen)
-    if (selectedNode && isEditingNode && !skipPersist) {
-      persistNode(selectedNode);
-    }
-    setSelectedNode(null); 
-    setPreviewData(null); 
-    setSelectedNodeNeighbors([]); 
-    setIsEditingNode(false);
-    setEditSnapshot(null);
-  }, [selectedNode, isEditingNode, persistNode]);
-
-  const cancelEditing = useCallback(() => {
+      const closeSidebar = useCallback((skipPersist = false) => { 
+        // Wenn wir im Edit-Modus waren, speichern wir die Änderungen (außer beim Löschen oder Abbrechen)
+        if (selectedNode && isEditingNode && !skipPersist) {
+          persistNode(selectedNode);
+        }
+        setSelectedNode(null); 
+        setSelectedEdge(null);
+        setPreviewData(null); 
+        setSelectedNodeNeighbors([]); 
+        setIsEditingNode(false);
+        setEditSnapshot(null);
+      }, [selectedNode, isEditingNode, persistNode]);
+    const cancelEditing = useCallback(() => {
     if (!selectedNode) return;
     
     // Fall 1: Echter, ungespeicherter Entwurf -> Löschen
@@ -381,11 +420,11 @@ export default function App() {
       persistNode(selectedNode);
     }
     
-    setSelectedNode(node); 
-    setPreviewData(null);
-    setIsEditingNode(forceEdit);
-    
-    // Snapshot für mögliches Revert (Escape) erstellen
+          setSelectedNode(node); 
+          setSelectedEdge(null);
+          setPreviewData(null);
+          setIsEditingNode(forceEdit);
+        // Snapshot für mögliches Revert (Escape) erstellen
     if (forceEdit) {
       setEditSnapshot({ label: node.data.label, description: node.data.description, icon: node.data.icon });
     } else {
@@ -402,10 +441,20 @@ export default function App() {
       const response = await fetch(`http://localhost:8000/expand/${node.id}`);
       const data = await response.json();
       setSelectedNodeNeighbors(data.nodes.filter(n => n.id !== node.id));
-    } catch (e) { console.error(e); }
-  }, [selectedNode, isEditingNode, persistNode]);
-
-  const handleDrawerClose = useCallback((event, reason) => {
+          } catch (e) { console.error(e); }
+        }, [selectedNode, isEditingNode, persistNode]);
+    
+        const openEdgeDetails = useCallback((edge) => {
+          // Wenn wir gerade einen Knoten editiert haben, speichern wir diesen erst
+          if (selectedNode && isEditingNode) {
+            persistNode(selectedNode);
+          }
+          setSelectedEdge(edge);
+          setSelectedNode(null);
+          setPreviewData(null);
+          setIsEditingNode(false);
+        }, [selectedNode, isEditingNode, persistNode]);
+      const handleDrawerClose = useCallback((event, reason) => {
     if (reason === 'escapeKeyDown' && isEditingNode) {
       cancelEditing();
     } else {
@@ -485,34 +534,44 @@ export default function App() {
     try {
       const response = await fetch(`http://localhost:8000/expand/${nodeId}${filterCategory ? `?filter_category=${filterCategory}` : ''}`);
       const data = await response.json();
-      const { nodes: integratedNodes, edges: integratedEdges } = integrateNewData(currentNodes, currentEdges, data, nodeId, expandNode);
-      setNodes(integratedNodes); setEdges(integratedEdges);
-      setTimeout(() => {
-        const layoutedNodes = applyLayout(integratedNodes, integratedEdges, activeLayoutRef.current);
-        setNodes(layoutedNodes);
-        // Vorzeitiger Kamera-Zoom (300ms) für flüssigeres Gefühl
-        setTimeout(() => fitToNodes(layoutedNodes), 300);
-      }, 150);
-      setTimeout(() => setEdges(integratedEdges.map(e => ({ ...e, data: { ...e.data, isNew: false } }))), 200);
-    } catch (error) { console.error(error); }
-  }, [applyLayout, fitToNodes, setNodes, setEdges]);
-
-  const addSingleNode = useCallback((sourceId, targetNode) => {
-    const currentNodes = nodesRef.current;
-    const currentEdges = edgesRef.current;
-    if (currentNodes.find(n => n.id === targetNode.id)) return;
-    const sourceNode = currentNodes.find(n => n.id === sourceId);
-    const newNode = { ...targetNode, type: 'keylines', position: { ...(sourceNode?.position || {x:400,y:400}) }, data: { ...targetNode.data, onSegmentClick: (cat, e) => expandNode(targetNode.id, cat, e) } };
-    const newEdge = { id: `e-${sourceId}-manual-${targetNode.id}`, source: sourceId, target: targetNode.id, animated: true, style: getEdgeStyle('default') };
-    setNodes(nds => deduplicate([...nds, newNode]));
-    setEdges(eds => deduplicate([...eds, newEdge]));
-    setTimeout(() => {
-      setNodes(nds => applyLayout(nds, edgesRef.current, activeLayoutRef.current));
-      setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
-    }, 50);
-  }, [expandNode, applyLayout, fitView, setNodes, setEdges]);
-
-  const onDrillDown = useCallback(() => {
+                      const { nodes: integratedNodes, edges: integratedEdges } = integrateNewData(currentNodes, currentEdges, data, nodeId, expandNode, enableEdgeColoring, enableDonuts);
+                      setNodes(integratedNodes); setEdges(integratedEdges);
+                      setTimeout(() => {
+                        const layoutedNodes = applyLayout(integratedNodes, integratedEdges, activeLayoutRef.current);
+                        setNodes(layoutedNodes);
+                        // Vorzeitiger Kamera-Zoom (300ms) für flüssigeres Gefühl
+                        setTimeout(() => fitToNodes(layoutedNodes), 300);
+                      }, 150);
+                      setTimeout(() => setEdges(integratedEdges.map(e => ({ ...e, data: { ...e.data, isNew: false } }))), 200);
+                    } catch (error) { console.error(error); }
+                  }, [applyLayout, fitToNodes, setNodes, setEdges, enableEdgeColoring, enableDonuts]);
+              
+            const addSingleNode = useCallback((sourceId, targetNode) => {
+              const currentNodes = nodesRef.current;
+              const currentEdges = edgesRef.current;
+              if (currentNodes.find(n => n.id === targetNode.id)) return;
+              const sourceNode = currentNodes.find(n => n.id === sourceId);
+              const newNode = { 
+                ...targetNode, 
+                type: 'keylines', 
+                position: { ...(sourceNode?.position || {x:400,y:400}) }, 
+                data: { 
+                  ...targetNode.data, 
+                  showDonuts: enableDonuts,
+                  onSegmentClick: (cat, e) => expandNode(targetNode.id, cat, e) 
+                } 
+              };
+              const newEdge = { id: `e-${sourceId}-manual-${targetNode.id}`, source: sourceId, target: targetNode.id, animated: true, data: { type: 'manual' }, style: getEdgeStyle('default') };
+              
+              setNodes(nds => deduplicate([...nds, newNode]));
+              setEdges(eds => deduplicate([...eds, newEdge]));
+              setTimeout(() => {
+                setNodes(nds => applyLayout(nds, edgesRef.current, activeLayoutRef.current));
+                setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
+              }, 50);
+            }, [expandNode, applyLayout, fitView, setNodes, setEdges, enableEdgeColoring, enableDonuts]);
+        
+      const onDrillDown = useCallback(() => {
     if (highlightedTypes.size === 0) return;
     setNodes((nds) => {
       const remainingNodes = nds.filter(n => highlightedTypes.has(n.data.type));
@@ -557,14 +616,17 @@ export default function App() {
           newPos = { x: maxX + 200, y: rightmostNode.position.y };
         }
 
-        const newNode = { 
-          ...fullNode, 
-          type: 'keylines', 
-          position: newPos, 
-          data: { ...fullNode.data, onSegmentClick: (cat, e) => expandNode(fullNode.id, cat, e) } 
-        };
-        
-        setNodes(nds => deduplicate([...nds, newNode]));
+                  const newNode = { 
+                    ...fullNode, 
+                    type: 'keylines', 
+                    position: newPos, 
+                    data: { 
+                      ...fullNode.data, 
+                      showDonuts: enableDonuts,
+                      onSegmentClick: (cat, e) => expandNode(fullNode.id, cat, e) 
+                    } 
+                  };
+                setNodes(nds => deduplicate([...nds, newNode]));
         existing = newNode;
         
         // Kamera sanft auf den neuen Bereich ausrichten
@@ -594,24 +656,23 @@ export default function App() {
       const promises = nodeIds.map(id => fetch(`http://localhost:8000/expand/${id}`).then(r => r.json()));
       const allResults = await Promise.all(promises);
       let nextNodes = [...currentNodes]; let nextEdges = [...currentEdges];
-      allResults.forEach((data, index) => {
-        const integrated = integrateNewData(nextNodes, nextEdges, data, nodeIds[index], expandNode);
-        nextNodes = integrated.nodes; nextEdges = integrated.edges;
-      });
-                                              const integratedNodes = nextNodes;
-                                              setNodes(integratedNodes); setEdges(nextEdges);
-                                              setTimeout(() => {
-                                                const layouted = applyLayout(integratedNodes, nextEdges, activeLayoutRef.current);
-                                                setNodes(layouted);
-                                                // Früherer Kamera-Zoom
-                                                setTimeout(() => fitToNodes(layouted), 300);
-                                              }, 150);
-                                              setTimeout(() => setEdges(nextEdges.map(e => ({ ...e, data: { ...e.data, isNew: false } }))), 200);
-                                      
-                                    } catch (e) { console.error('Batch expansion failed:', e); }
-                                  }, [expandNode, applyLayout, fitToNodes, setNodes, setEdges]);
-                              
-                        const deleteSelectedElements = useCallback(() => {
+                      allResults.forEach((data, index) => {
+                        const integrated = integrateNewData(nextNodes, nextEdges, data, nodeIds[index], expandNode, enableEdgeColoring, enableDonuts);
+                        nextNodes = integrated.nodes; nextEdges = integrated.edges;
+                      });
+                      const integratedNodes = nextNodes;
+                      setNodes(integratedNodes); setEdges(nextEdges);
+                      setTimeout(() => {
+                        const layouted = applyLayout(integratedNodes, nextEdges, activeLayoutRef.current);
+                        setNodes(layouted);
+                        // Früherer Kamera-Zoom
+                        setTimeout(() => fitToNodes(layouted), 300);
+                      }, 150);
+                      setTimeout(() => setEdges(nextEdges.map(e => ({ ...e, data: { ...e.data, isNew: false } }))), 200);
+                    } catch (e) { console.error('Batch expansion failed:', e); }
+                  }, [expandNode, applyLayout, fitToNodes, setNodes, setEdges, enableEdgeColoring, enableDonuts]);
+              
+                              const deleteSelectedElements = useCallback(() => {
     const nodeIdsToRemove = new Set(nodesRef.current.filter(n => n.selected).map(n => n.id));
     const edgeIdsToRemove = new Set(edgesRef.current.filter(e => e.selected).map(e => e.id));
     if (nodeIdsToRemove.size === 0 && edgeIdsToRemove.size === 0) return;
@@ -649,33 +710,75 @@ export default function App() {
     const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
     const nodeId = `new-${Date.now()}`;
     const iconMap = { person: 'Person', planet: 'Public', robot: 'Android', mutant: 'Psychology', item: 'AutoStories', science: 'Science' };
-    const newNode = {
-      id: nodeId, type: 'keylines', position,
-      data: { 
-        label: '', 
-        type, 
-        icon: iconMap[type] || 'HelpOutline', 
-        description: '', 
-        score: 0.5, 
-        isDraft: true,
-        onSegmentClick: (cat, e) => expandNode(nodeId, cat, e) 
-      },
-    };
-    setNodes((nds) => nds.concat(newNode));
-    // Sofort selektieren und in den Edit-Modus schalten
-    setTimeout(() => {
-      openDetails(newNode, true);
-    }, 50);
-  }, [setNodes, expandNode, openDetails, screenToFlowPosition]);
-
-  const visibleNodes = useMemo(() => {
-    const hasHighlight = highlightedTypes.size > 0;
-    return nodes.filter(n => !hiddenTypes.has(n.data.type)).map(n => ({
-      ...n, style: { ...n.style, opacity: hasHighlight ? (highlightedTypes.has(n.data.type) ? 1 : 0.2) : 1, transition: 'opacity 0.3s ease' }
-    }));
-  }, [nodes, hiddenTypes, highlightedTypes]);
-
-  const visibleEdges = useMemo(() => {
+          const newNode = {
+            id: nodeId, type: 'keylines', position,
+            data: { 
+              label: '', 
+              type, 
+              icon: iconMap[type] || 'HelpOutline', 
+              description: '', 
+              score: 0.5, 
+              isDraft: true,
+              showDonuts: enableDonuts,
+              onSegmentClick: (cat, e) => expandNode(nodeId, cat, e) 
+            },
+          };
+          setNodes((nds) => nds.concat(newNode));
+          // Sofort selektieren und in den Edit-Modus schalten
+          setTimeout(() => {
+            openDetails(newNode, true);
+          }, 50);
+        }, [setNodes, expandNode, openDetails, screenToFlowPosition, enableDonuts]);
+          const visibleNodes = useMemo(() => {
+            const hasHighlight = highlightedTypes.size > 0;
+            return nodes.filter(n => !hiddenTypes.has(n.data.type)).map(n => {
+              // Dynamische Donut-Berechnung: Segmente verschwinden/schrumpfen, 
+              // wenn Nachbarn bereits auf der Stage sind.
+              let newDonut = n.data.donut || [];
+              if (newDonut.length > 0) {
+                // Finde alle Nachbarn dieses Knotens, die aktuell auf der Stage sind
+                const stageNeighbors = edges
+                  .filter(e => e.source === n.id || e.target === n.id)
+                  .map(e => e.source === n.id ? e.target : e.source);
+                
+                const uniqueNeighborsOnStage = new Set(stageNeighbors);
+                const neighborsOnStage = nodes.filter(node => uniqueNeighborsOnStage.has(node.id));
+      
+                // Zähle Nachbarn pro Kategorie auf der Stage
+                const stageCounts = {};
+                neighborsOnStage.forEach(nb => {
+                  const cat = categoryMap[nb.data.type?.toLowerCase()] || 'other';
+                  stageCounts[cat] = (stageCounts[cat] || 0) + 1;
+                });
+      
+                // Berechne verbleibende Counts für den Donut
+                newDonut = newDonut.map(segment => {
+                  const currentOnStage = stageCounts[segment.category] || 0;
+                  const remaining = Math.max(0, (segment.total_count || 0) - currentOnStage);
+                  return { ...segment, value: remaining }; // Wir nutzen hier den absoluten Wert für die Berechnung
+                }).filter(s => s.value > 0);
+      
+                          // Normalisiere die Werte wieder auf Prozente für die SVG-Anzeige
+                          const totalRemaining = newDonut.reduce((sum, s) => sum + s.value, 0);
+                          if (totalRemaining > 0) {
+                            newDonut = newDonut.map(s => ({
+                              ...s,
+                              value: (s.value / totalRemaining) * 100
+                            }));
+                          } else {
+                            newDonut = [];
+                          }
+                
+              }
+      
+              return {
+                ...n, 
+                data: { ...n.data, donut: newDonut },
+                style: { ...n.style, opacity: hasHighlight ? (highlightedTypes.has(n.data.type) ? 1 : 0.2) : 1, transition: 'opacity 0.3s ease' }
+              };
+            });
+          }, [nodes, edges, hiddenTypes, highlightedTypes]);
+        const visibleEdges = useMemo(() => {
     const nodeIds = new Set(visibleNodes.map(n => n.id));
     const hasHighlight = highlightedTypes.size > 0;
     return edges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target)).map(edge => {
@@ -694,9 +797,8 @@ export default function App() {
     return Object.entries(counts).sort((a, b) => b[1] - a[1]);
   }, [nodes]);
 
-  const sidebarColor = selectedNode ? getHexColor(selectedNode.data.type) : previewData ? typeColors[previewData.category] : typeColors.other;
-
-  const topBarHeight = 48; // Common height for the top toolbars
+      const sidebarColor = selectedNode ? getHexColor(selectedNode.data.type) : selectedEdge ? COLORS.secondary : previewData ? typeColors[previewData.category] : typeColors.other;
+    const topBarHeight = 48; // Common height for the top toolbars
 
   return (
     <Box sx={{ width: '100vw', height: '100vh', bgcolor: 'background.default', display: 'flex', fontFamily: '"Open Sans", sans-serif', overflow: 'hidden', position: 'relative' }}>
@@ -717,11 +819,24 @@ export default function App() {
       {/* LEFT TOOLBAR (DRAWER TOGGLE) */}
       <Box sx={{ position: 'absolute', top: 16, left: 16, zIndex: 1200 }}>
         <Paper elevation={3} sx={{ px: 1, height: topBarHeight, display: 'flex', alignItems: 'center', bgcolor: 'rgba(30, 30, 30, 0.9)', borderRadius: 2, border: `1px solid ${COLORS.panelBorder}` }}>
-          <Tooltip title="Toolbox">
-            <IconButton onClick={() => setIsLeftDrawerOpen(!isLeftDrawerOpen)} color={isLeftDrawerOpen ? 'secondary' : 'primary'} size="small">
-              <MenuIcon />
-            </IconButton>
-          </Tooltip>
+                      <Tooltip title="Toolbox">
+                        <IconButton 
+                          onClick={() => { setIsLeftDrawerOpen(!isLeftDrawerOpen); setIsSettingsOpen(false); }} 
+                          color={isLeftDrawerOpen ? 'secondary' : 'primary'} size="small"
+                        >
+                          <MenuIcon />
+                        </IconButton>
+                      </Tooltip>
+                      <Divider orientation="vertical" flexItem sx={{ mx: 1, my: 1, borderColor: 'rgba(255,255,255,0.1)' }} />
+                      <Tooltip title="Settings">
+                        <IconButton 
+                          onClick={() => { setIsSettingsOpen(!isSettingsOpen); setIsLeftDrawerOpen(false); }} 
+                          color={isSettingsOpen ? 'secondary' : 'primary'} size="small"
+                        >
+                          <SettingsIcon />
+                        </IconButton>
+                      </Tooltip>
+          
         </Paper>
       </Box>
 
@@ -838,6 +953,7 @@ export default function App() {
         <ReactFlow
           nodes={visibleNodes} edges={visibleEdges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
           onNodeClick={(e, n) => e.shiftKey ? openDetails(n) : expandNode(n.id)}
+          onEdgeClick={(e, edge) => e.shiftKey && openEdgeDetails(edge)}
           onPaneClick={() => { closeSidebar(); setHighlightedTypes(new Set()); }}
           onMove={(e, v) => setZoomLevel(v.zoom)} onDrop={onDrop} onDragOver={onDragOver}
           nodeTypes={nodeTypes} defaultEdgeOptions={{ type: 'straight' }} fitView
@@ -847,31 +963,37 @@ export default function App() {
         </ReactFlow>
       </Box>
 
-      <Drawer anchor="right" open={!!selectedNode || !!previewData} onClose={handleDrawerClose} variant="temporary" sx={{ width: 350, '& .MuiDrawer-paper': { width: 350, borderLeft: `4px solid ${sidebarColor}`, boxShadow: -5, bgcolor: COLORS.paper } }}>
+              <Drawer anchor="right" open={!!selectedNode || !!selectedEdge || !!previewData} onClose={handleDrawerClose} variant="temporary" sx={{ width: 350, '& .MuiDrawer-paper': { width: 350, borderLeft: `4px solid ${sidebarColor}`, boxShadow: -5, bgcolor: COLORS.paper } }}>
+      
         <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
           <Box sx={{ flexGrow: 1, overflowY: 'auto' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Avatar sx={{ bgcolor: sidebarColor, width: 64, height: 64, boxShadow: '0 0 20px ' + sidebarColor + '44' }}>
-                  {selectedNode ? React.createElement(Icons[selectedNode.data.icon] || Icons.HelpOutline, { sx: { fontSize: 32, color: '#fff' } }) : <GroupIcon sx={{ fontSize: 32, color: '#fff' }} />}
-                </Avatar>
-                {selectedNode && (
-                  <Tooltip title={isEditingNode ? "View Info" : "Edit Properties"}>
-                    <IconButton 
-                      onClick={() => {
-                        if (!isEditingNode) {
-                          setEditSnapshot({ label: selectedNode.data.label, description: selectedNode.data.description, icon: selectedNode.data.icon });
-                        } else {
-                          setEditSnapshot(null);
-                        }
-                        setIsEditingNode(!isEditingNode);
-                      }} 
-                      sx={{ bgcolor: 'rgba(255,255,255,0.05)', '&:hover': { bgcolor: isEditingNode ? `${COLORS.secondary}22` : `${COLORS.primary}22` } }}
-                    >
-                      {isEditingNode ? <Icons.Visibility sx={{ fontSize: 20, color: COLORS.secondary }} /> : <Icons.Edit sx={{ fontSize: 20, color: COLORS.primary }} />}
-                    </IconButton>
-                  </Tooltip>
-                )}
+                                  <Avatar sx={{ bgcolor: sidebarColor, width: 64, height: 64, boxShadow: '0 0 20px ' + sidebarColor + '44' }}>
+                                    {selectedNode ? React.createElement(Icons[selectedNode.data.icon] || Icons.HelpOutline, { sx: { fontSize: 32, color: '#fff' } }) : selectedEdge ? <Icons.Link sx={{ fontSize: 32, color: '#fff' }} /> : <GroupIcon sx={{ fontSize: 32, color: '#fff' }} />}
+                                  </Avatar>
+                                  {(selectedNode || selectedEdge) && (
+                                    <Tooltip title={selectedEdge ? "Edit Edge (Coming Soon)" : (isEditingNode ? "View Info" : "Edit Properties")}>
+                                      <span>
+                                        <IconButton 
+                                          onClick={() => {
+                                            if (selectedEdge) return;
+                                            if (!isEditingNode) {
+                                              setEditSnapshot({ label: selectedNode.data.label, description: selectedNode.data.description, icon: selectedNode.data.icon });
+                                            } else {
+                                              setEditSnapshot(null);
+                                            }
+                                            setIsEditingNode(!isEditingNode);
+                                          }} 
+                                          disabled={!!selectedEdge}
+                                          sx={{ bgcolor: 'rgba(255,255,255,0.05)', '&:hover': { bgcolor: isEditingNode ? `${COLORS.secondary}22` : `${COLORS.primary}22` } }}
+                                        >
+                                          {isEditingNode ? <Icons.Visibility sx={{ fontSize: 20, color: COLORS.secondary }} /> : <Icons.Edit sx={{ fontSize: 20, color: COLORS.primary }} />}
+                                        </IconButton>
+                                      </span>
+                                    </Tooltip>
+                                  )}
+                
               </Box>
               <IconButton onClick={() => closeSidebar()}><CloseIcon /></IconButton>
             </Box>
@@ -930,7 +1052,51 @@ export default function App() {
                   Delete from Database
                 </Button>
               </>
-            ) : selectedNode ? (
+                          ) : selectedEdge ? (
+                            <>
+                              <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#fff' }}>Relationship</Typography>
+                              <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
+                                                <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic', color: 'rgba(255,255,255,0.7)' }}>
+                                                  {selectedEdge.label || selectedEdge.data?.type || 'No description available'}
+                                                </Typography>
+                                                
+                                                <List sx={{ mb: 2 }}>
+                                                  {Object.entries(selectedEdge.data || {})
+                                                    .filter(([key]) => !['type', 'isNew'].includes(key))
+                                                    .map(([key, value]) => (
+                                                      <ListItem key={key} sx={{ px: 0 }}>
+                                                        <ListItemIcon><Icons.InfoOutlined sx={{ color: sidebarColor, fontSize: 20 }} /></ListItemIcon>
+                                                        <ListItemText primary={key.charAt(0).toUpperCase() + key.slice(1)} secondary={String(value)} secondaryTypographyProps={{ style: { color: 'rgba(255,255,255,0.5)' } }} />
+                                                      </ListItem>
+                                                    ))
+                                                  }
+                                                </List>
+                                                
+                                                <Box sx={{ mt: 3 }}>
+                              
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', display: 'block', mb: 1 }}>CONNECTED NODES</Typography>
+                                <List>
+                                  {(() => {
+                                    const s = nodes.find(n => n.id === selectedEdge.source);
+                                    const t = nodes.find(n => n.id === selectedEdge.target);
+                                    return (
+                                      <>
+                                        <ListItem sx={{ px: 0 }}>
+                                          <ListItemIcon><Icons.ArrowOutward sx={{ color: s ? getHexColor(s.data.type) : 'gray' }} /></ListItemIcon>
+                                          <ListItemText primary="Source" secondary={s?.data.label || selectedEdge.source} secondaryTypographyProps={{ style: { color: 'rgba(255,255,255,0.5)' } }} />
+                                        </ListItem>
+                                        <ListItem sx={{ px: 0 }}>
+                                          <ListItemIcon><Icons.ArrowDownward sx={{ color: t ? getHexColor(t.data.type) : 'gray' }} /></ListItemIcon>
+                                          <ListItemText primary="Target" secondary={t?.data.label || selectedEdge.target} secondaryTypographyProps={{ style: { color: 'rgba(255,255,255,0.5)' } }} />
+                                        </ListItem>
+                                      </>
+                                    );
+                                  })()}
+                                </List>
+                              </Box>
+                            </>
+                          ) : selectedNode ? (
+            
               <>
                 <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#fff' }}>{selectedNode.data.label}</Typography>
                 <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
@@ -944,30 +1110,57 @@ export default function App() {
               </>
             ) : null}
 
-            {(selectedNode || previewData) && (
-              <>
-                <Typography variant="caption" color="rgba(255,255,255,0.4)" display="block" sx={{ mt: 2, mb: 1, fontWeight: 'bold', letterSpacing: 1 }}>
-                  {previewData ? `${previewData.category.toUpperCase()} GROUP` : "NEIGHBORS"}
-                </Typography>
-                <List>
-                  {(previewData ? previewData.nodes : selectedNodeNeighbors)
-                    .sort((a, b) => (a.data.type || '').localeCompare(b.data.type || ''))
-                    .map(node => (
-                      <ListItem key={node.id} sx={{ px: 0 }}>
-                        <ListItemAvatar><Avatar sx={{ bgcolor: getHexColor(node.data.type), width: 32, height: 32 }}>{React.createElement(Icons[node.data.icon] || Icons.HelpOutline, { sx: { fontSize: 18, color: '#fff' } })}</Avatar></ListItemAvatar>
-                        <ListItemText primary={node.data.label} secondary={node.data.type} primaryTypographyProps={{ style: { fontSize: '0.9rem' } }} secondaryTypographyProps={{ style: { fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' } }} />
-                        <ListItemSecondaryAction><IconButton edge="end" color="primary" disabled={nodes.some(n => n.id === node.id)} onClick={() => addSingleNode(selectedNode?.id || previewData?.sourceId, node)}>{nodes.some(n => n.id === node.id) ? <CheckIcon sx={{ color: 'success.main' }} /> : <AddIcon />}</IconButton></ListItemSecondaryAction>
-                      </ListItem>
-                    ))}
-                </List>
-              </>
-            )}
-          </Box>
-                    {selectedNode && (
-                      <Box sx={{ pt: 2 }}><Divider sx={{ mb: 2, borderColor: 'rgba(255,255,255,0.1)' }} /><Button variant="outlined" color="error" fullWidth startIcon={<DeleteIcon />} onClick={onDeleteNode} sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 'bold', borderColor: 'rgba(211, 47, 47, 0.5)' }}>Remove from Canvas</Button></Box>
-                    )}
+                          {(selectedNode || previewData) && (
+                            <>
+                              <Typography variant="caption" color="rgba(255,255,255,0.4)" display="block" sx={{ mt: 2, mb: 1, fontWeight: 'bold', letterSpacing: 1 }}>
+                                {previewData ? `${previewData.category.toUpperCase()} GROUP` : "NEIGHBORS"}
+                              </Typography>
+                              <List>
+                                {(previewData ? previewData.nodes : selectedNodeNeighbors)
+                                  .sort((a, b) => (a.data.type || '').localeCompare(b.data.type || ''))
+                                  .map(node => (
+                                    <ListItem key={node.id} sx={{ px: 0 }}>
+                                      <ListItemAvatar><Avatar sx={{ bgcolor: getHexColor(node.data.type), width: 32, height: 32 }}>{React.createElement(Icons[node.data.icon] || Icons.HelpOutline, { sx: { fontSize: 18, color: '#fff' } })}</Avatar></ListItemAvatar>
+                                      <ListItemText primary={node.data.label} secondary={node.data.type} primaryTypographyProps={{ style: { fontSize: '0.9rem' } }} secondaryTypographyProps={{ style: { fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' } }} />
+                                      <ListItemSecondaryAction><IconButton edge="end" color="primary" disabled={nodes.some(n => n.id === node.id)} onClick={() => addSingleNode(selectedNode?.id || previewData?.sourceId, node)}>{nodes.some(n => n.id === node.id) ? <CheckIcon sx={{ color: 'success.main' }} /> : <AddIcon />}</IconButton></ListItemSecondaryAction>
+                                    </ListItem>
+                                  ))}
+                              </List>
+                            </>
+                          )}
+                        </Box>
+                        {selectedNode && (
+                          <Box sx={{ pt: 2 }}><Divider sx={{ mb: 2, borderColor: 'rgba(255,255,255,0.1)' }} /><Button variant="outlined" color="error" fullWidth startIcon={<DeleteIcon />} onClick={onDeleteNode} sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 'bold', borderColor: 'rgba(211, 47, 47, 0.5)' }}>Remove from Canvas</Button></Box>
+                        )}
+            
                   </Box>
                 </Drawer>
+
+        <Drawer 
+          anchor="left" open={isSettingsOpen} variant="persistent" 
+          sx={{ width: isSettingsOpen ? 280 : 0, flexShrink: 0, '& .MuiDrawer-paper': { width: 280, borderRight: `2px solid ${COLORS.panelBorder}`, bgcolor: COLORS.paper, boxShadow: 5 } }}
+        >
+          <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', color: COLORS.secondary, letterSpacing: 1 }}>SETTINGS</Typography>
+              <IconButton onClick={() => setIsSettingsOpen(false)} sx={{ color: 'rgba(255,255,255,0.5)' }}><ChevronLeftIcon /></IconButton>
+            </Box>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 2, letterSpacing: 1 }}>VISUALIZATION RULES</Typography>
+            <FormGroup sx={{ px: 1 }}>
+              <FormControlLabel 
+                control={<Switch checked={enableEdgeColoring} onChange={(e) => setEnableEdgeColoring(e.target.checked)} color="secondary" />} 
+                label={<Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>Edge Coloring Rules</Typography>} 
+              />
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', ml: 4, mb: 2, display: 'block' }}>Color-code edges by relationship type (Rules, Conquests, etc.)</Typography>
+              <FormControlLabel 
+                control={<Switch checked={enableDonuts} onChange={(e) => setEnableDonuts(e.target.checked)} color="secondary" />} 
+                label={<Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>Show Node Donuts</Typography>} 
+              />
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', ml: 4, mb: 2, display: 'block' }}>Display neighbor distribution rings around nodes</Typography>
+            </FormGroup>
+            <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
+          </Box>
+        </Drawer>
               </Box>
             );
           }

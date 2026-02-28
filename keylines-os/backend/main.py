@@ -166,12 +166,22 @@ async def expand(node_id: str, use_mock: bool = Query(False), filter_category: s
 
     query = f"""
     MATCH (n {{id: '{node_id}'}})
-    OPTIONAL MATCH (n)-[e]-(m)
-    WITH n, e, m
-    OPTIONAL MATCH (m)-[]-(mn)
-    WITH n, e, m, collect(mn.type) as m_neighbor_types
+    
+    // Finde alle distinkten Nachbarn von n und sammle ihre Typen
     OPTIONAL MATCH (n)-[]-(nn)
-    RETURN n, collect(nn.type) as n_neighbor_types, e, m, m_neighbor_types;
+    WITH DISTINCT n, nn
+    WITH n, collect(nn.type) as n_neighbor_types
+    
+    // Hole alle Kanten und Zielknoten m für die Expansion
+    OPTIONAL MATCH (n)-[e]-(m)
+    WITH n, n_neighbor_types, e, m
+    
+    // Finde für jeden Zielknoten m dessen distinkte Nachbarn (für die Vorschau im Donut)
+    OPTIONAL MATCH (m)-[]-(mn)
+    WITH DISTINCT n, n_neighbor_types, e, m, mn
+    WITH n, n_neighbor_types, e, m, collect(mn.type) as m_neighbor_types
+    
+    RETURN n, n_neighbor_types, e, m, m_neighbor_types;
     """
     
     try:
@@ -184,7 +194,7 @@ async def expand(node_id: str, use_mock: bool = Query(False), filter_category: s
     edges = []
     
     category_map = {
-        "person": "people", 
+        "person": "person", 
         "mutant": "mutant",
         "planet": "planet",
         "robot": "robot",
@@ -194,7 +204,7 @@ async def expand(node_id: str, use_mock: bool = Query(False), filter_category: s
     }
     
     color_values = {
-        "people": "#1976d2", 
+        "person": "#1976d2", 
         "planet": "#4caf50",
         "mutant": "#dc143c", 
         "robot": "#00bfff",
@@ -223,6 +233,7 @@ async def expand(node_id: str, use_mock: bool = Query(False), filter_category: s
                 "category": cat,
                 "type_labels": [f"{t} ({count})" for t, count in cat_type_details[cat].items()],
                 "value": (count / total) * 100, 
+                "total_count": count,
                 "color": color_values[cat]
             }
             for cat, count in cat_counts.items()
@@ -275,11 +286,12 @@ async def expand(node_id: str, use_mock: bool = Query(False), filter_category: s
                 elif hasattr(e, "type"):
                     rel_type = e.type
                 
+                p_e = get_props(e)
                 edges.append({
                     "id": f"e-{id_n}-{rel_type}-{id_m}",
                     "source": id_n, "target": id_m, 
                     "label": rel_type.replace("_", " ").lower(),
-                    "data": {"type": rel_type},
+                    "data": {**p_e, "type": rel_type},
                     "animated": rel_type in ["TRAVELS_WITH", "CONNECTS", "FOLLOWS"]
                 })
 

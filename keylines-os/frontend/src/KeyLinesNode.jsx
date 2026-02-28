@@ -7,7 +7,7 @@ import { getHexColor } from './constants';
 import { COLORS } from './theme';
 
 const KeyLinesNode = ({ data }) => {
-  const { label, icon, donut = [], score = 1.0 } = data;
+  const { label, icon, donut = [], score = 1.0, showDonuts = true } = data;
   const IconComponent = Icons[icon] || Icons.HelpOutline;
 
   const size = 60;
@@ -41,66 +41,68 @@ const KeyLinesNode = ({ data }) => {
         filter: score > 0.4 ? `drop-shadow(0 0 ${glowIntensity}px ${glowColor}88)` : 'none'
       }}>
         {/* SVG Donut Ring */}
-        <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', overflow: 'visible' }}>
-          {donut.map((segment, index) => {
-            const value = typeof segment === 'object' ? segment.value : segment;
-            const color = typeof segment === 'object' ? segment.color : (index === 0 ? '#1976d2' : '#dc004e');
-            
-            const strokeDasharray = `${(value / 100) * circumference} ${circumference}`;
-            const strokeDashoffset = -cumulativeOffset;
-            cumulativeOffset += (value / 100) * circumference;
+        {showDonuts && donut.length > 0 && (
+          <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', overflow: 'visible' }}>
+            {donut.map((segment, index) => {
+              const value = typeof segment === 'object' ? segment.value : segment;
+              const color = typeof segment === 'object' ? segment.color : (index === 0 ? '#1976d2' : '#dc004e');
+              
+              const strokeDasharray = `${(value / 100) * circumference} ${circumference}`;
+              const strokeDashoffset = -cumulativeOffset;
+              cumulativeOffset += (value / 100) * circumference;
 
-            const tooltipTitle = segment.type_labels ? segment.type_labels.join(", ") : (segment.types ? segment.types.join(", ") : segment.category?.toUpperCase());
+              const tooltipTitle = segment.type_labels ? segment.type_labels.join(", ") : (segment.types ? segment.types.join(", ") : segment.category?.toUpperCase());
 
-            return (
-              <Tooltip 
-                key={index} 
-                title={tooltipTitle} 
-                arrow 
-                placement="top"
-                enterDelay={0}
-                enterNextDelay={0}
-                slotProps={{
-                  popper: {
-                    modifiers: [
-                      {
-                        name: 'offset',
-                        options: {
-                          offset: [0, 12],
+              return (
+                <Tooltip 
+                  key={index} 
+                  title={tooltipTitle} 
+                  arrow 
+                  placement="top"
+                  enterDelay={0}
+                  enterNextDelay={0}
+                  slotProps={{
+                    popper: {
+                      modifiers: [
+                        {
+                          name: 'offset',
+                          options: {
+                            offset: [0, 12],
+                          },
                         },
-                      },
-                    ],
-                  },
-                }}
-              >
-                <circle
-                  cx={center}
-                  cy={center}
-                  r={radius}
-                  fill="none"
-                  stroke={color}
-                  strokeWidth="10"
-                  strokeDasharray={strokeDasharray}
-                  strokeDashoffset={strokeDashoffset}
-                  strokeLinecap="butt"
-                  style={{ 
-                    cursor: 'pointer', 
-                    transition: 'stroke-width 0.2s',
-                    pointerEvents: 'stroke' 
+                      ],
+                    },
                   }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (data.onSegmentClick && segment.category) {
-                      data.onSegmentClick(segment.category, e);
-                    }
-                  }}
-                  onMouseEnter={(e) => e.target.setAttribute('stroke-width', '14')}
-                  onMouseLeave={(e) => e.target.setAttribute('stroke-width', '10')}
-                />
-              </Tooltip>
-            );
-          })}
-        </svg>
+                >
+                  <circle
+                    cx={center}
+                    cy={center}
+                    r={radius}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth="10"
+                    strokeDasharray={strokeDasharray}
+                    strokeDashoffset={strokeDashoffset}
+                    strokeLinecap="butt"
+                    style={{ 
+                      cursor: 'pointer', 
+                      transition: 'stroke-width 0.2s',
+                      pointerEvents: 'stroke' 
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (data.onSegmentClick && segment.category) {
+                        data.onSegmentClick(segment.category, e);
+                      }
+                    }}
+                    onMouseEnter={(e) => e.target.setAttribute('stroke-width', '14')}
+                    onMouseLeave={(e) => e.target.setAttribute('stroke-width', '10')}
+                  />
+                </Tooltip>
+              );
+            })}
+          </svg>
+        )}
 
         {/* Central Icon */}
         <Box sx={{

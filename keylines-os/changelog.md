@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.21.0] - 2026-02-27
+
+### Added
+- **Edge Details Drawer**: Shift-clicking an edge now opens the right sidebar with comprehensive information, including relationship type, connected nodes (with type-colored icons), and all database-driven properties (weight, status, date).
+- **Global Settings Panel**: A new dedicated settings panel on the left toolbar allows users to toggle visualization rules in real-time.
+- **Dynamic Donut Shrinking**: Donut segments now dynamically shrink or vanish based on the nodes currently present on the stage. This provides immediate visual feedback on which connections have already been explored.
+- **Edge Data Enrichment**: The Asimov dataset now includes additional relationship properties like `weight`, `since`, and `status` for more detailed analysis.
+
+### Changed
+- **Visual Toggle System**: Users can now globally disable "Edge Coloring Rules" and "Node Donuts" for a cleaner, more focused view of the graph structure.
+- **Sync Consistency**: Unified category naming (e.g., using `person` instead of `people`) across the entire stack to match the backend database schema perfectly.
+
+### Fixed
+- **Accurate Donut Proportions**: Refined the Cypher query logic to count distinct neighbor nodes instead of relationships, ensuring that donut segments reflect the true quantity of connected entities.
+- **Backend Stability**: Fixed Python indentation errors and Cypher syntax issues in the `/expand` endpoint.
+
 ## [1.20.0] - 2026-02-27
 
 ### Added

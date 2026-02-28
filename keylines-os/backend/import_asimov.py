@@ -45,9 +45,18 @@ def import_data():
     with open(edges_path, mode='r', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         for row in reader:
+            # Füge einige Dummy-Daten für Kanten hinzu, damit der Drawer was zu tun hat
+            extra_props = ""
+            if row['source'] == 'n1' and row['type'] == 'LIVES_ON':
+                extra_props = ", e.status = 'primary_residence', e.weight = 0.95, e.since = '11988 GE'"
+            else:
+                import random
+                extra_props = f", e.weight = {round(random.uniform(0.1, 0.9), 2)}, e.since = '12000 GE'"
+
             query = f"""
             MATCH (a {{id: '{row['source']}'}}), (b {{id: '{row['target']}'}})
-            MERGE (a)-[:{row['type']}]->(b)
+            MERGE (a)-[e:{row['type']}]->(b)
+            SET e.type = '{row['type']}' {extra_props}
             """
             memgraph.execute(query)
             print(f"Imported Edge: {row['source']} -> {row['target']}")
