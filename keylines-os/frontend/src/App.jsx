@@ -5,7 +5,8 @@ import ReactFlow, {
   Background, 
   Controls, 
   Panel, 
-  useReactFlow
+  useReactFlow,
+  getRectOfNodes
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import KeyLinesNode from './KeyLinesNode';
@@ -118,10 +119,38 @@ const getLayoutedElements = (nodes, edges, direction = 'TB') => {
   if (nodes.length === 0) return [];
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
-  dagreGraph.setGraph({ rankdir: direction });
+  dagreGraph.setGraph({ rankdir: direction, nodesep: 70, ranksep: 100 });
+  
   const selectedIds = new Set(nodes.filter(n => n.selected).map(n => n.id));
-  nodes.forEach((node) => dagreGraph.setNode(node.id, { width: 150, height: 100 }));
-  edges.forEach((edge) => {
+  const nodeMap = new Map(nodes.map(n => [n.id, n]));
+  
+  // 1. Knoten sortieren für konsistente Initialisierung
+  const sortedNodes = [...nodes].sort((a, b) => {
+    const typeA = (a.data.type || '').toLowerCase();
+    const typeB = (b.data.type || '').toLowerCase();
+    if (typeA !== typeB) return typeA.localeCompare(typeB);
+    return (a.data.label || '').toLowerCase().localeCompare((b.data.label || '').toLowerCase());
+  });
+
+  sortedNodes.forEach((node) => {
+    dagreGraph.setNode(node.id, { width: 150, height: 100 });
+  });
+
+  // 2. Kanten sortieren basierend auf dem Typ des ZIEL-Knotens
+  // Das ist der entscheidende Faktor für die horizontale Sortierung in Dagre
+  const sortedEdges = [...edges].sort((a, b) => {
+    const targetA = nodeMap.get(a.target);
+    const targetB = nodeMap.get(b.target);
+    if (!targetA || !targetB) return 0;
+    
+    const typeA = (targetA.data.type || '').toLowerCase();
+    const typeB = (targetB.data.type || '').toLowerCase();
+    if (typeA !== typeB) return typeA.localeCompare(typeB);
+    
+    return (targetA.data.label || '').toLowerCase().localeCompare((targetB.data.label || '').toLowerCase());
+  });
+
+  sortedEdges.forEach((edge) => {
     if (dagreGraph.hasNode(edge.source) && dagreGraph.hasNode(edge.target)) {
       if (selectedIds.has(edge.target) && !selectedIds.has(edge.source)) {
         dagreGraph.setEdge(edge.target, edge.source);
@@ -130,6 +159,7 @@ const getLayoutedElements = (nodes, edges, direction = 'TB') => {
       }
     }
   });
+
   dagre.layout(dagreGraph);
   return nodes.map((node) => {
     const pos = dagreGraph.node(node.id);
@@ -253,6 +283,18 @@ export default function App() {
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   useEffect(() => { edgesRef.current = edges; }, [edges]);
   useEffect(() => { activeLayoutRef.current = activeLayout; }, [activeLayout]);
+
+  // Funktion zum manuellen Anpassen der Kamera an neue Knotenpositionen,
+  // ignoriert CSS-Animationen für mehr Präzision.
+  const fitToNodes = useCallback((nds) => {
+    if (nds.length === 0) return;
+    const rect = getRectOfNodes(nds);
+    fitView({ 
+      duration: 800, 
+      padding: 0.2, 
+      nodes: nds 
+    });
+  }, [fitView]);
 
   const updateNodeData = useCallback((nodeId, newData) => {
     setNodes((nds) =>
@@ -382,9 +424,11 @@ export default function App() {
 
   const onLayoutClick = useCallback((type) => {
     setActiveLayout(type);
-    setNodes(nds => applyLayout(nds, edgesRef.current, type));
-    setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
-  }, [applyLayout, fitView, setNodes]);
+    const layouted = applyLayout(nodes, edgesRef.current, type);
+    setNodes(layouted);
+    // Kamera zieht früher nach (300ms)
+    setTimeout(() => fitToNodes(layouted), 300);
+  }, [applyLayout, fitToNodes, setNodes, nodes]);
 
   const onAnalyze = useCallback(async (algorithm) => {
     setActiveAlgorithm(algorithm);
@@ -444,12 +488,14 @@ export default function App() {
       const { nodes: integratedNodes, edges: integratedEdges } = integrateNewData(currentNodes, currentEdges, data, nodeId, expandNode);
       setNodes(integratedNodes); setEdges(integratedEdges);
       setTimeout(() => {
-        setNodes(applyLayout(integratedNodes, integratedEdges, activeLayoutRef.current));
-        requestAnimationFrame(() => fitView({ duration: 800, padding: 0.2 }));
+        const layoutedNodes = applyLayout(integratedNodes, integratedEdges, activeLayoutRef.current);
+        setNodes(layoutedNodes);
+        // Vorzeitiger Kamera-Zoom (300ms) für flüssigeres Gefühl
+        setTimeout(() => fitToNodes(layoutedNodes), 300);
       }, 150);
       setTimeout(() => setEdges(integratedEdges.map(e => ({ ...e, data: { ...e.data, isNew: false } }))), 200);
     } catch (error) { console.error(error); }
-  }, [applyLayout, fitView, setNodes, setEdges]);
+  }, [applyLayout, fitToNodes, setNodes, setEdges]);
 
   const addSingleNode = useCallback((sourceId, targetNode) => {
     const currentNodes = nodesRef.current;
@@ -472,9 +518,11 @@ export default function App() {
       const remainingNodes = nds.filter(n => highlightedTypes.has(n.data.type));
       const remainingIds = new Set(remainingNodes.map(n => n.id));
       setEdges((eds) => eds.filter(e => remainingIds.has(e.source) && remainingIds.has(e.target)));
-      setHighlightedTypes(new Set()); return remainingNodes;
+      setHighlightedTypes(new Set()); 
+      setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
+      return remainingNodes;
     });
-  }, [highlightedTypes, setNodes, setEdges]);
+  }, [highlightedTypes, setNodes, setEdges, fitView]);
 
   const toggleHighlight = useCallback((type, isShift) => {
     setHighlightedTypes(prev => {
@@ -535,8 +583,9 @@ export default function App() {
     if (!selectedNode) return;
     setNodes(nds => nds.filter(n => n.id !== selectedNode.id));
     setEdges(eds => eds.filter(e => e.source !== selectedNode.id && e.target !== selectedNode.id));
+    setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
     closeSidebar();
-  }, [selectedNode, setNodes, setEdges, closeSidebar]);
+  }, [selectedNode, setNodes, setEdges, closeSidebar, fitView]);
 
   const batchExpandNodes = useCallback(async (nodeIds) => {
     const currentNodes = nodesRef.current;
@@ -549,16 +598,20 @@ export default function App() {
         const integrated = integrateNewData(nextNodes, nextEdges, data, nodeIds[index], expandNode);
         nextNodes = integrated.nodes; nextEdges = integrated.edges;
       });
-      setNodes(nextNodes); setEdges(nextEdges);
-      setTimeout(() => {
-        setNodes(applyLayout(nextNodes, nextEdges, activeLayoutRef.current));
-        requestAnimationFrame(() => fitView({ duration: 800, padding: 0.2 }));
-      }, 150);
-      setTimeout(() => setEdges(nextEdges.map(e => ({ ...e, data: { ...e.data, isNew: false } }))), 200);
-    } catch (e) { console.error('Batch expansion failed:', e); }
-  }, [expandNode, applyLayout, fitView, setNodes, setEdges]);
-
-  const deleteSelectedElements = useCallback(() => {
+                                              const integratedNodes = nextNodes;
+                                              setNodes(integratedNodes); setEdges(nextEdges);
+                                              setTimeout(() => {
+                                                const layouted = applyLayout(integratedNodes, nextEdges, activeLayoutRef.current);
+                                                setNodes(layouted);
+                                                // Früherer Kamera-Zoom
+                                                setTimeout(() => fitToNodes(layouted), 300);
+                                              }, 150);
+                                              setTimeout(() => setEdges(nextEdges.map(e => ({ ...e, data: { ...e.data, isNew: false } }))), 200);
+                                      
+                                    } catch (e) { console.error('Batch expansion failed:', e); }
+                                  }, [expandNode, applyLayout, fitToNodes, setNodes, setEdges]);
+                              
+                        const deleteSelectedElements = useCallback(() => {
     const nodeIdsToRemove = new Set(nodesRef.current.filter(n => n.selected).map(n => n.id));
     const edgeIdsToRemove = new Set(edgesRef.current.filter(e => e.selected).map(e => e.id));
     if (nodeIdsToRemove.size === 0 && edgeIdsToRemove.size === 0) return;
@@ -649,8 +702,8 @@ export default function App() {
     <Box sx={{ width: '100vw', height: '100vh', bgcolor: 'background.default', display: 'flex', fontFamily: '"Open Sans", sans-serif', overflow: 'hidden', position: 'relative' }}>
       <style>{`
         body { margin: 0; padding: 0; overflow: hidden; background: ${COLORS.background}; }
-        .react-flow__node { transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); will-change: transform; }
-        .react-flow__node.dragging, .react-flow__node.selected { transition: none !important; }
+        .react-flow__node { transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) !important; will-change: transform; }
+        .react-flow__node.dragging { transition: none !important; }
         .react-flow__edge-path { transition: d 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); }
         .react-flow__edge-textwrapper { transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease; opacity: ${zoomLevel > 0.6 ? 1 : 0}; }
         .react-flow__edge-text { fill: ${COLORS.nodeLabel} !important; }

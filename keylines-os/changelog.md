@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.20.0] - 2026-02-27
+
+### Added
+- **Type-Aware Hierarchical Layout**: The hierarchical layout engine now automatically sorts nodes by their **Entity Type** and **Label** horizontally. This results in much cleaner, grouped structures within each level.
+- **Smart Camera Tracking (`fitToNodes`)**: Replaced standard `fitView` with a more precise manual calculation system that determines the final bounding box before node animations finish, preventing "half-visible" graphs in structured layouts.
+- **Responsive Camera Triggers**: Added automatic camera adjustments to `onDrillDown` and `onDeleteNode` for a seamless experience.
+
+### Changed
+- **Optimized Animation Timing**: Refined the camera zoom delay to 300ms. The camera now begins its move while nodes are still in motion, creating a more fluid and responsive "fly-out" effect.
+- **Improved Animation Consistency**: Re-enabled transitions for selected nodes to ensure that expanded clusters always glide smoothly into position.
+- **Manual Alignment Refinement**: Replaced random offsets with a fixed 200px rightward placement for isolated nodes added from search.
+
+### Fixed
+- **Dagre Sorting Logic**: Corrected the horizontal order in hierarchical views by sorting edges by the target node's properties, overriding Dagre's default "first-seen" placement.
+- **Node dragging stability**: Confirmed that only active dragging disables transitions, preserving smooth motion for all other layout-driven changes.
+
 ## [1.19.0] - 2026-02-27
 
 ### Added
