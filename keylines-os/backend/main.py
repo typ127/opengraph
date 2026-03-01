@@ -8,6 +8,15 @@ from typing import List, Dict, Any
 
 app = FastAPI()
 
+@app.get("/health")
+async def health_check():
+    try:
+        # Führe eine minimale Abfrage aus, um die DB-Verbindung zu testen
+        memgraph.execute("RETURN 1")
+        return {"status": "online", "database": "connected"}
+    except Exception as e:
+        return {"status": "offline", "error": str(e)}
+
 # Memgraph Verbindung initialisieren
 MEMGRAPH_HOST = os.getenv("MEMGRAPH_HOST", "localhost")
 MEMGRAPH_PORT = int(os.getenv("MEMGRAPH_PORT", 7687))

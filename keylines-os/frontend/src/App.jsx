@@ -326,6 +326,22 @@ export default function App() {
       const [highlightedTypes, setHighlightedTypes] = useState(new Set());
       const [searchResults, setSearchResults] = useState([]);
       const [statusParts, setStatusParts] = useState([]);
+      const [dbStatus, setDbStatus] = useState('checking'); // 'online', 'offline', 'checking'
+
+      useEffect(() => {
+        const checkHealth = async () => {
+          try {
+            const res = await fetch('http://localhost:8000/health');
+            const data = await res.json();
+            setDbStatus(data.status === 'online' ? 'online' : 'offline');
+          } catch (e) {
+            setDbStatus('offline');
+          }
+        };
+        checkHealth();
+        const interval = setInterval(checkHealth, 10000);
+        return () => clearInterval(interval);
+      }, []);
 
       useEffect(() => {        const fetchCounts = async () => {
           try {
@@ -988,7 +1004,9 @@ export default function App() {
   
       const onDrillDownToNode = useCallback(() => {
         if (!selectedNode) return;
-        setNodes([selectedNode]);
+        // Search for original node in state to avoid using the "filtered" donut from visibleNodes view
+        const originalNode = nodesRef.current.find(n => n.id === selectedNode.id);
+        setNodes(originalNode ? [originalNode] : [selectedNode]);
         setEdges([]);
         setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
       }, [selectedNode, setNodes, setEdges, fitView]);
@@ -1445,13 +1463,28 @@ export default function App() {
       </Box>
 
       {/* STATUS BAR (BOTTOM) */}
-      <Box sx={{ height: statusBarHeight, width: '100%', bgcolor: 'rgba(20, 20, 20, 0.95)', borderTop: `1px solid ${COLORS.panelBorder}`, display: 'flex', alignItems: 'center', px: 3, zIndex: 1201, gap: 3 }}>
-        {statusParts.map((part, i) => (
-          <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontWeight: 500, fontSize: '10px', letterSpacing: 1, textTransform: 'uppercase' }}>{part.trigger}:</Typography>
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 200, fontSize: '10px', letterSpacing: 0.5 }}>{part.action}</Typography>
-          </Box>
-        ))}
+      <Box sx={{ height: statusBarHeight, width: '100%', bgcolor: 'rgba(20, 20, 20, 0.95)', borderTop: `1px solid ${COLORS.panelBorder}`, display: 'flex', alignItems: 'center', pl: 3, pr: 4, zIndex: 1201, gap: 3, justifyContent: 'space-between', boxSizing: 'border-box' }}>
+        <Box sx={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+          {statusParts.map((part, i) => (
+            <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontWeight: 500, fontSize: '10px', letterSpacing: 1, textTransform: 'uppercase' }}>{part.trigger}:</Typography>
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 200, fontSize: '10px', letterSpacing: 0.5 }}>{part.action}</Typography>
+            </Box>
+          ))}
+        </Box>
+
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 200, fontSize: '10px', letterSpacing: 1 }}>DATABASE</Typography>
+          <Box 
+            onMouseEnter={() => setStatusParts([{ trigger: 'STATUS', action: `Database is currently ${dbStatus.toUpperCase()}` }])}
+            onMouseLeave={() => setStatusParts([])}
+            sx={{ 
+              width: 8, height: 8, borderRadius: '50%', 
+              bgcolor: dbStatus === 'online' ? '#4caf50' : dbStatus === 'offline' ? '#f44336' : '#ff9800',
+              transition: 'all 0.3s ease'
+            }} 
+          />
+        </Box>
       </Box>
 
                       <Drawer anchor="right" open={!!selectedNode || !!selectedEdge || !!previewData || !!pendingConnection} onClose={handleDrawerClose} variant="temporary" sx={{ width: 350, '& .MuiDrawer-paper': { width: 350, borderLeft: `4px solid ${sidebarColor}`, boxShadow: -5, bgcolor: COLORS.paper, overflow: 'hidden' } }}>

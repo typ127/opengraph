@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.30.0] - 2026-03-01
+
+### Added
+- **Database Health Monitoring**: Implemented a real-time connectivity indicator in the status bar.
+    - **Backend**: New `/health` endpoint performs active verification of the Memgraph connection.
+    - **Frontend**: Automated polling system (10s interval) with a color-coded status dot (Green: Online, Red: Offline, Orange: Checking).
+- **Interactive Status Prompts**: Added status bar hover support for the Database indicator.
+
+### Fixed
+- **Isolation Donut Persistence**: Fixed a bug where neighbor distribution rings (donuts) disappeared when using the "Isolate" function. The system now correctly references the original node state instead of the filtered UI view.
+
+### Changed
+- **Status Bar Refinement**: Optimized layout alignment using `box-sizing: border-box` and adjusted padding to ensure all indicators are perfectly aligned within the viewport.
+
 ## [1.29.0] - 2026-03-01
 
 ### Added
