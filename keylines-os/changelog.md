@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.22.0] - 2026-02-28
+
+### Added
+- **Manual Edge Creation Workflow**: Introduced a dedicated "Relationship Mode" in the toolbox. When active, users can draw connections directly between characters by clicking and dragging from icon to icon.
+- **Visual Connection Feedback**: While drawing, a thick primary-colored line appears, which becomes dashed and animated once it "snaps" to a valid target node.
+- **Relationship Type Definition**: A new drawer interface allows users to select from a predefined list of relationship types (e.g., `PROTECTS`, `CREATED`, `TRAVELS_WITH`) immediately after drawing a connection.
+- **Integrated Relationship Deletion**: Added the ability to delete database relationships directly from the node profile and donut segment drawers, regardless of whether the partner is currently on the stage.
+- **Backend Persistence (`/create-edge`)**: New POST endpoint to permanently save user-created relationships into the Memgraph database using Cypher `MERGE` logic.
+
+### Changed
+- **Invisible Interaction Handles**: Replaced technical anchor points with full-area invisible handles that only activate in connection mode, keeping the UI clean during normal navigation.
+- **Seamless Edge Deletion**: The drawer now remains open after deleting a relationship, providing a continuous workflow for managing entity connections.
+- **Direction-Agnostic Operations**: Both deletion and expansion now handle edge directions intelligently, preventing "ghost" relations caused by mismatched source/target orientations in the DB.
+
+### Fixed
+- **Manual Edge Donut Sync**: Manually created edges now correctly update the node's internal `total_count`, ensuring donut segments are properly restored when partner nodes are removed from the canvas.
+- **Real-time Donut Shrinking**: Fixed a bug where donut segments wouldn't update after deletion in the drawer due to missing type metadata for off-stage nodes.
+
 ## [1.21.0] - 2026-02-27
 
 ### Added

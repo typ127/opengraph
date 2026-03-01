@@ -328,3 +328,21 @@ async def create_edge(edge: EdgeCreate):
     except Exception as e:
         print(f"Edge creation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/delete-edge")
+async def delete_edge(edge: EdgeCreate):
+    rel_type = edge.type.upper().replace(" ", "_")
+    print(f"Attempting to delete edge: {edge.source} -[{rel_type}]- {edge.target}")
+    
+    # Richtungsunabhängiges Löschen: -[e]- statt -[e]->
+    query = f"""
+    MATCH (a {{id: '{edge.source}'}})-[e:{rel_type}]-(b {{id: '{edge.target}'}})
+    DELETE e;
+    """
+    try:
+        memgraph.execute(query)
+        print(f"Successfully executed delete query for {edge.source} <-> {edge.target}")
+        return {"status": "success"}
+    except Exception as e:
+        print(f"Edge deletion error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

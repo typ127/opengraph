@@ -289,9 +289,11 @@ export default function App() {
   const [activeLayout, setActiveLayout] = useState('force');
   const [activeAlgorithm, setActiveAlgorithm] = useState('degree');
   const [selectedNode, setSelectedNode] = useState(null);
-  const [selectedEdge, setSelectedEdge] = useState(null);
-  const [selectedNodeNeighbors, setSelectedNodeNeighbors] = useState([]);
-  const [previewData, setPreviewData] = useState(null);
+      const [selectedEdge, setSelectedEdge] = useState(null);
+      const [selectedNodeNeighbors, setSelectedNodeNeighbors] = useState([]);
+      const [selectedNodeEdges, setSelectedNodeEdges] = useState([]);
+      const [previewData, setPreviewData] = useState(null);
+  
   const [zoomLevel, setZoomLevel] = useState(1);
   const [hiddenTypes, setHiddenTypes] = useState(new Set());
   const [highlightedTypes, setHighlightedTypes] = useState(new Set());
@@ -419,9 +421,72 @@ export default function App() {
     } catch (e) {
       console.error("Delete error:", e);
     }
-  }, [setNodes, setEdges, closeSidebar]);
-
-  const openDetails = useCallback(async (node, forceEdit = false) => {
+      }, [setNodes, setEdges, closeSidebar]);
+  
+                  const deleteEdgePermanently = useCallback(async (edge) => {
+                    if (!window.confirm("Do you really want to delete this relationship permanently from the database?")) return;
+                    
+                    // Vorab den Partner und seine Kategorie bestimmen
+                    const currentContextId = selectedNode?.id || previewData?.sourceId;
+                    const neighborId = edge.source === currentContextId ? edge.target : edge.source;
+                    const neighborNode = nodesRef.current.find(n => n.id === neighborId) || 
+                                         (previewData?.nodes || selectedNodeNeighbors).find(n => n.id === neighborId);
+                    const neighborCat = categoryMap[neighborNode?.data?.type?.toLowerCase()] || 'other';
+                    
+                    console.log(`Deleting relationship. Neighbor: ${neighborId}, Category: ${neighborCat}`);
+              
+                    try {
+                      await fetch('http://localhost:8000/delete-edge', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                          source: edge.source, 
+                          target: edge.target, 
+                          type: edge.data?.type || 'RELATES_TO' 
+                        })
+                      });
+                      
+                      // 1. Von der Stage entfernen
+                      setEdges(eds => eds.filter(e => e.id !== edge.id));
+                      
+                      // 2. Donuts global aktualisieren (total_count dekrementieren)
+                      // Wir nutzen hier neighborCat, den wir oben sicher bestimmt haben
+                      setNodes(nds => nds.map(node => {
+                        if (node.id === edge.source || node.id === edge.target) {
+                          // Bestimme, welcher Typ für DIESEN Knoten abgezogen werden muss
+                          const otherId = node.id === edge.source ? edge.target : edge.source;
+                          const otherNode = nds.find(n => n.id === otherId) || 
+                                            (previewData?.nodes || selectedNodeNeighbors).find(n => n.id === otherId);
+                          const decrCat = categoryMap[otherNode?.data?.type?.toLowerCase()] || 'other';
+              
+                          const updatedDonut = (node.data.donut || []).map(seg => {
+                            if (seg.category === decrCat) {
+                              return { ...seg, total_count: Math.max(0, (seg.total_count || 0) - 1) };
+                            }
+                            return seg;
+                          }).filter(seg => seg.total_count > 0);
+                          return { ...node, data: { ...node.data, donut: updatedDonut } };
+                        }
+                        return node;
+                      }));
+              
+                      // 3. Drawer-Listen bereinigen
+                      if (selectedEdge?.id === edge.id) setSelectedEdge(null);
+                      setSelectedNodeEdges(prev => prev.filter(e => e.id !== edge.id));
+                      setSelectedNodeNeighbors(prev => prev.filter(n => n.id !== neighborId));
+                      
+                      setPreviewData(prev => prev ? { 
+                        ...prev, 
+                        nodes: prev.nodes.filter(n => n.id !== neighborId),
+                        edges: prev.edges.filter(e => e.id !== edge.id) 
+                      } : null);
+                      
+                    } catch (e) {
+                      console.error("Edge delete error:", e);
+                    }
+                  }, [setEdges, setNodes, selectedEdge, selectedNode, previewData, selectedNodeNeighbors]);
+              
+              const openDetails = useCallback(async (node, forceEdit = false) => {
     // Wenn wir gerade einen anderen Knoten editiert haben, speichern wir diesen erst
     if (selectedNode && isEditingNode && selectedNode.id !== node.id) {
       persistNode(selectedNode);
@@ -438,17 +503,20 @@ export default function App() {
       setEditSnapshot(null);
     }
     
-    // Keine Nachbarn laden, wenn es ein brandneuer Knoten ist
-    if (node.id.toString().startsWith('new-')) {
-      setSelectedNodeNeighbors([]);
-      return;
-    }
-
-    try {
-      const response = await fetch(`http://localhost:8000/expand/${node.id}`);
-      const data = await response.json();
-      setSelectedNodeNeighbors(data.nodes.filter(n => n.id !== node.id));
+          // Keine Nachbarn laden, wenn es ein brandneuer Knoten ist
+          if (node.data?.isDraft) {
+            setSelectedNodeNeighbors([]);
+            setSelectedNodeEdges([]);
+            return;
+          }
+    
+          try {
+            const response = await fetch(`http://localhost:8000/expand/${node.id}`);
+            const data = await response.json();
+            setSelectedNodeNeighbors(data.nodes.filter(n => n.id !== node.id));
+            setSelectedNodeEdges(data.edges || []);
           } catch (e) { console.error(e); }
+    
         }, [selectedNode, isEditingNode, persistNode]);
     
             const openEdgeDetails = useCallback((edge) => {
@@ -471,29 +539,63 @@ export default function App() {
                   setPreviewData(null);
                   setIsEditingNode(false);
                 }, []);
-                        const confirmConnection = useCallback(async (type) => {
-              if (!pendingConnection) return;
-              const { source, target } = pendingConnection;
-              const newEdge = {
-                ...pendingConnection,
-                id: `e-${source}-${type}-${target}`,
-                label: type.replace("_", " ").toLowerCase(),
-                data: { type },
-                style: getEdgeStyle(enableEdgeColoring ? type : 'default'),
-                animated: ["TRAVELS_WITH", "CONNECTS", "FOLLOWS"].includes(type)
-              };
-              try {
-                await fetch('http://localhost:8000/create-edge', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ source, target, type })
-                });
-                        setEdges((eds) => addEdge(newEdge, eds));
-                        setPendingConnection(null);
-                        setIsEdgeCreationMode(false);
-                      } catch (e) { console.error("Edge creation failed:", e); }
-                
-            }, [pendingConnection, enableEdgeColoring, setEdges]);
+                            const confirmConnection = useCallback(async (type) => {
+                              if (!pendingConnection) return;
+                              const { source, target } = pendingConnection;
+                              const newEdge = {
+                                ...pendingConnection,
+                                id: `e-${source}-${type}-${target}`,
+                                label: type.replace("_", " ").toLowerCase(),
+                                data: { type },
+                                style: getEdgeStyle(enableEdgeColoring ? type : 'default'),
+                                animated: ["TRAVELS_WITH", "CONNECTS", "FOLLOWS"].includes(type)
+                              };
+                              try {
+                                await fetch('http://localhost:8000/create-edge', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ source, target, type })
+                                });
+                        
+                                // 1. Kante zur Stage hinzufügen
+                                setEdges((eds) => addEdge(newEdge, eds));
+                        
+                                // 2. Kategorien für Donut-Update bestimmen
+                                const sourceNode = nodesRef.current.find(n => n.id === source);
+                                const targetNode = nodesRef.current.find(n => n.id === target);
+                                const sourceCat = categoryMap[sourceNode?.data.type?.toLowerCase()] || 'other';
+                                const targetCat = categoryMap[targetNode?.data.type?.toLowerCase()] || 'other';
+                        
+                                // 3. Donuts global aktualisieren (total_count INKREMENTIEREN für neue DB-Relation)
+                                setNodes(nds => nds.map(node => {
+                                  if (node.id === source || node.id === target) {
+                                    const incrCat = node.id === source ? targetCat : sourceCat;
+                                    const existingDonut = node.data.donut || [];
+                                    let updatedDonut;
+                                    
+                                    if (existingDonut.some(s => s.category === incrCat)) {
+                                      updatedDonut = existingDonut.map(seg => 
+                                        seg.category === incrCat ? { ...seg, total_count: (seg.total_count || 0) + 1 } : seg
+                                      );
+                                    } else {
+                                      updatedDonut = [...existingDonut, {
+                                        category: incrCat,
+                                        total_count: 1,
+                                        value: 0, // Wird von visibleNodes berechnet
+                                        color: typeColors[incrCat] || typeColors.other,
+                                        type_labels: [`${type} (1)`]
+                                      }];
+                                    }
+                                    return { ...node, data: { ...node.data, donut: updatedDonut } };
+                                  }
+                                  return node;
+                                }));
+                        
+                                setPendingConnection(null);
+                                setIsEdgeCreationMode(false);
+                              } catch (e) { console.error("Edge creation failed:", e); }
+                            }, [pendingConnection, enableEdgeColoring, setEdges, setNodes]);
+                        
         
       const handleDrawerClose = useCallback((event, reason) => {
     if (reason === 'escapeKeyDown' && isEditingNode) {
@@ -554,12 +656,18 @@ export default function App() {
     const currentNodes = nodesRef.current;
     const currentEdges = edgesRef.current;
     if (filterCategory && event?.shiftKey) {
-      try {
-        const response = await fetch(`http://localhost:8000/expand/${nodeId}?filter_category=${filterCategory}`);
-        const data = await response.json();
-        setPreviewData({ category: filterCategory, sourceId: nodeId, nodes: data.nodes.filter(n => n.id !== nodeId) });
-        setSelectedNode(null); return;
-      } catch (e) { console.error(e); return; }
+              try {
+                const response = await fetch(`http://localhost:8000/expand/${nodeId}?filter_category=${filterCategory}`);
+                const data = await response.json();
+                setPreviewData({ 
+                  category: filterCategory, 
+                  sourceId: nodeId, 
+                  nodes: data.nodes.filter(n => n.id !== nodeId),
+                  edges: data.edges || []
+                });
+                setSelectedNode(null); return;
+              } catch (e) { console.error(e); return; }
+      
     }
     if (filterCategory) {
       const directChildren = currentEdges.filter(e => e.source === nodeId).map(e => currentNodes.find(n => n.id === e.target)).filter(n => n && categoryMap[n.data.type?.toLowerCase()] === filterCategory);
@@ -1217,12 +1325,22 @@ export default function App() {
                                       </>
                                     );
                                   })()}
-                                </List>
-                              </Box>
-                            </>
-                          ) : selectedNode ? (
-            
-              <>
+                                                    </List>
+                                                  </Box>
+                                                  <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.1)' }} />
+                                                  <Button 
+                                                    variant="outlined" 
+                                                    color="error" 
+                                                    fullWidth 
+                                                    startIcon={<Icons.DeleteForever />} 
+                                                    onClick={() => deleteEdgePermanently(selectedEdge)}
+                                                    sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 'bold', borderColor: 'rgba(211, 47, 47, 0.3)' }}
+                                                  >
+                                                    Delete Relationship
+                                                  </Button>
+                                                </>
+                                              ) : selectedNode ? (
+                                              <>
                 <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#fff' }}>{selectedNode.data.label}</Typography>
                 <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
                 <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic', color: 'rgba(255,255,255,0.7)' }}>
@@ -1247,8 +1365,37 @@ export default function App() {
                                     <ListItem key={node.id} sx={{ px: 0 }}>
                                       <ListItemAvatar><Avatar sx={{ bgcolor: getHexColor(node.data.type), width: 32, height: 32 }}>{React.createElement(Icons[node.data.icon] || Icons.HelpOutline, { sx: { fontSize: 18, color: '#fff' } })}</Avatar></ListItemAvatar>
                                       <ListItemText primary={node.data.label} secondary={node.data.type} primaryTypographyProps={{ style: { fontSize: '0.9rem' } }} secondaryTypographyProps={{ style: { fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' } }} />
-                                      <ListItemSecondaryAction><IconButton edge="end" color="primary" disabled={nodes.some(n => n.id === node.id)} onClick={() => addSingleNode(selectedNode?.id || previewData?.sourceId, node)}>{nodes.some(n => n.id === node.id) ? <CheckIcon sx={{ color: 'success.main' }} /> : <AddIcon />}</IconButton></ListItemSecondaryAction>
-                                    </ListItem>
+                                                                                      <ListItemSecondaryAction sx={{ display: 'flex', gap: 0.5 }}>
+                                                                                        {(() => {
+                                                                                          const sourceId = selectedNode?.id || previewData?.sourceId;
+                                                                                          const relevantEdges = previewData ? previewData.edges : selectedNodeEdges;
+                                                                                          const dbEdge = relevantEdges?.find(e => 
+                                                                                            (e.source === sourceId && e.target === node.id) || 
+                                                                                            (e.source === node.id && e.target === sourceId)
+                                                                                          );
+                                                                                          
+                                                                                          // Falls die Kante auf der Stage ist, nutzen wir das Stage-Objekt (für Styles etc.),
+                                                                                          // ansonsten das DB-Objekt für das Löschen.
+                                                                                          const edgeOnStage = edges.find(e => 
+                                                                                            (e.source === sourceId && e.target === node.id) || 
+                                                                                            (e.source === node.id && e.target === sourceId)
+                                                                                          );
+                                                                                          
+                                                                                          const edgeToDelete = edgeOnStage || dbEdge;
+                                                              
+                                                                                          return edgeToDelete ? (
+                                                                                            <Tooltip title="Delete Relationship Permanently">
+                                                                                              <IconButton size="small" onClick={() => deleteEdgePermanently(edgeToDelete)} sx={{ color: 'rgba(211, 47, 47, 0.6)', '&:hover': { color: 'error.main' } }}>
+                                                                                                <Icons.LinkOff sx={{ fontSize: 20 }} />
+                                                                                              </IconButton>
+                                                                                            </Tooltip>
+                                                                                          ) : null;
+                                                                                        })()}
+                                                                                        <IconButton edge="end" color="primary" disabled={nodes.some(n => n.id === node.id)} onClick={() => addSingleNode(selectedNode?.id || previewData?.sourceId, node)}>
+                                                                                          {nodes.some(n => n.id === node.id) ? <CheckIcon sx={{ color: 'success.main' }} /> : <AddIcon />}
+                                                                                        </IconButton>
+                                                                                      </ListItemSecondaryAction>
+                                                                                                  </ListItem>
                                   ))}
                               </List>
                             </>
