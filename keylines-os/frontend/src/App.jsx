@@ -1145,9 +1145,10 @@ export default function App() {
 
       const sidebarColor = selectedNode ? getHexColor(selectedNode.data.type) : (selectedEdge || pendingConnection) ? COLORS.secondary : previewData ? typeColors[previewData.category] : typeColors.other;
     const topBarHeight = 48; // Common height for the top toolbars
+    const statusBarHeight = 30;
 
   return (
-    <Box sx={{ width: '100vw', height: '100vh', bgcolor: 'background.default', display: 'flex', fontFamily: '"Open Sans", sans-serif', overflow: 'hidden', position: 'relative' }}>
+    <Box sx={{ width: '100vw', height: '100vh', bgcolor: 'background.default', display: 'flex', flexDirection: 'column', fontFamily: '"Open Sans", sans-serif', overflow: 'hidden', position: 'relative' }}>
       <style>{`
         body { margin: 0; padding: 0; overflow: hidden; background: ${COLORS.background}; }
         .react-flow__node { transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) !important; will-change: transform; }
@@ -1352,7 +1353,7 @@ export default function App() {
         </Box>
       </Drawer>
 
-      <Box sx={{ flexGrow: 1, height: '100%', position: 'relative', transition: 'all 0.3s ease' }}>
+      <Box sx={{ flexGrow: 1, height: 'auto', position: 'relative', transition: 'all 0.3s ease' }}>
                   <ReactFlow
                     nodes={visibleNodes} edges={visibleEdges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
                     onNodeClick={(e, n) => e.shiftKey ? openDetails(n) : expandNode(n.id)}
@@ -1372,8 +1373,13 @@ export default function App() {
         </ReactFlow>
       </Box>
 
+      {/* STATUS BAR (BOTTOM) */}
+      <Box sx={{ height: statusBarHeight, width: '100%', bgcolor: 'rgba(20, 20, 20, 0.95)', borderTop: `1px solid ${COLORS.panelBorder}`, display: 'flex', alignItems: 'center', px: 3, zIndex: 1201 }}>
+        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 200, fontSize: '10px', letterSpacing: 1 }}>SYSTEM STATUS: OPERATIONAL</Typography>
+      </Box>
+
                       <Drawer anchor="right" open={!!selectedNode || !!selectedEdge || !!previewData || !!pendingConnection} onClose={handleDrawerClose} variant="temporary" sx={{ width: 350, '& .MuiDrawer-paper': { width: 350, borderLeft: `4px solid ${sidebarColor}`, boxShadow: -5, bgcolor: COLORS.paper, overflow: 'hidden' } }}>
-                        <Box sx={{ p: 3, height: '100vh', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
+                        <Box sx={{ p: 3, pb: 5, height: '100vh', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
                           <Box sx={{ flexGrow: 1, overflowY: 'auto', pr: 1, '&::-webkit-scrollbar': { width: '4px' }, '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(255,255,255,0.1)', borderRadius: '4px' } }}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
               

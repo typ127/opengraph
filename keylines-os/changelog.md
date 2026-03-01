@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.29.0] - 2026-03-01
+
+### Added
+- **System Status Bar**: Introduced a minimal 30px status bar at the bottom of the viewport for future system-wide notifications and labels.
+
+### Changed
+- **Adaptive UI Layout**: Restructured the main viewport using a flexbox column layout to ensure the ReactFlow canvas and status bar coexist without occlusion.
+- **Drawer Ergonomics**: Added strategic bottom padding to the right profile drawer to maintain button accessibility above the new status bar.
+
 ## [1.28.0] - 2026-03-01
 
 ### Added
