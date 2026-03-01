@@ -114,16 +114,19 @@ const deduplicate = (arr) => {
   return Array.from(map.values());
 };
 
-const getEdgeStyle = (type, weight = 1) => {
-  const weightFactor = Math.max(1, Math.min(weight, 10)) * 0.8; // Scale between 1 and 8 roughly
+const getEdgeStyle = (type, weight = 1, useWeight = true) => {
+  // Normalize weight to 0-1 range (backend sends 0.1 to 0.95)
+  const w = useWeight ? Math.max(0, Math.min(weight, 1)) : 0;
+  const weightFactor = w * 4.4; // Range extension to reach 5.0 from 0.6
+  
   const edgeStyles = {
-    RULES: { stroke: EDGE_TYPES.rules, strokeWidth: 2 + weightFactor },
-    CONQUERED: { stroke: EDGE_TYPES.conquered, strokeWidth: 2 + weightFactor },
-    PROTECTS: { stroke: EDGE_TYPES.protects, strokeWidth: 1.5 + weightFactor },
-    GUIDES: { stroke: EDGE_TYPES.guides, strokeWidth: 1.5 + weightFactor, strokeDasharray: '5,5' },
-    LIVES_ON: { stroke: EDGE_TYPES.livesOn, strokeWidth: 1 + weightFactor },
-    CREATED: { stroke: EDGE_TYPES.created, strokeWidth: 1.5 + weightFactor },
-    default: { stroke: EDGE_TYPES.default, strokeWidth: 1 + weightFactor }
+    RULES: { stroke: EDGE_TYPES.rules, strokeWidth: (useWeight ? 1.0 : 0.6) + weightFactor * 0.9 },
+    CONQUERED: { stroke: EDGE_TYPES.conquered, strokeWidth: (useWeight ? 1.0 : 0.6) + weightFactor * 0.9 },
+    PROTECTS: { stroke: EDGE_TYPES.protects, strokeWidth: (useWeight ? 0.8 : 0.6) + weightFactor * 0.9 },
+    GUIDES: { stroke: EDGE_TYPES.guides, strokeWidth: (useWeight ? 0.8 : 0.6) + weightFactor * 0.9, strokeDasharray: '5,5' },
+    LIVES_ON: { stroke: EDGE_TYPES.livesOn, strokeWidth: 0.6 + weightFactor },
+    CREATED: { stroke: EDGE_TYPES.created, strokeWidth: (useWeight ? 0.8 : 0.6) + weightFactor * 0.9 },
+    default: { stroke: EDGE_TYPES.default, strokeWidth: 0.6 + weightFactor }
   };
   return edgeStyles[type] || edgeStyles.default;
 };
@@ -262,7 +265,7 @@ const getConcentricLayout = (nodes) => {
   return layoutedNodes;
 };
 
-  const integrateNewData = (currentNodes, currentEdges, newData, sourceNodeId, expandNodeFn, enableEdgeColoring, enableDonuts) => {
+  const integrateNewData = (currentNodes, currentEdges, newData, sourceNodeId, expandNodeFn, enableEdgeColoring, enableDonuts, enableWeightedEdges) => {
     const sourceNode = currentNodes.find(n => n.id === sourceNodeId);
     const sourcePos = sourceNode ? sourceNode.position : { x: 400, y: 400 };
     const nodesMap = new Map(currentNodes.map(n => [n.id, n]));
@@ -296,7 +299,7 @@ const getConcentricLayout = (nodes) => {
       if (!edgesMap.has(newEdge.id)) {
         edgesMap.set(newEdge.id, {
           ...newEdge, data: { ...newEdge.data, isNew: true }, 
-          style: getEdgeStyle(enableEdgeColoring ? (newEdge.data?.type || 'default') : 'default', newEdge.data?.weight || 1),
+          style: getEdgeStyle(enableEdgeColoring ? (newEdge.data?.type || 'default') : 'default', newEdge.data?.weight || 1, enableWeightedEdges),
           labelStyle: { fill: COLORS.nodeLabel, fontWeight: 600, fontSize: '10px', fontFamily: '"Open Sans", sans-serif' },
           labelBgStyle: { fill: COLORS.background, fillOpacity: 0.8 }, labelBgPadding: [4, 2], labelBgBorderRadius: 4
         });
@@ -346,6 +349,10 @@ export default function App() {
             const saved = localStorage.getItem('kl_enableDonuts');
             return saved !== null ? JSON.parse(saved) : true;
           });
+          const [enableWeightedEdges, setEnableWeightedEdges] = useState(() => {
+            const saved = localStorage.getItem('kl_enableWeightedEdges');
+            return saved !== null ? JSON.parse(saved) : true;
+          });
           const [edgePathType, setEdgePathType] = useState(() => {
             return localStorage.getItem('kl_edgePathType') || 'straight';
           });
@@ -368,16 +375,17 @@ export default function App() {
           useEffect(() => {
             localStorage.setItem('kl_enableEdgeColoring', JSON.stringify(enableEdgeColoring));
             localStorage.setItem('kl_enableDonuts', JSON.stringify(enableDonuts));
+            localStorage.setItem('kl_enableWeightedEdges', JSON.stringify(enableWeightedEdges));
             localStorage.setItem('kl_edgePathType', edgePathType);
-          }, [enableEdgeColoring, enableDonuts, edgePathType]);
+          }, [enableEdgeColoring, enableDonuts, enableWeightedEdges, edgePathType]);
       
           useEffect(() => {
       
             setEdges(eds => eds.map(edge => ({
               ...edge,
-              style: getEdgeStyle(enableEdgeColoring ? (edge.data?.type || 'default') : 'default', edge.data?.weight || 1)
+              style: getEdgeStyle(enableEdgeColoring ? (edge.data?.type || 'default') : 'default', edge.data?.weight || 1, enableWeightedEdges)
             })));
-          }, [enableEdgeColoring, setEdges]);
+          }, [enableEdgeColoring, enableWeightedEdges, setEdges]);
       
                           useEffect(() => {
                             setNodes(nds => nds.map(node => ({
@@ -480,15 +488,15 @@ export default function App() {
             })
           });
           
-          // Lokal die Kante aktualisieren (Stil neu berechnen falls Typ geändert)
-          setEdges(eds => eds.map(e => e.id === edge.id ? {
-            ...e,
-            style: getEdgeStyle(enableEdgeColoring ? type : 'default', properties.weight || 1)
-          } : e));
-        } catch (e) {
-          console.error("Persist edge error:", e);
-        }
-      }, [edgeEditSnapshot, enableEdgeColoring, setEdges]);
+      // Lokal die Kante aktualisieren (Stil neu berechnen falls Typ geändert)
+      setEdges(eds => eds.map(e => e.id === edge.id ? {
+        ...e,
+        style: getEdgeStyle(enableEdgeColoring ? type : 'default', properties.weight || 1, enableWeightedEdges)
+      } : e));
+    } catch (e) {
+      console.error("Persist edge error:", e);
+    }
+  }, [edgeEditSnapshot, enableEdgeColoring, enableWeightedEdges, setEdges]);
             const closeSidebar = useCallback((skipPersist = false) => { 
               // Wenn wir im Edit-Modus waren, speichern wir die Änderungen (außer beim Löschen oder Abbrechen)
               if (selectedNode && isEditingNode && !skipPersist) {
@@ -673,7 +681,7 @@ export default function App() {
                                 id: `e-${source}-${type}-${target}`,
                                 label: type.replace("_", " ").toLowerCase(),
                                 data: { type },
-                                style: getEdgeStyle(enableEdgeColoring ? type : 'default', 1),
+                                style: getEdgeStyle(enableEdgeColoring ? type : 'default', 1, enableWeightedEdges),
                                 animated: ["TRAVELS_WITH", "CONNECTS", "FOLLOWS"].includes(type)
                               };
                               try {
@@ -720,7 +728,7 @@ export default function App() {
                                 setPendingConnection(null);
                                 setIsEdgeCreationMode(false);
                               } catch (e) { console.error("Edge creation failed:", e); }
-                            }, [pendingConnection, enableEdgeColoring, setEdges, setNodes]);
+                            }, [pendingConnection, enableEdgeColoring, enableWeightedEdges, setEdges, setNodes]);
                         
         
           const handleDrawerClose = useCallback((event, reason) => {
@@ -808,7 +816,7 @@ export default function App() {
     try {
       const response = await fetch(`http://localhost:8000/expand/${nodeId}${filterCategory ? `?filter_category=${filterCategory}` : ''}`);
       const data = await response.json();
-                      const { nodes: integratedNodes, edges: integratedEdges } = integrateNewData(currentNodes, currentEdges, data, nodeId, expandNode, enableEdgeColoring, enableDonuts);
+                      const { nodes: integratedNodes, edges: integratedEdges } = integrateNewData(currentNodes, currentEdges, data, nodeId, expandNode, enableEdgeColoring, enableDonuts, enableWeightedEdges);
                       setNodes(integratedNodes); setEdges(integratedEdges);
                       setTimeout(() => {
                         const layoutedNodes = applyLayout(integratedNodes, integratedEdges, activeLayoutRef.current);
@@ -818,7 +826,7 @@ export default function App() {
                       }, 150);
                       setTimeout(() => setEdges(integratedEdges.map(e => ({ ...e, data: { ...e.data, isNew: false } }))), 200);
                     } catch (error) { console.error(error); }
-                  }, [applyLayout, fitToNodes, setNodes, setEdges, enableEdgeColoring, enableDonuts]);
+                  }, [applyLayout, fitToNodes, setNodes, setEdges, enableEdgeColoring, enableWeightedEdges, enableDonuts]);
               
                 const addSingleNode = useCallback((sourceId, targetNode, edgeData = null) => {
                   const currentNodes = nodesRef.current;
@@ -844,7 +852,7 @@ export default function App() {
                     label: edgeData?.label || relType.replace("_", " ").toLowerCase(),
                     animated: edgeData?.animated || ["TRAVELS_WITH", "CONNECTS", "FOLLOWS"].includes(relType), 
                     data: edgeData?.data || { type: relType }, 
-                    style: getEdgeStyle(enableEdgeColoring ? relType : 'default', edgeData?.data?.weight || 1) 
+                    style: getEdgeStyle(enableEdgeColoring ? relType : 'default', edgeData?.data?.weight || 1, enableWeightedEdges) 
                   };
                   
                   setNodes(nds => deduplicate([...nds, newNode]));
@@ -853,7 +861,7 @@ export default function App() {
                     setNodes(nds => applyLayout(nds, edgesRef.current, activeLayoutRef.current));
                     setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
                   }, 50);
-                }, [expandNode, applyLayout, fitView, setNodes, setEdges, enableEdgeColoring, enableDonuts]);
+                }, [expandNode, applyLayout, fitView, setNodes, setEdges, enableEdgeColoring, enableWeightedEdges, enableDonuts]);
                   const addAllNodesOfType = useCallback(async (category) => {
       console.log(`FETCHING ALL ${category.toUpperCase()} NODES...`);
       try {
@@ -992,7 +1000,7 @@ export default function App() {
       const allResults = await Promise.all(promises);
       let nextNodes = [...currentNodes]; let nextEdges = [...currentEdges];
                       allResults.forEach((data, index) => {
-                        const integrated = integrateNewData(nextNodes, nextEdges, data, nodeIds[index], expandNode, enableEdgeColoring, enableDonuts);
+                        const integrated = integrateNewData(nextNodes, nextEdges, data, nodeIds[index], expandNode, enableEdgeColoring, enableDonuts, enableWeightedEdges);
                         nextNodes = integrated.nodes; nextEdges = integrated.edges;
                       });
                       const integratedNodes = nextNodes;
@@ -1005,7 +1013,7 @@ export default function App() {
                       }, 150);
                       setTimeout(() => setEdges(nextEdges.map(e => ({ ...e, data: { ...e.data, isNew: false } }))), 200);
                     } catch (e) { console.error('Batch expansion failed:', e); }
-                  }, [expandNode, applyLayout, fitToNodes, setNodes, setEdges, enableEdgeColoring, enableDonuts]);
+                  }, [expandNode, applyLayout, fitToNodes, setNodes, setEdges, enableEdgeColoring, enableWeightedEdges, enableDonuts]);
               
                               const deleteSelectedElements = useCallback(() => {
     const nodeIdsToRemove = new Set(nodesRef.current.filter(n => n.selected).map(n => n.id));
@@ -1761,6 +1769,11 @@ export default function App() {
                 label={<Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>Show Node Donuts</Typography>} 
               />
               <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', ml: 4, mb: 2, display: 'block' }}>Display neighbor distribution rings around nodes</Typography>
+              <FormControlLabel 
+                control={<Switch checked={enableWeightedEdges} onChange={(e) => setEnableWeightedEdges(e.target.checked)} color="secondary" />} 
+                label={<Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>Weighted Edges</Typography>} 
+              />
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', ml: 4, mb: 2, display: 'block' }}>Scale edge thickness based on relationship weight</Typography>
             </FormGroup>
             
             <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
