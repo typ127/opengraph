@@ -325,9 +325,9 @@ export default function App() {
       const [hiddenTypes, setHiddenTypes] = useState(new Set());
       const [highlightedTypes, setHighlightedTypes] = useState(new Set());
       const [searchResults, setSearchResults] = useState([]);
-  
-      useEffect(() => {
-        const fetchCounts = async () => {
+      const [statusParts, setStatusParts] = useState([]);
+
+      useEffect(() => {        const fetchCounts = async () => {
           try {
             const response = await fetch('http://localhost:8000/node-counts');
             setDbCounts(await response.json());
@@ -1196,6 +1196,8 @@ export default function App() {
                       <Tooltip title="Toolbox">
                         <IconButton 
                           onClick={() => { setIsLeftDrawerOpen(!isLeftDrawerOpen); setIsSettingsOpen(false); }} 
+                          onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Toggle Node Toolbox' }])}
+                          onMouseLeave={() => setStatusParts([])}
                           color={isLeftDrawerOpen ? 'secondary' : 'primary'} size="small"
                         >
                           <MenuIcon />
@@ -1205,6 +1207,8 @@ export default function App() {
                       <Tooltip title="Settings">
                         <IconButton 
                           onClick={() => { setIsSettingsOpen(!isSettingsOpen); setIsLeftDrawerOpen(false); }} 
+                          onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Toggle Visualization Settings' }])}
+                          onMouseLeave={() => setStatusParts([])}
                           color={isSettingsOpen ? 'secondary' : 'primary'} size="small"
                         >
                           <SettingsIcon />
@@ -1224,6 +1228,8 @@ export default function App() {
             getOptionLabel={(o) => o.label || o.type || 'Unknown'} 
             onInputChange={(e, v) => handleSearch(v)} 
             onChange={(e, v) => onSelectSearchResult(v)} 
+            onMouseEnter={() => setStatusParts([{ trigger: 'TYPE', action: 'Search For Entities' }, { trigger: 'ENTER', action: 'Add First Result' }])}
+            onMouseLeave={() => setStatusParts([])}
             autoSelect 
             renderInput={(params) => <TextField {...params} placeholder="Search Universe..." variant="outlined" InputProps={{ ...params.InputProps, startAdornment: (<InputAdornment position="start"><SearchIcon fontSize="small" color="action" /></InputAdornment>), }} />} 
             renderOption={(props, o) => {
@@ -1240,24 +1246,41 @@ export default function App() {
               );
             }} 
           />
-          <Tooltip title="Clear Canvas"><IconButton size="small" color="error" onClick={() => { setNodes([]); setEdges([]); setSelectedNode(null); setPreviewData(null); }}><CloseIcon /></IconButton></Tooltip>
+          <Tooltip title="Clear Canvas">
+            <IconButton 
+              size="small" color="error" 
+              onClick={() => { setNodes([]); setEdges([]); setSelectedNode(null); setPreviewData(null); }}
+              onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Clear All Nodes From Canvas' }])}
+              onMouseLeave={() => setStatusParts([])}
+            >
+              <CloseIcon />
+            </IconButton>
+          </Tooltip>
           <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
           <ButtonGroup variant="text" size="small">
-            <Tooltip title="Hierarchical"><IconButton onClick={() => onLayoutClick('hierarchical')} color={activeLayout === 'hierarchical' ? 'secondary' : 'primary'}><TreeIcon /></IconButton></Tooltip>
-            <Tooltip title="Circular"><IconButton onClick={() => onLayoutClick('circular')} color={activeLayout === 'circular' ? 'secondary' : 'primary'}><CircularIcon /></IconButton></Tooltip>
-            <Tooltip title="Force"><IconButton onClick={() => onLayoutClick('force')} color={activeLayout === 'force' ? 'secondary' : 'primary'}><ForceIcon /></IconButton></Tooltip>
-            <Tooltip title="Grid"><IconButton onClick={() => onLayoutClick('grid')} color={activeLayout === 'grid' ? 'secondary' : 'primary'}><GridIcon /></IconButton></Tooltip>
-            <Tooltip title="Concentric"><IconButton onClick={() => onLayoutClick('concentric')} color={activeLayout === 'concentric' ? 'secondary' : 'primary'}><ConcentricIcon /></IconButton></Tooltip>
+            <Tooltip title="Hierarchical"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Hierarchical Tree Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('hierarchical')} color={activeLayout === 'hierarchical' ? 'secondary' : 'primary'}><TreeIcon /></IconButton></Tooltip>
+            <Tooltip title="Circular"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Circular Hub Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('circular')} color={activeLayout === 'circular' ? 'secondary' : 'primary'}><CircularIcon /></IconButton></Tooltip>
+            <Tooltip title="Force"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Force-Directed Organic Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('force')} color={activeLayout === 'force' ? 'secondary' : 'primary'}><ForceIcon /></IconButton></Tooltip>
+            <Tooltip title="Grid"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Structured Grid Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('grid')} color={activeLayout === 'grid' ? 'secondary' : 'primary'}><GridIcon /></IconButton></Tooltip>
+            <Tooltip title="Concentric"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Importance-Based Concentric Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('concentric')} color={activeLayout === 'concentric' ? 'secondary' : 'primary'}><ConcentricIcon /></IconButton></Tooltip>
           </ButtonGroup>
           <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
           <ButtonGroup variant="text" size="small">
-            <Tooltip title="Degree"><IconButton onClick={() => onAnalyze('degree')} color={activeAlgorithm === 'degree' ? 'secondary' : 'primary'}><DegreeIcon /></IconButton></Tooltip>
-            <Tooltip title="Betweenness"><IconButton onClick={() => onAnalyze('betweenness')} color={activeAlgorithm === 'betweenness' ? 'secondary' : 'primary'}><BetweennessIcon /></IconButton></Tooltip>
-            <Tooltip title="Closeness"><IconButton onClick={() => onAnalyze('closeness')} color={activeAlgorithm === 'closeness' ? 'secondary' : 'primary'}><ClosenessIcon /></IconButton></Tooltip>
-            <Tooltip title="PageRank"><IconButton onClick={() => onAnalyze('pagerank')} color={activeAlgorithm === 'pagerank' ? 'secondary' : 'primary'}><PageRankIcon /></IconButton></Tooltip>
+            <Tooltip title="Degree"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Scale by Degree Centrality (Connectivity)' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onAnalyze('degree')} color={activeAlgorithm === 'degree' ? 'secondary' : 'primary'}><DegreeIcon /></IconButton></Tooltip>
+            <Tooltip title="Betweenness"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Scale by Betweenness (Bridge Nodes)' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onAnalyze('betweenness')} color={activeAlgorithm === 'betweenness' ? 'secondary' : 'primary'}><BetweennessIcon /></IconButton></Tooltip>
+            <Tooltip title="Closeness"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Scale by Closeness (Distance)' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onAnalyze('closeness')} color={activeAlgorithm === 'closeness' ? 'secondary' : 'primary'}><ClosenessIcon /></IconButton></Tooltip>
+            <Tooltip title="PageRank"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Scale by PageRank (Importance)' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onAnalyze('pagerank')} color={activeAlgorithm === 'pagerank' ? 'secondary' : 'primary'}><PageRankIcon /></IconButton></Tooltip>
           </ButtonGroup>
           <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
-          <Tooltip title="Export PNG"><IconButton onClick={onExport} color="primary"><DownloadIcon /></IconButton></Tooltip>
+          <Tooltip title="Export PNG">
+            <IconButton 
+              onClick={onExport} color="primary"
+              onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Export Current View As PNG' }])}
+              onMouseLeave={() => setStatusParts([])}
+            >
+              <DownloadIcon />
+            </IconButton>
+          </Tooltip>
         </Paper>
       </Box>
 
@@ -1274,8 +1297,25 @@ export default function App() {
                 <Box key={type} sx={{ mb: 1.5, p: 0.5, borderRadius: 1, bgcolor: isHighlighted ? 'rgba(0, 191, 255, 0.1)' : 'transparent' }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
-                      <Checkbox size="small" checked={!hiddenTypes.has(type)} onChange={() => setHiddenTypes(prev => { const n = new Set(prev); if (n.has(type)) n.delete(type); else n.add(type); return n; })} sx={{ color: color, '&.Mui-checked': { color: color }, p: 0.5 }} />
-                      <Typography variant="caption" onClick={(e) => toggleHighlight(type, e.shiftKey)} sx={{ fontWeight: 600, fontSize: '0.7rem', cursor: 'pointer', ml: 0.5, flexGrow: 1 }}>{type.toUpperCase()}</Typography>
+                      <Checkbox 
+                        size="small" 
+                        checked={!hiddenTypes.has(type)} 
+                        onChange={() => setHiddenTypes(prev => { const n = new Set(prev); if (n.has(type)) n.delete(type); else n.add(type); return n; })} 
+                        onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Toggle Visibility On Canvas' }])}
+                        onMouseLeave={() => setStatusParts([])}
+                        sx={{ color: color, '&.Mui-checked': { color: color }, p: 0.5 }} 
+                      />                      <Typography 
+                        variant="caption" 
+                        onClick={(e) => toggleHighlight(type, e.shiftKey)} 
+                        onMouseEnter={() => setStatusParts([
+                          { trigger: 'CLICK', action: 'Focus This Type' },
+                          { trigger: 'SHIFT+CLICK', action: 'Add To Focus' }
+                        ])}
+                        onMouseLeave={() => setStatusParts([])}
+                        sx={{ fontWeight: 600, fontSize: '0.7rem', cursor: 'pointer', ml: 0.5, flexGrow: 1 }}
+                      >
+                        {type.toUpperCase()}
+                      </Typography>
                     </Box>
                     <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>{count}</Typography>
                   </Box>
@@ -1284,8 +1324,20 @@ export default function App() {
               );
             })}
           </FormGroup>
-          {highlightedTypes.size > 0 && (<Button fullWidth variant="outlined" size="small" startIcon={<DrillDownIcon />} onClick={onDrillDown} sx={{ mt: 2, fontSize: '0.65rem' }}>Drill Down</Button>)}
-        </Paper>
+          {highlightedTypes.size > 0 && (
+            <Button 
+              fullWidth 
+              variant="outlined" 
+              size="small" 
+              startIcon={<DrillDownIcon />} 
+              onClick={onDrillDown} 
+              onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Remove All Unfocused Nodes' }])}
+              onMouseLeave={() => setStatusParts([])}
+              sx={{ mt: 2, fontSize: '0.65rem' }}
+            >
+              Drill Down
+            </Button>
+          )}        </Paper>
       </Box>
 
       <Drawer 
@@ -1307,6 +1359,11 @@ export default function App() {
                                                       draggable 
                                                       onDragStart={(e) => { e.dataTransfer.setData('application/reactflow', cat); e.dataTransfer.effectAllowed = 'move'; }}
                                                       onClick={(e) => { if (e.shiftKey) addAllNodesOfType(cat); }}
+                                                      onMouseEnter={() => setStatusParts([
+                                                        { trigger: 'DRAG', action: 'Add Single Node' },
+                                                        { trigger: 'SHIFT+CLICK', action: 'Load All From Database' }
+                                                      ])}
+                                                      onMouseLeave={() => setStatusParts([])}
                                                       sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', border: `1px solid rgba(255,255,255,0.05)`, borderRadius: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'grab', transition: 'all 0.2s ease', '&:hover': { bgcolor: 'rgba(255,255,255,0.07)', borderColor: NODE_CATEGORIES[cat], transform: 'translateY(-2px)', boxShadow: `0 4px 10px ${NODE_CATEGORIES[cat]}33`, cursor: 'pointer' } }}
                                                     >
                                                       <Avatar sx={{ bgcolor: NODE_CATEGORIES[cat], width: 32, height: 32, mb: 1 }}>
@@ -1331,6 +1388,10 @@ export default function App() {
                         fullWidth 
                         startIcon={<LinkIcon />} 
                         onClick={() => setIsEdgeCreationMode(!isEdgeCreationMode)}
+                        onMouseEnter={() => setStatusParts([
+                          { trigger: 'CLICK', action: isEdgeCreationMode ? 'Disable Relationship Mode' : 'Enable Relationship Mode' }
+                        ])}
+                        onMouseLeave={() => setStatusParts([])}
                         sx={{ 
                           textTransform: 'none', 
                           justifyContent: 'flex-start', 
@@ -1361,6 +1422,16 @@ export default function App() {
                     onConnect={onConnect}
                     onPaneClick={() => { closeSidebar(); setHighlightedTypes(new Set()); }}
                                 onMove={(e, v) => setZoomLevel(v.zoom)} onDrop={onDrop} onDragOver={onDragOver}
+                                onNodeMouseEnter={(e, n) => setStatusParts([
+                                  { trigger: 'CLICK', action: n.data.isDraft ? 'Select' : 'Expand' },
+                                  { trigger: 'SHIFT+CLICK', action: 'Show Details' },
+                                  { trigger: 'DRAG', action: 'Reposition' }
+                                ])}
+                                onNodeMouseLeave={() => setStatusParts([])}
+                                onEdgeMouseEnter={(e, edge) => setStatusParts([
+                                  { trigger: 'SHIFT+CLICK', action: 'Show Edge Details' }
+                                ])}
+                                onEdgeMouseLeave={() => setStatusParts([])}
                                 nodeTypes={nodeTypes} defaultEdgeOptions={{ type: edgePathType }} fitView
                                 nodesDraggable={!isEdgeCreationMode}
                     
@@ -1374,8 +1445,13 @@ export default function App() {
       </Box>
 
       {/* STATUS BAR (BOTTOM) */}
-      <Box sx={{ height: statusBarHeight, width: '100%', bgcolor: 'rgba(20, 20, 20, 0.95)', borderTop: `1px solid ${COLORS.panelBorder}`, display: 'flex', alignItems: 'center', px: 3, zIndex: 1201 }}>
-        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 200, fontSize: '10px', letterSpacing: 1 }}>SYSTEM STATUS: OPERATIONAL</Typography>
+      <Box sx={{ height: statusBarHeight, width: '100%', bgcolor: 'rgba(20, 20, 20, 0.95)', borderTop: `1px solid ${COLORS.panelBorder}`, display: 'flex', alignItems: 'center', px: 3, zIndex: 1201, gap: 3 }}>
+        {statusParts.map((part, i) => (
+          <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontWeight: 500, fontSize: '10px', letterSpacing: 1, textTransform: 'uppercase' }}>{part.trigger}:</Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 200, fontSize: '10px', letterSpacing: 0.5 }}>{part.action}</Typography>
+          </Box>
+        ))}
       </Box>
 
                       <Drawer anchor="right" open={!!selectedNode || !!selectedEdge || !!previewData || !!pendingConnection} onClose={handleDrawerClose} variant="temporary" sx={{ width: 350, '& .MuiDrawer-paper': { width: 350, borderLeft: `4px solid ${sidebarColor}`, boxShadow: -5, bgcolor: COLORS.paper, overflow: 'hidden' } }}>
@@ -1411,6 +1487,11 @@ export default function App() {
                                                                                   setIsEditingNode(!isEditingNode);
                                                                                 }
                                                                               }} 
+                                                                              onMouseEnter={() => setStatusParts([
+                                                                                { trigger: 'CLICK', action: (isEditingNode || isEditingEdge) ? 'View Information' : 'Edit Properties' },
+                                                                                { trigger: 'ESC', action: 'Cancel / Revert' }
+                                                                              ])}
+                                                                              onMouseLeave={() => setStatusParts([])}
                                                                               disabled={!!pendingConnection}
                                                                               sx={{ bgcolor: 'rgba(255,255,255,0.05)', '&:hover': { bgcolor: (isEditingNode || isEditingEdge) ? `${COLORS.secondary}22` : `${COLORS.primary}22` } }}
                                                                             >
@@ -1433,6 +1514,11 @@ export default function App() {
                   placeholder="Enter name..."
                   value={selectedNode.data.label || ''}
                   onChange={(e) => updateNodeData(selectedNode.id, { label: e.target.value })}
+                  onMouseEnter={() => setStatusParts([
+                    { trigger: 'ESC', action: 'Cancel' },
+                    { trigger: 'ENTER', action: 'Save & Close' }
+                  ])}
+                  onMouseLeave={() => setStatusParts([])}
                   onKeyDown={(e) => { 
                     if (e.key === 'Enter') closeSidebar(); 
                     if (e.key === 'Escape') cancelEditing();
@@ -1444,6 +1530,11 @@ export default function App() {
                   placeholder="Enter details..."
                   value={selectedNode.data.description || ''}
                   onChange={(e) => updateNodeData(selectedNode.id, { description: e.target.value })}
+                  onMouseEnter={() => setStatusParts([
+                    { trigger: 'ESC', action: 'Cancel' },
+                    { trigger: 'CTRL+ENTER', action: 'Save & Close' }
+                  ])}
+                  onMouseLeave={() => setStatusParts([])}
                   onKeyDown={(e) => { 
                     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) closeSidebar(); 
                     if (e.key === 'Escape') cancelEditing();
@@ -1456,6 +1547,8 @@ export default function App() {
                                       <IconButton 
                                         key={iconName} size="small" 
                                         onClick={() => updateNodeData(selectedNode.id, { icon: iconName })}
+                                        onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: `Set Icon to ${iconName}` }])}
+                                        onMouseLeave={() => setStatusParts([])}
                                         sx={{ 
                                           bgcolor: selectedNode.data.icon === iconName ? `${COLORS.primary}22` : 'transparent',
                                           border: `1px solid ${selectedNode.data.icon === iconName ? COLORS.primary : 'rgba(255,255,255,0.1)'}`,
@@ -1493,6 +1586,8 @@ export default function App() {
                   fullWidth 
                   startIcon={<Icons.DeleteForever />} 
                   onClick={() => deleteNodePermanently(selectedNode.id)}
+                  onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Permanent Database Deletion' }, { trigger: 'ESC', action: 'Cancel' }])}
+                  onMouseLeave={() => setStatusParts([])}
                   sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 'bold', mb: 2, borderColor: 'rgba(211, 47, 47, 0.3)' }}
                 >
                   Delete from Database
@@ -1510,6 +1605,8 @@ export default function App() {
                       <ListItemButton 
                         key={type} 
                         onClick={() => confirmConnection(type)}
+                        onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: `Define Relationship Type: ${type}` }])}
+                        onMouseLeave={() => setStatusParts([])}
                         sx={{ 
                           borderRadius: 2, mb: 1, 
                           bgcolor: 'rgba(255,255,255,0.03)', 
@@ -1524,6 +1621,8 @@ export default function App() {
                   </List>
                   <Button 
                     variant="outlined" fullWidth onClick={() => setPendingConnection(null)}
+                    onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Discard New Connection' }])}
+                    onMouseLeave={() => setStatusParts([])}
                     sx={{ mt: 2, borderRadius: 2, color: 'rgba(255,255,255,0.5)', borderColor: 'rgba(255,255,255,0.2)', textTransform: 'none' }}
                   >
                     Cancel
@@ -1708,12 +1807,24 @@ export default function App() {
                                                             <ListItemSecondaryAction sx={{ display: 'flex', gap: 0.5 }}>
                                                               {edgeToDelete && (
                                                                 <Tooltip title="Delete Relationship Permanently">
-                                                                  <IconButton size="small" onClick={() => deleteEdgePermanently(edgeToDelete)} sx={{ color: 'rgba(211, 47, 47, 0.6)', '&:hover': { color: 'error.main' } }}>
+                                                                  <IconButton 
+                                                                    size="small" 
+                                                                    onClick={() => deleteEdgePermanently(edgeToDelete)} 
+                                                                    onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Delete Relationship Permanently From DB' }])}
+                                                                    onMouseLeave={() => setStatusParts([])}
+                                                                    sx={{ color: 'rgba(211, 47, 47, 0.6)', '&:hover': { color: 'error.main' } }}
+                                                                  >
                                                                     <Icons.LinkOff sx={{ fontSize: 20 }} />
                                                                   </IconButton>
                                                                 </Tooltip>
                                                               )}
-                                                              <IconButton edge="end" color="primary" disabled={nodes.some(n => n.id === node.id)} onClick={() => addSingleNode(sourceId, node, dbEdge)}>
+                                                              <IconButton 
+                                                                edge="end" color="primary" 
+                                                                disabled={nodes.some(n => n.id === node.id)} 
+                                                                onClick={() => addSingleNode(sourceId, node, dbEdge)}
+                                                                onMouseEnter={() => !nodes.some(n => n.id === node.id) && setStatusParts([{ trigger: 'CLICK', action: 'Add Neighbor To Canvas' }])}
+                                                                onMouseLeave={() => setStatusParts([])}
+                                                              >
                                                                 {nodes.some(n => n.id === node.id) ? <CheckIcon sx={{ color: 'success.main' }} /> : <AddIcon />}
                                                               </IconButton>
                                                             </ListItemSecondaryAction>
@@ -1734,6 +1845,8 @@ export default function App() {
                                                       fullWidth 
                                                       startIcon={<DeleteIcon />} 
                                                       onClick={onDeleteNode} 
+                                                      onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Remove Node From Current View' }])}
+                                                      onMouseLeave={() => setStatusParts([])}
                                                       sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 'bold', mb: 1, borderColor: 'rgba(211, 47, 47, 0.5)' }}
                                                     >
                                                       Remove from Canvas
@@ -1744,6 +1857,8 @@ export default function App() {
                                                       fullWidth 
                                                       startIcon={<DrillDownIcon />} 
                                                       onClick={onDrillDownToNode} 
+                                                      onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Isolate Node (Clear Rest)' }])}
+                                                      onMouseLeave={() => setStatusParts([])}
                                                       sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 'bold', borderColor: 'rgba(0, 191, 255, 0.3)' }}
                                                     >
                                                       Drill Down (Isolate)

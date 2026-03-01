@@ -5,7 +5,14 @@ All notable changes to this project will be documented in this file.
 ## [1.29.0] - 2026-03-01
 
 ### Added
-- **System Status Bar**: Introduced a minimal 30px status bar at the bottom of the viewport for future system-wide notifications and labels.
+- **Context-Sensitive Status Bar**: Implemented a dynamic helper bar at the bottom of the screen that provides real-time interaction hints based on mouse hover.
+- **UI-Wide Integration**: Added interactive status hints for:
+    - **Stage**: Nodes (Expand/Details/Drag) and Edges (Type/Details).
+    - **Toolbox**: Templates (Add/Batch-Load) and Relationship mode.
+    - **Histogram**: Visibility toggles and Focus modes.
+    - **Global Toolbar**: Search, Layout engines, Analysis algorithms, and Export tools.
+    - **Profile Drawer**: Neighbor management, Edit mode, Icon picker, and Database deletion.
+- **Semantic Styling**: Triggers (e.g., `CLICK`, `DRAG`) are styled in bright uppercase, while actions (e.g., `Expand`) use a subtle, darker sentence-case for optimal readability and a technical aesthetic.
 
 ### Changed
 - **Adaptive UI Layout**: Restructured the main viewport using a flexbox column layout to ensure the ReactFlow canvas and status bar coexist without occlusion.
