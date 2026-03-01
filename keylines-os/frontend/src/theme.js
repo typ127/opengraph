@@ -23,6 +23,7 @@ export const NODE_CATEGORIES = {
   robot: '#00bfff',
   item: '#ff9800',
   science: '#9c27b0',
+  book: '#f44336',
   other: '#9e9e9e',
 };
 

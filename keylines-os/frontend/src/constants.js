@@ -8,6 +8,7 @@ export const categoryMap = {
   "item": "item",
   "entity": "science", 
   "science": "science",
+  "book": "book",
 };
 
 export const typeColors = {
@@ -17,6 +18,7 @@ export const typeColors = {
   robot: NODE_CATEGORIES.robot,
   item: NODE_CATEGORIES.item,
   science: NODE_CATEGORIES.science,
+  book: NODE_CATEGORIES.book,
   other: NODE_CATEGORIES.other
 };
 

@@ -97,25 +97,35 @@ async def upsert_node(node_data: Dict[str, Any] = Body(...)):
     """Erstellt oder aktualisiert einen Knoten in der Datenbank."""
     props = node_data.get("data", {})
     node_id = node_data.get("id")
-    label = props.get("label", "")
-    node_type = props.get("type", "other")
-    icon = props.get("icon", "HelpOutline")
-    description = props.get("description", "")
+    
+    if not node_id:
+        raise HTTPException(status_code=400, detail="Node ID is required")
 
-    print(f"UPSERT NODE: {node_id} (Label: '{label}')")
+    print(f"UPSERT NODE: {node_id}")
 
-    # Strings für Cypher vorbereiten (Escaping von Hochkommas)
-    safe_label = label.replace("'", "\\'")
-    safe_description = description.replace("'", "\\'")
+    # Bestimme, welche Keys ignoriert werden sollen (interne Frontend-Zustände)
+    internal_keys = {'donut', 'isNew', 'isDraft', 'score', 'onSegmentClick', 'showDonuts', 'isEdgeCreationMode', 'category'}
+    
+    set_clauses = []
+    for k, v in props.items():
+        if k in internal_keys:
+            continue
+        
+        if isinstance(v, str):
+            safe_v = v.replace("'", "\\'")
+            set_clauses.append(f"n.{k} = '{safe_v}'")
+        elif isinstance(v, (int, float, bool)):
+            set_clauses.append(f"n.{k} = {v}")
+        elif v is None:
+            set_clauses.append(f"n.{k} = null")
 
-    # Cypher Query: MERGE findet den Knoten anhand der ID oder erstellt ihn.
-    # Wir stellen sicher, dass der Knoten das Label :Entity erhält (wie im Import-Skript).
+    set_query = ", ".join(set_clauses)
+    if not set_query:
+        set_query = "n.id = n.id" # No-op SET if no props
+
     query = f"""
     MERGE (n:Entity {{id: '{node_id}'}})
-    SET n.label = '{safe_label}',
-        n.type = '{node_type}',
-        n.icon = '{icon}',
-        n.description = '{safe_description}'
+    SET {set_query}
     RETURN n;
     """
     try:
@@ -124,7 +134,7 @@ async def upsert_node(node_data: Dict[str, Any] = Body(...)):
         return {"status": "success", "id": node_id}
     except Exception as e:
         print(f"Upsert error: {e}")
-        return {"status": "error", "message": str(e)}
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/delete-node/{node_id}")
 async def delete_node(node_id: str):
@@ -202,6 +212,7 @@ async def expand(node_id: str, use_mock: bool = Query(False), filter_category: s
         "item": "item",
         "entity": "science", 
         "science": "science",
+        "book": "book",
     }
     
     color_values = {
@@ -211,6 +222,7 @@ async def expand(node_id: str, use_mock: bool = Query(False), filter_category: s
         "robot": "#00bfff",
         "item": "#ff9800", 
         "science": "#9c27b0",
+        "book": "#f44336",
         "other": "#9e9e9e"
     }
 
@@ -257,10 +269,7 @@ async def expand(node_id: str, use_mock: bool = Query(False), filter_category: s
             nodes_dict[id_n] = {
                 "id": id_n, "type": "keylines",
                 "data": {
-                    "label": p_n.get("label"), 
-                    "icon": p_n.get("icon"),
-                    "type": p_n.get("type"),
-                    "description": p_n.get("description", ""),
+                    **p_n,
                     "donut": calculate_donut(n_neighbor_types)
                 }
             }
@@ -272,10 +281,7 @@ async def expand(node_id: str, use_mock: bool = Query(False), filter_category: s
                 nodes_dict[id_m] = {
                     "id": id_m, "type": "keylines",
                     "data": {
-                        "label": p_m.get("label"), 
-                        "icon": p_m.get("icon"),
-                        "type": p_m.get("type"),
-                        "description": p_m.get("description", ""),
+                        **p_m,
                         "donut": calculate_donut(m_neighbor_types)
                     }
                 }

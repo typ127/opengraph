@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.25.0] - 2026-02-28
+
+### Added
+- **Asimov Universe Expansion**: Massive dataset update with over 40 interconnected entities, including major characters (Giskard, Hober Mallow, Bayta Darell), organizations (Second Foundation, Galactic Empire), and locations (Gaia, Solaria, Kalgan).
+- **Books as Entities**: Introduced a new `book` category with dedicated icons and styling. Books are now fully integrated nodes linked via `APPEARS_IN` and `FEATURING` relationships.
+- **Dynamic Property Editor**: The node drawer now automatically renders and allows editing for all database properties (e.g., `published` year for books, `planet` for characters).
+- **Expandable Lore Descriptions**: Added a "Show more/less" feature for long entity descriptions, keeping the drawer clean while providing deep lore access.
+- **Backend Dynamic Upsert**: Refactored the `/upsert-node` endpoint to dynamically handle any number of properties, enabling full database-backed customization from the frontend.
+
+### Changed
+- **Professional Drawer Layout**: Redesigned the sidebar structure to ensure the "Remove from Canvas" button is always visible and anchored to the bottom of the viewport using a fixed-height flex container.
+- **Immersive Sidebar Aesthetics**: Added a custom, slim scrollbar for the drawer that blends seamlessly into the dark theme.
+
+### Fixed
+- **Cypher Escaping Stability**: Enhanced the import script and backend logic to correctly handle single quotes in titles and descriptions (e.g., "Foundation's Edge"), preventing database query failures.
+- **Data Synchronization**: Ensured that manually added neighbors from the drawer immediately inherit all their database-driven attributes and styles on the stage.
+
 ## [1.24.0] - 2026-02-28
 
 ### Added

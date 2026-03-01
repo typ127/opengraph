@@ -77,19 +77,37 @@ import {
   Android as AndroidIcon,
   AutoStories as ItemIcon,
   Science as ScienceIcon,
+  MenuBook as BookIcon,
   AddLink as LinkIcon,
-  MenuOpen as MenuIcon
-} from '@mui/icons-material';
-import * as Icons from '@mui/icons-material';
-
-import { categoryMap, typeColors, getHexColor } from './constants';
-import { COLORS, EDGE_TYPES, NODE_CATEGORIES } from './theme';
-
-const nodeTypes = {
-  keylines: KeyLinesNode,
-};
-
-// --- GLOBAL UTILS ---
+    MenuOpen as MenuIcon
+  } from '@mui/icons-material';
+  import * as Icons from '@mui/icons-material';
+  import { categoryMap, typeColors, getHexColor } from './constants';
+  import { COLORS, EDGE_TYPES, NODE_CATEGORIES } from './theme';
+  
+  const nodeTypes = {
+    keylines: KeyLinesNode,
+  };
+  
+  const ExpandableText = ({ text, maxLength = 100 }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+    if (!text) return null;
+    if (text.length <= maxLength) return <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic', color: 'rgba(255,255,255,0.7)' }}>{text}</Typography>;
+    
+    return (
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'rgba(255,255,255,0.7)', display: 'inline' }}>
+          {isExpanded ? text : `${text.substring(0, maxLength)}...`}
+        </Typography>
+        <Button size="small" sx={{ ml: 1, textTransform: 'none', minWidth: 'auto', p: 0, fontSize: '0.75rem', color: COLORS.primary }} onClick={() => setIsExpanded(!isExpanded)}>
+          {isExpanded ? 'Show less' : 'Show more'}
+        </Button>
+      </Box>
+    );
+  };
+  
+  // --- GLOBAL UTILS ---
+  
 const deduplicate = (arr) => {
   const map = new Map();
   arr.forEach(item => map.set(item.id, item));
@@ -589,14 +607,13 @@ export default function App() {
           setSelectedEdge(null);
           setPreviewData(null);
           setIsEditingNode(forceEdit);
-        // Snapshot für mögliches Revert (Escape) erstellen
-    if (forceEdit) {
-      setEditSnapshot({ label: node.data.label, description: node.data.description, icon: node.data.icon });
-    } else {
-      setEditSnapshot(null);
-    }
-    
-          // Keine Nachbarn laden, wenn es ein brandneuer Knoten ist
+              // Snapshot für mögliches Revert (Escape) erstellen
+              if (forceEdit) {
+                setEditSnapshot({ ...node.data });
+              } else {
+                setEditSnapshot(null);
+              }
+                  // Keine Nachbarn laden, wenn es ein brandneuer Knoten ist
           if (node.data?.isDraft) {
             setSelectedNodeNeighbors([]);
             setSelectedNodeEdges([]);
@@ -964,7 +981,7 @@ export default function App() {
     if (!type) return;
     const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
     const nodeId = `new-${Date.now()}`;
-    const iconMap = { person: 'Person', planet: 'Public', robot: 'Android', mutant: 'Psychology', item: 'AutoStories', science: 'Science' };
+    const iconMap = { person: 'Person', planet: 'Public', robot: 'Android', mutant: 'Psychology', item: 'AutoStories', science: 'Science', book: 'MenuBook' };
           const newNode = {
             id: nodeId, type: 'keylines', position,
             data: { 
@@ -1198,7 +1215,7 @@ export default function App() {
 
       <Drawer 
         anchor="left" open={isLeftDrawerOpen} variant="persistent" 
-        sx={{ width: isLeftDrawerOpen ? 280 : 0, flexShrink: 0, '& .MuiDrawer-paper': { width: 280, borderRight: `2px solid ${COLORS.panelBorder}`, bgcolor: COLORS.paper, boxShadow: 5 } }}
+        sx={{ width: isLeftDrawerOpen ? 280 : 0, flexShrink: 0, '& .MuiDrawer-paper': { width: 280, borderRight: `2px solid ${COLORS.panelBorder}`, bgcolor: COLORS.paper, boxShadow: 5, overflow: 'hidden' } }}
       >
         <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -1215,9 +1232,11 @@ export default function App() {
                   {cat === 'person' ? <PersonIcon sx={{ fontSize: 18, color: '#fff' }} /> : 
                    cat === 'planet' ? <PublicIcon sx={{ fontSize: 18, color: '#fff' }} /> : 
                    cat === 'robot' ? <AndroidIcon sx={{ fontSize: 18, color: '#fff' }} /> : 
-                   cat === 'item' ? <ItemIcon sx={{ fontSize: 18, color: '#fff' }} /> :
-                   cat === 'science' ? <ScienceIcon sx={{ fontSize: 18, color: '#fff' }} /> :
-                   <Icons.HelpOutline sx={{ fontSize: 18, color: '#fff' }} />}
+                                        cat === 'item' ? <ItemIcon sx={{ fontSize: 18, color: '#fff' }} /> :
+                                        cat === 'science' ? <ScienceIcon sx={{ fontSize: 18, color: '#fff' }} /> :
+                                        cat === 'book' ? <BookIcon sx={{ fontSize: 18, color: '#fff' }} /> :
+                                        <Icons.HelpOutline sx={{ fontSize: 18, color: '#fff' }} />}
+                   
                 </Avatar>
                 <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.6)', fontWeight: 'bold' }}>{cat.toUpperCase()}</Typography>
               </Box>
@@ -1272,11 +1291,11 @@ export default function App() {
         </ReactFlow>
       </Box>
 
-              <Drawer anchor="right" open={!!selectedNode || !!selectedEdge || !!previewData || !!pendingConnection} onClose={handleDrawerClose} variant="temporary" sx={{ width: 350, '& .MuiDrawer-paper': { width: 350, borderLeft: `4px solid ${sidebarColor}`, boxShadow: -5, bgcolor: COLORS.paper } }}>
-      
-        <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <Box sx={{ flexGrow: 1, overflowY: 'auto' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
+                      <Drawer anchor="right" open={!!selectedNode || !!selectedEdge || !!previewData || !!pendingConnection} onClose={handleDrawerClose} variant="temporary" sx={{ width: 350, '& .MuiDrawer-paper': { width: 350, borderLeft: `4px solid ${sidebarColor}`, boxShadow: -5, bgcolor: COLORS.paper, overflow: 'hidden' } }}>
+                        <Box sx={{ p: 3, height: '100vh', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
+                          <Box sx={{ flexGrow: 1, overflowY: 'auto', pr: 1, '&::-webkit-scrollbar': { width: '4px' }, '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(255,255,255,0.1)', borderRadius: '4px' } }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
+              
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                                     <Avatar sx={{ bgcolor: sidebarColor, width: 64, height: 64, boxShadow: '0 0 20px ' + sidebarColor + '44' }}>
                                                       {selectedNode ? React.createElement(Icons[selectedNode.data.icon] || Icons.HelpOutline, { sx: { fontSize: 32, color: '#fff' } }) : (selectedEdge || pendingConnection) ? <Icons.Link sx={{ fontSize: 32, color: '#fff' }} /> : <GroupIcon sx={{ fontSize: 32, color: '#fff' }} />}
@@ -1296,11 +1315,12 @@ export default function App() {
                                                                                   }
                                                                                   setIsEditingEdge(!isEditingEdge);
                                                                                 } else {
-                                                                                  if (!isEditingNode) {
-                                                                                    setEditSnapshot({ label: selectedNode.data.label, description: selectedNode.data.description, icon: selectedNode.data.icon });
-                                                                                  } else {
-                                                                                    setEditSnapshot(null);
-                                                                                  }
+                                                                                                                if (!isEditingNode) {
+                                                                                                                  setEditSnapshot({ ...selectedNode.data });
+                                                                                                                } else {
+                                                                                                                  setEditSnapshot(null);
+                                                                                                                }
+                                                                                  
                                                                                   setIsEditingNode(!isEditingNode);
                                                                                 }
                                                                               }} 
@@ -1344,23 +1364,43 @@ export default function App() {
                   sx={{ mb: 3 }}
                 />
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 1, display: 'block' }}>CHOOSE ICON</Typography>
-                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 3 }}>
-                  {['Person', 'Android', 'Public', 'Science', 'AutoStories', 'Psychology', 'Hub', 'Star'].map(iconName => (
-                    <IconButton 
-                      key={iconName} size="small" 
-                      onClick={() => updateNodeData(selectedNode.id, { icon: iconName })}
-                      sx={{ 
-                        bgcolor: selectedNode.data.icon === iconName ? `${COLORS.primary}22` : 'transparent',
-                        border: `1px solid ${selectedNode.data.icon === iconName ? COLORS.primary : 'rgba(255,255,255,0.1)'}`,
-                        color: selectedNode.data.icon === iconName ? COLORS.primary : 'rgba(255,255,255,0.5)'
-                      }}
-                    >
-                      {React.createElement(Icons[iconName], { sx: { fontSize: 18 } })}
-                    </IconButton>
-                  ))}
-                </Box>
-
-                <Button 
+                                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 3 }}>
+                                    {['Person', 'Android', 'Public', 'Science', 'AutoStories', 'Psychology', 'Hub', 'Star'].map(iconName => (
+                                      <IconButton 
+                                        key={iconName} size="small" 
+                                        onClick={() => updateNodeData(selectedNode.id, { icon: iconName })}
+                                        sx={{ 
+                                          bgcolor: selectedNode.data.icon === iconName ? `${COLORS.primary}22` : 'transparent',
+                                          border: `1px solid ${selectedNode.data.icon === iconName ? COLORS.primary : 'rgba(255,255,255,0.1)'}`,
+                                          color: selectedNode.data.icon === iconName ? COLORS.primary : 'rgba(255,255,255,0.5)'
+                                        }}
+                                      >
+                                        {React.createElement(Icons[iconName], { sx: { fontSize: 18 } })}
+                                      </IconButton>
+                                    ))}
+                                  </Box>
+                
+                                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 1, display: 'block' }}>PROPERTIES</Typography>
+                                  {Object.entries(selectedNode.data || {})
+                                    .filter(([key]) => !['label', 'description', 'icon', 'type', 'donut', 'isNew', 'isDraft', 'score', 'onSegmentClick', 'showDonuts', 'isEdgeCreationMode', 'category'].includes(key))
+                                    .map(([key, value]) => (
+                                      <TextField
+                                        key={key}
+                                        fullWidth label={key.charAt(0).toUpperCase() + key.slice(1)}
+                                        variant="outlined" size="small"
+                                        value={value || ''}
+                                        onChange={(e) => updateNodeData(selectedNode.id, { [key]: e.target.value })}
+                                        onKeyDown={(e) => { 
+                                          if (e.key === 'Enter') closeSidebar(); 
+                                          if (e.key === 'Escape') cancelEditing(); 
+                                        }}
+                                        sx={{ mb: 2 }}
+                                      />
+                                    ))
+                                  }
+                
+                                  <Button 
+                 
                   variant="outlined" 
                   color="error" 
                   fullWidth 
@@ -1526,15 +1566,28 @@ export default function App() {
                                                 </>
                                               ) : selectedNode ? (
                                               <>
-                <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#fff' }}>{selectedNode.data.label}</Typography>
-                <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
-                <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic', color: 'rgba(255,255,255,0.7)' }}>
-                  {selectedNode.data.description}
-                </Typography>
-                <List>
-                  <ListItem sx={{ px: 0 }}><ListItemIcon><TypeIcon sx={{ color: sidebarColor }} /></ListItemIcon><ListItemText primary="Type" secondary={selectedNode.data.type} secondaryTypographyProps={{ style: { color: 'rgba(255,255,255,0.5)' } }} /></ListItem>
-                  <ListItem sx={{ px: 0 }}><ListItemIcon><InfoIcon sx={{ color: sidebarColor }} /></ListItemIcon><ListItemText primary="Importance" secondary={(selectedNode.data.score * 100).toFixed(1) + "%"} secondaryTypographyProps={{ style: { color: 'rgba(255,255,255,0.5)' } }} /></ListItem>
-                </List>
+                                  <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#fff' }}>{selectedNode.data.label}</Typography>
+                                  <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
+                                  <ExpandableText text={selectedNode.data.description} />
+                                                    <List>
+                                                      <ListItem sx={{ px: 0 }}><ListItemIcon><TypeIcon sx={{ color: sidebarColor }} /></ListItemIcon><ListItemText primary="Type" secondary={selectedNode.data.type} secondaryTypographyProps={{ style: { color: 'rgba(255,255,255,0.5)' } }} /></ListItem>
+                                                      <ListItem sx={{ px: 0 }}><ListItemIcon><InfoIcon sx={{ color: sidebarColor }} /></ListItemIcon><ListItemText primary="Importance" secondary={(selectedNode.data.score * 100).toFixed(1) + "%"} secondaryTypographyProps={{ style: { color: 'rgba(255,255,255,0.5)' } }} /></ListItem>
+                                                      
+                                                      {/* Dynamische Zusatz-Properties (z.B. Published bei Büchern) */}
+                                                      {Object.entries(selectedNode.data || {})
+                                                        .filter(([key, value]) => 
+                                                          !['label', 'description', 'icon', 'type', 'donut', 'isNew', 'isDraft', 'score', 'onSegmentClick', 'showDonuts', 'isEdgeCreationMode', 'category'].includes(key) && 
+                                                          value && value !== 'None' && value !== 'undefined'
+                                                        )
+                                                        .map(([key, value]) => (
+                                                          <ListItem key={key} sx={{ px: 0 }}>
+                                                            <ListItemIcon><Icons.InfoOutlined sx={{ color: sidebarColor, fontSize: 20 }} /></ListItemIcon>
+                                                            <ListItemText primary={key.charAt(0).toUpperCase() + key.slice(1)} secondary={String(value)} secondaryTypographyProps={{ style: { color: 'rgba(255,255,255,0.5)' } }} />
+                                                          </ListItem>
+                                                        ))
+                                                      }
+                                                    </List>
+                                  
               </>
             ) : null}
 
@@ -1585,16 +1638,15 @@ export default function App() {
                             </>
                           )}
                         </Box>
-                        {selectedNode && (
-                          <Box sx={{ pt: 2 }}><Divider sx={{ mb: 2, borderColor: 'rgba(255,255,255,0.1)' }} /><Button variant="outlined" color="error" fullWidth startIcon={<DeleteIcon />} onClick={onDeleteNode} sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 'bold', borderColor: 'rgba(211, 47, 47, 0.5)' }}>Remove from Canvas</Button></Box>
-                        )}
-            
-                  </Box>
+                                    {selectedNode && (
+                                      <Box sx={{ pt: 2, flexShrink: 0 }}><Divider sx={{ mb: 2, borderColor: 'rgba(255,255,255,0.1)' }} /><Button variant="outlined" color="error" fullWidth startIcon={<DeleteIcon />} onClick={onDeleteNode} sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 'bold', borderColor: 'rgba(211, 47, 47, 0.5)' }}>Remove from Canvas</Button></Box>
+                                    )}
+                                          </Box>
                 </Drawer>
 
         <Drawer 
           anchor="left" open={isSettingsOpen} variant="persistent" 
-          sx={{ width: isSettingsOpen ? 280 : 0, flexShrink: 0, '& .MuiDrawer-paper': { width: 280, borderRight: `2px solid ${COLORS.panelBorder}`, bgcolor: COLORS.paper, boxShadow: 5 } }}
+          sx={{ width: isSettingsOpen ? 280 : 0, flexShrink: 0, '& .MuiDrawer-paper': { width: 280, borderRight: `2px solid ${COLORS.panelBorder}`, bgcolor: COLORS.paper, boxShadow: 5, overflow: 'hidden' } }}
         >
           <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
