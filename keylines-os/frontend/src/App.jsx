@@ -316,11 +316,24 @@ export default function App() {
       const [selectedNodeEdges, setSelectedNodeEdges] = useState([]);
       const [previewData, setPreviewData] = useState(null);
   
-  const [zoomLevel, setZoomLevel] = useState(1);
-  const [hiddenTypes, setHiddenTypes] = useState(new Set());
-  const [highlightedTypes, setHighlightedTypes] = useState(new Set());
-  const [searchResults, setSearchResults] = useState([]);
+      const [zoomLevel, setZoomLevel] = useState(1);
+      const [dbCounts, setDbCounts] = useState({});
+      const [hiddenTypes, setHiddenTypes] = useState(new Set());
+      const [highlightedTypes, setHighlightedTypes] = useState(new Set());
+      const [searchResults, setSearchResults] = useState([]);
+  
+      useEffect(() => {
+        const fetchCounts = async () => {
+          try {
+            const response = await fetch('http://localhost:8000/node-counts');
+            setDbCounts(await response.json());
+          } catch (e) { console.error("Counts fetch error:", e); }
+        };
+        fetchCounts();
+      }, []);
+  
       const [isLeftDrawerOpen, setIsLeftDrawerOpen] = useState(false);
+  
           const [isSettingsOpen, setIsSettingsOpen] = useState(false);
           
           // Settings mit LocalStorage Initialisierung
@@ -840,7 +853,53 @@ export default function App() {
                     setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
                   }, 50);
                 }, [expandNode, applyLayout, fitView, setNodes, setEdges, enableEdgeColoring, enableDonuts]);
-                  const onDrillDown = useCallback(() => {
+                  const addAllNodesOfType = useCallback(async (category) => {
+      console.log(`FETCHING ALL ${category.toUpperCase()} NODES...`);
+      try {
+        const response = await fetch(`http://localhost:8000/nodes-by-type/${category}`);
+        const newNodesFromDB = await response.json();
+        
+        if (!Array.isArray(newNodesFromDB)) {
+          console.error("Expected array from backend, got:", newNodesFromDB);
+          return;
+        }
+
+        if (newNodesFromDB.length === 0) {
+          console.log(`No nodes found for category: ${category}`);
+          return;
+        }
+
+        // Wir nutzen existing nodesRef to check what we already have
+        const currentNodes = nodesRef.current;
+        const nodesToAdd = newNodesFromDB.filter(n => !currentNodes.find(existing => existing.id === n.id));
+        
+        if (nodesToAdd.length === 0) return;
+
+        // Positioniere neue Knoten im Zentrum oder zufällig, bevor das Layout greift
+        const centerPos = { x: 400, y: 400 };
+        const preparedNodes = nodesToAdd.map((n, i) => ({
+          ...n,
+          position: { x: centerPos.x + (i % 5) * 50, y: centerPos.y + Math.floor(i / 5) * 50 },
+          data: { 
+            ...n.data, 
+            showDonuts: enableDonuts,
+            onSegmentClick: (cat, e) => expandNode(n.id, cat, e) 
+          }
+        }));
+
+        setNodes(nds => deduplicate([...nds, ...preparedNodes]));
+        
+        // Layout triggern
+        setTimeout(() => {
+          setNodes(nds => applyLayout(nds, edgesRef.current, activeLayoutRef.current));
+          setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
+        }, 50);
+      } catch (e) {
+        console.error("Batch load error:", e);
+      }
+    }, [enableDonuts, expandNode, applyLayout, fitView, setNodes]);
+
+    const onDrillDown = useCallback(() => {
     if (highlightedTypes.size === 0) return;
     setNodes((nds) => {
       const remainingNodes = nds.filter(n => highlightedTypes.has(n.data.type));
@@ -910,15 +969,21 @@ export default function App() {
     }
   };
 
-  const onDeleteNode = useCallback(() => {
-    if (!selectedNode) return;
-    setNodes(nds => nds.filter(n => n.id !== selectedNode.id));
-    setEdges(eds => eds.filter(e => e.source !== selectedNode.id && e.target !== selectedNode.id));
-    setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
-    closeSidebar();
-  }, [selectedNode, setNodes, setEdges, closeSidebar, fitView]);
-
-  const batchExpandNodes = useCallback(async (nodeIds) => {
+      const onDeleteNode = useCallback(() => {
+        if (!selectedNode) return;
+        setNodes(nds => nds.filter(n => n.id !== selectedNode.id));
+        setEdges(eds => eds.filter(e => e.source !== selectedNode.id && e.target !== selectedNode.id));
+        setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
+        closeSidebar();
+      }, [selectedNode, setNodes, setEdges, closeSidebar, fitView]);
+  
+      const onDrillDownToNode = useCallback(() => {
+        if (!selectedNode) return;
+        setNodes([selectedNode]);
+        setEdges([]);
+        setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
+      }, [selectedNode, setNodes, setEdges, fitView]);
+    const batchExpandNodes = useCallback(async (nodeIds) => {
     const currentNodes = nodesRef.current;
     const currentEdges = edgesRef.current;
     try {
@@ -1222,27 +1287,34 @@ export default function App() {
             <Typography variant="h6" sx={{ fontWeight: 'bold', color: COLORS.primary, letterSpacing: 1 }}>TOOLBOX</Typography>
             <IconButton onClick={() => setIsLeftDrawerOpen(false)} sx={{ color: 'rgba(255,255,255,0.5)' }}><ChevronLeftIcon /></IconButton>
           </Box>
-          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 2, letterSpacing: 1 }}>NODE TEMPLATES (Drag & Drop)</Typography>
-          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 4 }}>
-            {Object.keys(NODE_CATEGORIES).filter(cat => cat !== 'other').map(cat => (
-              <Box key={cat} draggable onDragStart={(e) => { e.dataTransfer.setData('application/reactflow', cat); e.dataTransfer.effectAllowed = 'move'; }}
-                sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', border: `1px solid rgba(255,255,255,0.05)`, borderRadius: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'grab', transition: 'all 0.2s ease', '&:hover': { bgcolor: 'rgba(255,255,255,0.07)', borderColor: NODE_CATEGORIES[cat], transform: 'translateY(-2px)', boxShadow: `0 4px 10px ${NODE_CATEGORIES[cat]}33` } }}
-              >
-                <Avatar sx={{ bgcolor: NODE_CATEGORIES[cat], width: 32, height: 32, mb: 1 }}>
-                  {cat === 'person' ? <PersonIcon sx={{ fontSize: 18, color: '#fff' }} /> : 
-                   cat === 'planet' ? <PublicIcon sx={{ fontSize: 18, color: '#fff' }} /> : 
-                   cat === 'robot' ? <AndroidIcon sx={{ fontSize: 18, color: '#fff' }} /> : 
-                                        cat === 'item' ? <ItemIcon sx={{ fontSize: 18, color: '#fff' }} /> :
-                                        cat === 'science' ? <ScienceIcon sx={{ fontSize: 18, color: '#fff' }} /> :
-                                        cat === 'book' ? <BookIcon sx={{ fontSize: 18, color: '#fff' }} /> :
-                                        <Icons.HelpOutline sx={{ fontSize: 18, color: '#fff' }} />}
-                   
-                </Avatar>
-                <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.6)', fontWeight: 'bold' }}>{cat.toUpperCase()}</Typography>
-              </Box>
-            ))}
-          </Box>
-          <Divider sx={{ mb: 3, borderColor: 'rgba(255,255,255,0.1)' }} />
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 2, letterSpacing: 1 }}>NODE TEMPLATES (Drag & Drop, Shift+Click: Load All)</Typography>
+                                              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 4 }}>
+                                                {Object.keys(NODE_CATEGORIES).filter(cat => cat !== 'other').map(cat => {
+                                                  const count = dbCounts[cat.toLowerCase()] || 0;
+                                                  return (
+                                                    <Box 
+                                                      key={cat}
+                                                      draggable 
+                                                      onDragStart={(e) => { e.dataTransfer.setData('application/reactflow', cat); e.dataTransfer.effectAllowed = 'move'; }}
+                                                      onClick={(e) => { if (e.shiftKey) addAllNodesOfType(cat); }}
+                                                      sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', border: `1px solid rgba(255,255,255,0.05)`, borderRadius: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'grab', transition: 'all 0.2s ease', '&:hover': { bgcolor: 'rgba(255,255,255,0.07)', borderColor: NODE_CATEGORIES[cat], transform: 'translateY(-2px)', boxShadow: `0 4px 10px ${NODE_CATEGORIES[cat]}33`, cursor: 'pointer' } }}
+                                                    >
+                                                      <Avatar sx={{ bgcolor: NODE_CATEGORIES[cat], width: 32, height: 32, mb: 1 }}>
+                                                        {cat === 'person' ? <PersonIcon sx={{ fontSize: 18, color: '#fff' }} /> : 
+                                                         cat === 'planet' ? <PublicIcon sx={{ fontSize: 18, color: '#fff' }} /> : 
+                                                         cat === 'robot' ? <AndroidIcon sx={{ fontSize: 18, color: '#fff' }} /> : 
+                                                         cat === 'item' ? <ItemIcon sx={{ fontSize: 18, color: '#fff' }} /> :
+                                                         cat === 'science' ? <ScienceIcon sx={{ fontSize: 18, color: '#fff' }} /> :
+                                                         cat === 'book' ? <BookIcon sx={{ fontSize: 18, color: '#fff' }} /> :
+                                                         <Icons.HelpOutline sx={{ fontSize: 18, color: '#fff' }} />}
+                                                      </Avatar>
+                                                      <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.6)', fontWeight: 'bold' }}>{cat.toUpperCase()}</Typography>
+                                                      {count > 0 && <Typography variant="caption" sx={{ fontSize: '0.55rem', color: 'rgba(255,255,255,0.3)' }}>({count})</Typography>}
+                                                    </Box>
+                                                  );
+                                                })}
+                                              </Box>
+                                            <Divider sx={{ mb: 3, borderColor: 'rgba(255,255,255,0.1)' }} />
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 2, letterSpacing: 1 }}>RELATIONSHIP TOOLS</Typography>
                       <Button 
                         variant={isEdgeCreationMode ? "contained" : "outlined"} 
@@ -1638,9 +1710,32 @@ export default function App() {
                             </>
                           )}
                         </Box>
-                                    {selectedNode && (
-                                      <Box sx={{ pt: 2, flexShrink: 0 }}><Divider sx={{ mb: 2, borderColor: 'rgba(255,255,255,0.1)' }} /><Button variant="outlined" color="error" fullWidth startIcon={<DeleteIcon />} onClick={onDeleteNode} sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 'bold', borderColor: 'rgba(211, 47, 47, 0.5)' }}>Remove from Canvas</Button></Box>
-                                    )}
+                                                {selectedNode && (
+                                                  <Box sx={{ pt: 2, flexShrink: 0 }}>
+                                                    <Divider sx={{ mb: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
+                                                    <Button 
+                                                      variant="outlined" 
+                                                      color="error" 
+                                                      fullWidth 
+                                                      startIcon={<DeleteIcon />} 
+                                                      onClick={onDeleteNode} 
+                                                      sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 'bold', mb: 1, borderColor: 'rgba(211, 47, 47, 0.5)' }}
+                                                    >
+                                                      Remove from Canvas
+                                                    </Button>
+                                                    <Button 
+                                                      variant="outlined" 
+                                                      color="primary" 
+                                                      fullWidth 
+                                                      startIcon={<DrillDownIcon />} 
+                                                      onClick={onDrillDownToNode} 
+                                                      sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 'bold', borderColor: 'rgba(0, 191, 255, 0.3)' }}
+                                                    >
+                                                      Drill Down (Isolate)
+                                                    </Button>
+                                                  </Box>
+                                                )}
+                                    
                                           </Box>
                 </Drawer>
 

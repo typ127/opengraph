@@ -13,6 +13,54 @@ MEMGRAPH_HOST = os.getenv("MEMGRAPH_HOST", "localhost")
 MEMGRAPH_PORT = int(os.getenv("MEMGRAPH_PORT", 7687))
 memgraph = Memgraph(MEMGRAPH_HOST, MEMGRAPH_PORT)
 
+category_map = {
+    "person": "person", 
+    "mutant": "mutant",
+    "planet": "planet",
+    "robot": "robot",
+    "item": "item",
+    "entity": "science", 
+    "science": "science",
+    "book": "book",
+}
+
+color_values = {
+    "person": "#1976d2", 
+    "planet": "#4caf50",
+    "mutant": "#dc143c", 
+    "robot": "#00bfff",
+    "item": "#ff9800", 
+    "science": "#9c27b0",
+    "book": "#f44336",
+    "other": "#9e9e9e"
+}
+
+def calculate_donut(type_list):
+    if not type_list: return []
+    cat_counts = {}
+    cat_type_details = {}
+    
+    for t in type_list:
+        if not t: continue
+        cat = category_map.get(t.lower(), "other")
+        cat_counts[cat] = cat_counts.get(cat, 0) + 1
+        
+        if cat not in cat_type_details: cat_type_details[cat] = {}
+        t_upper = t.upper()
+        cat_type_details[cat][t_upper] = cat_type_details[cat].get(t_upper, 0) + 1
+    
+    total = sum(cat_counts.values())
+    return [
+        {
+            "category": cat,
+            "type_labels": [f"{t} ({count})" for t, count in cat_type_details[cat].items()],
+            "value": (count / total) * 100, 
+            "total_count": count,
+            "color": color_values[cat]
+        }
+        for cat, count in cat_counts.items()
+    ]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -170,6 +218,54 @@ async def search(q: str = Query(...)):
         print(f"Search error: {e}")
         return []
 
+@app.get("/node-counts")
+async def get_node_counts():
+    """Gibt die Anzahl der Knoten pro Kategorie (Type) zurück."""
+    query = """
+    MATCH (n)
+    RETURN toLower(n.type) as type, count(n) as count;
+    """
+    try:
+        results = list(memgraph.execute_and_fetch(query))
+        counts = {row["type"]: row["count"] for row in results if row["type"]}
+        return counts
+    except Exception as e:
+        print(f"Node counts error: {e}")
+        return {}
+
+@app.get("/nodes-by-type/{category}")
+async def get_nodes_by_type(category: str):
+    print(f"FETCH ALL NODES OF TYPE: {category}")
+    
+    # Da wir in n.type die Werte wie 'Person', 'Robot' etc. speichern (Case-Insensitive Match)
+    query = f"""
+    MATCH (n)
+    WHERE toLower(n.type) = toLower('{category}')
+    RETURN n;
+    """
+    try:
+        results = list(memgraph.execute_and_fetch(query))
+        nodes = []
+        for row in results:
+            n = row.get("n")
+            p_n = get_props(n)
+            # Wir rufen noch die Nachbar-Typen ab für den Donut
+            neighbor_query = f"MATCH (n {{id: '{p_n['id']}'}})-[]-(m) RETURN m.type as type"
+            neighbor_types = [r['type'] for r in memgraph.execute_and_fetch(neighbor_query)]
+            
+            nodes.append({
+                "id": p_n['id'],
+                "type": "keylines",
+                "data": {
+                    **p_n,
+                    "donut": calculate_donut(neighbor_types)
+                }
+            })
+        return nodes
+    except Exception as e:
+        print(f"Nodes by type error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/expand/{node_id}")
 async def expand(node_id: str, use_mock: bool = Query(False), filter_category: str = Query(None)):
     if use_mock:
@@ -204,53 +300,7 @@ async def expand(node_id: str, use_mock: bool = Query(False), filter_category: s
     nodes_dict = {}
     edges = []
     
-    category_map = {
-        "person": "person", 
-        "mutant": "mutant",
-        "planet": "planet",
-        "robot": "robot",
-        "item": "item",
-        "entity": "science", 
-        "science": "science",
-        "book": "book",
-    }
-    
-    color_values = {
-        "person": "#1976d2", 
-        "planet": "#4caf50",
-        "mutant": "#dc143c", 
-        "robot": "#00bfff",
-        "item": "#ff9800", 
-        "science": "#9c27b0",
-        "book": "#f44336",
-        "other": "#9e9e9e"
-    }
-
-    def calculate_donut(type_list):
-        if not type_list: return []
-        cat_counts = {}
-        cat_type_details = {}
-        
-        for t in type_list:
-            if not t: continue
-            cat = category_map.get(t.lower(), "other")
-            cat_counts[cat] = cat_counts.get(cat, 0) + 1
-            
-            if cat not in cat_type_details: cat_type_details[cat] = {}
-            t_upper = t.upper()
-            cat_type_details[cat][t_upper] = cat_type_details[cat].get(t_upper, 0) + 1
-        
-        total = sum(cat_counts.values())
-        return [
-            {
-                "category": cat,
-                "type_labels": [f"{t} ({count})" for t, count in cat_type_details[cat].items()],
-                "value": (count / total) * 100, 
-                "total_count": count,
-                "color": color_values[cat]
-            }
-            for cat, count in cat_counts.items()
-        ]
+    # Process Results
 
     for row in results:
         n, e, m = row.get("n"), row.get("e"), row.get("m")

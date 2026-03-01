@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.27.0] - 2026-02-28
+
+### Added
+- **Entity Isolation (Drill Down)**: New "Drill Down (Isolate)" button in the node drawer. This allows users to immediately clear the stage of all other entities, focusing exclusively on the selected node.
+- **Robust Batch Architecture**: Globalized core backend utilities (`calculate_donut`, `category_map`) to ensure consistent data structures across all endpoints, including batch-loading and search.
+
+### Changed
+- **Drawer Footer Refinement**: Grouped "Remove from Canvas" and "Drill Down" buttons in a persistent, non-shrinking footer for improved ergonomics and faster exploration resets.
+- **Enhanced Error Resilience**: The frontend now gracefully handles non-array responses from the backend during batch operations, preventing UI crashes.
+
+### Fixed
+- **Backend Scope Issue**: Resolved a `NameError` in the `/nodes-by-type` endpoint by lifting shared logic to the module level.
+
+## [1.26.0] - 2026-02-28
+
+### Added
+- **Category Batch Loading**: Users can now `Shift+Click` any template in the Toolbox to immediately load all entities of that type from the database onto the stage.
+- **Database Counters**: The Toolbox now displays the total number of available entities for each category (e.g., "BOOK (14)") directly below the template icons.
+- **Node-Counts API**: New backend endpoint `/node-counts` provides real-time entity statistics for the frontend UI.
+
+### Changed
+- **Toolbox UI Refinement**: Simplified the Toolbox by removing redundant tooltips and integrating counts directly into the template labels for better glanceability.
+- **Optimized Batch Layout**: Newly batch-loaded nodes are automatically arranged and the camera is adjusted to ensure full visibility of the added group.
+
 ## [1.25.0] - 2026-02-28
 
 ### Added
