@@ -7,7 +7,7 @@ import { getHexColor } from './constants';
 import { COLORS } from './theme';
 
 const KeyLinesNode = ({ data }) => {
-  const { label, icon, donut = [], score = 1.0, showDonuts = true } = data;
+  const { label, icon, donut = [], score = 1.0, showDonuts = true, isEdgeCreationMode = false } = data;
   const IconComponent = Icons[icon] || Icons.HelpOutline;
 
   const size = 60;
@@ -34,12 +34,15 @@ const KeyLinesNode = ({ data }) => {
       transition: 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
       zIndex: Math.round(score * 10), 
     }}>
-      <div style={{ 
-        position: 'relative', 
-        width: size, 
-        height: size,
-        filter: score > 0.4 ? `drop-shadow(0 0 ${glowIntensity}px ${glowColor}88)` : 'none'
-      }}>
+      <div 
+        className="node-circle-container"
+        style={{ 
+          position: 'relative', 
+          width: size, 
+          height: size,
+          filter: score > 0.4 ? `drop-shadow(0 0 ${glowIntensity}px ${glowColor}88)` : 'none'
+        }}
+      >
         {/* SVG Donut Ring */}
         {showDonuts && donut.length > 0 && (
           <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', overflow: 'visible' }}>
@@ -123,9 +126,35 @@ const KeyLinesNode = ({ data }) => {
           <IconComponent sx={{ fontSize: 24, color: 'white' }} />
         </Box>
 
-        {/* Handles */}
-        <Handle type="target" position={Position.Top} style={{ top: '30px', left: '30px', background: 'transparent', border: 'none', pointerEvents: 'none' }} />
-        <Handle type="source" position={Position.Bottom} style={{ top: '30px', left: '30px', background: 'transparent', border: 'none', pointerEvents: 'none' }} />
+        {/* Central Invisible Handles for Edge Creation Mode */}
+        {/* We keep them at 1px size in the center so edges always point to the middle. */}
+        {/* In EdgeCreationMode, we expand their hit area to cover the entire node. */}
+        <Handle 
+          type="target" 
+          position={Position.Top} 
+          style={{ 
+            top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+            width: isEdgeCreationMode ? '100%' : '1px', 
+            height: isEdgeCreationMode ? '100%' : '1px',
+            background: 'transparent', border: 'none',
+            opacity: 0,
+            pointerEvents: isEdgeCreationMode ? 'all' : 'none',
+            zIndex: 20
+          }} 
+        />
+        <Handle 
+          type="source" 
+          position={Position.Bottom} 
+          style={{ 
+            top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+            width: isEdgeCreationMode ? '100%' : '1px', 
+            height: isEdgeCreationMode ? '100%' : '1px',
+            background: 'transparent', border: 'none',
+            opacity: 0,
+            pointerEvents: isEdgeCreationMode ? 'all' : 'none',
+            zIndex: 20
+          }} 
+        />
       </div>
 
       {/* Label */}

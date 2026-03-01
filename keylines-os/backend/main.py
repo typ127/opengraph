@@ -1,5 +1,6 @@
-from fastapi import FastAPI, Query, Body
+from fastapi import FastAPI, Query, Body, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 import networkx as nx
 from gqlalchemy import Memgraph
 import os
@@ -304,3 +305,26 @@ async def expand(node_id: str, use_mock: bool = Query(False), filter_category: s
             seen_edge_ids.add(e["id"])
 
     return process_with_social_algorithms(unique_nodes, unique_edges)
+
+class EdgeCreate(BaseModel):
+    source: str
+    target: str
+    type: str
+
+@app.post("/create-edge")
+async def create_edge(edge: EdgeCreate):
+    rel_type = edge.type.upper().replace(" ", "_")
+    if not rel_type: rel_type = "RELATES_TO"
+    
+    query = f"""
+    MATCH (a {{id: '{edge.source}'}}), (b {{id: '{edge.target}'}})
+    MERGE (a)-[e:{rel_type}]->(b)
+    SET e.type = '{rel_type}'
+    RETURN e;
+    """
+    try:
+        memgraph.execute(query)
+        return {"status": "success"}
+    except Exception as e:
+        print(f"Edge creation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

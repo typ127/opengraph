@@ -6,7 +6,9 @@ import ReactFlow, {
   Controls, 
   Panel, 
   useReactFlow,
-  getRectOfNodes
+  getRectOfNodes,
+  addEdge,
+  MarkerType
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import KeyLinesNode from './KeyLinesNode';
@@ -25,6 +27,7 @@ import {
   Divider, 
   List, 
   ListItem, 
+  ListItemButton,
   ListItemText,
   ListItemIcon,
   Avatar,
@@ -296,11 +299,13 @@ export default function App() {
       const [isLeftDrawerOpen, setIsLeftDrawerOpen] = useState(false);
       const [isSettingsOpen, setIsSettingsOpen] = useState(false);
           const [enableEdgeColoring, setEnableEdgeColoring] = useState(true);
-          const [enableDonuts, setEnableDonuts] = useState(true);
-          
-          const [isEditingNode, setIsEditingNode] = useState(false);
-      
-  const [editSnapshot, setEditSnapshot] = useState(null);
+              const [enableDonuts, setEnableDonuts] = useState(true);
+                  const [pendingConnection, setPendingConnection] = useState(null);
+                  const [isEdgeCreationMode, setIsEdgeCreationMode] = useState(false);
+                  
+                  const [isEditingNode, setIsEditingNode] = useState(false);
+              
+            const [editSnapshot, setEditSnapshot] = useState(null);
 
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
@@ -316,14 +321,14 @@ export default function App() {
             })));
           }, [enableEdgeColoring, setEdges]);
       
-          useEffect(() => {
-            setNodes(nds => nds.map(node => ({
-              ...node,
-              data: { ...node.data, showDonuts: enableDonuts }
-            })));
-          }, [enableDonuts, setNodes]);
-      
-    // Funktion zum manuellen Anpassen der Kamera an neue Knotenpositionen,
+                      useEffect(() => {
+                        setNodes(nds => nds.map(node => ({
+                          ...node,
+                          className: isEdgeCreationMode ? 'edge-mode-node' : '',
+                          data: { ...node.data, showDonuts: enableDonuts, isEdgeCreationMode: isEdgeCreationMode }
+                        })));
+                      }, [enableDonuts, isEdgeCreationMode, setNodes]);
+                                // Funktion zum manuellen Anpassen der Kamera an neue Knotenpositionen,
   // ignoriert CSS-Animationen für mehr Präzision.
   const fitToNodes = useCallback((nds) => {
     if (nds.length === 0) return;
@@ -377,9 +382,11 @@ export default function App() {
         if (selectedNode && isEditingNode && !skipPersist) {
           persistNode(selectedNode);
         }
-        setSelectedNode(null); 
-        setSelectedEdge(null);
-        setPreviewData(null); 
+              setSelectedNode(null); 
+              setSelectedEdge(null);
+              setPendingConnection(null);
+              setPreviewData(null); 
+         
         setSelectedNodeNeighbors([]); 
         setIsEditingNode(false);
         setEditSnapshot(null);
@@ -444,16 +451,50 @@ export default function App() {
           } catch (e) { console.error(e); }
         }, [selectedNode, isEditingNode, persistNode]);
     
-        const openEdgeDetails = useCallback((edge) => {
-          // Wenn wir gerade einen Knoten editiert haben, speichern wir diesen erst
-          if (selectedNode && isEditingNode) {
-            persistNode(selectedNode);
-          }
-          setSelectedEdge(edge);
-          setSelectedNode(null);
-          setPreviewData(null);
-          setIsEditingNode(false);
-        }, [selectedNode, isEditingNode, persistNode]);
+            const openEdgeDetails = useCallback((edge) => {
+              // Wenn wir gerade einen Knoten editiert haben, speichern wir diesen erst
+              if (selectedNode && isEditingNode) {
+                persistNode(selectedNode);
+              }
+              setSelectedEdge(edge);
+              setSelectedNode(null);
+              setPendingConnection(null);
+              setPreviewData(null);
+              setIsEditingNode(false);
+            }, [selectedNode, isEditingNode, persistNode]);
+        
+                const onConnect = useCallback((params) => {
+                  console.log("Connection initiated:", params);
+                  setPendingConnection(params);
+                  setSelectedNode(null);
+                  setSelectedEdge(null);
+                  setPreviewData(null);
+                  setIsEditingNode(false);
+                }, []);
+                        const confirmConnection = useCallback(async (type) => {
+              if (!pendingConnection) return;
+              const { source, target } = pendingConnection;
+              const newEdge = {
+                ...pendingConnection,
+                id: `e-${source}-${type}-${target}`,
+                label: type.replace("_", " ").toLowerCase(),
+                data: { type },
+                style: getEdgeStyle(enableEdgeColoring ? type : 'default'),
+                animated: ["TRAVELS_WITH", "CONNECTS", "FOLLOWS"].includes(type)
+              };
+              try {
+                await fetch('http://localhost:8000/create-edge', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ source, target, type })
+                });
+                        setEdges((eds) => addEdge(newEdge, eds));
+                        setPendingConnection(null);
+                        setIsEdgeCreationMode(false);
+                      } catch (e) { console.error("Edge creation failed:", e); }
+                
+            }, [pendingConnection, enableEdgeColoring, setEdges]);
+        
       const handleDrawerClose = useCallback((event, reason) => {
     if (reason === 'escapeKeyDown' && isEditingNode) {
       cancelEditing();
@@ -797,7 +838,7 @@ export default function App() {
     return Object.entries(counts).sort((a, b) => b[1] - a[1]);
   }, [nodes]);
 
-      const sidebarColor = selectedNode ? getHexColor(selectedNode.data.type) : selectedEdge ? COLORS.secondary : previewData ? typeColors[previewData.category] : typeColors.other;
+      const sidebarColor = selectedNode ? getHexColor(selectedNode.data.type) : (selectedEdge || pendingConnection) ? COLORS.secondary : previewData ? typeColors[previewData.category] : typeColors.other;
     const topBarHeight = 48; // Common height for the top toolbars
 
   return (
@@ -813,10 +854,37 @@ export default function App() {
         .react-flow__controls { box-shadow: 0 0 10px rgba(0,0,0,0.5); }
         .react-flow__controls-button { background: ${COLORS.paper} !important; border-bottom: 1px solid ${COLORS.panelBorder} !important; fill: ${COLORS.textSecondary} !important; }
         .react-flow__controls-button:hover { background: #2a2a2a !important; fill: ${COLORS.primary} !important; }
-        .react-flow__controls-button svg { fill: currentColor !important; }
-      `}</style>
-      
-      {/* LEFT TOOLBAR (DRAWER TOGGLE) */}
+                            .react-flow__controls-button svg { fill: currentColor !important; }
+                                      .react-flow__handle { 
+                                        transition: all 0.3s ease;
+                                        opacity: 0;
+                                        pointer-events: ${isEdgeCreationMode ? 'all' : 'none'};
+                                      }
+                                      .react-flow__handle-connecting {
+                            
+                                        background: ${COLORS.secondary} !important;
+                                      }
+                                      
+                                      /* Connection Line refinement */
+                                      .react-flow__connection-path {
+                                        stroke: ${COLORS.primary} !important;
+                                        stroke-width: 3 !important;
+                                        transition: stroke-dasharray 0.2s ease;
+                                      }
+                                      
+                                      /* Animierte gestrichelte Linie wenn über einem Ziel (valid snap) */
+                                      .react-flow__connection.valid .react-flow__connection-path {
+                                        stroke-dasharray: 5;
+                                        animation: dashdraw 0.5s linear infinite;
+                                      }
+                                      
+                                                @keyframes dashdraw {
+                                                  from { stroke-dashoffset: 10; }
+                                                  to { stroke-dashoffset: 0; }
+                                                }
+                                              `}</style>
+                                      
+                                          {/* LEFT TOOLBAR (DRAWER TOGGLE) */}
       <Box sx={{ position: 'absolute', top: 16, left: 16, zIndex: 1200 }}>
         <Paper elevation={3} sx={{ px: 1, height: topBarHeight, display: 'flex', alignItems: 'center', bgcolor: 'rgba(30, 30, 30, 0.9)', borderRadius: 2, border: `1px solid ${COLORS.panelBorder}` }}>
                       <Tooltip title="Toolbox">
@@ -942,59 +1010,85 @@ export default function App() {
             ))}
           </Box>
           <Divider sx={{ mb: 3, borderColor: 'rgba(255,255,255,0.1)' }} />
-          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 2, letterSpacing: 1 }}>RELATIONSHIP TOOLS</Typography>
-          <Button variant="outlined" fullWidth startIcon={<LinkIcon />} sx={{ textTransform: 'none', justifyContent: 'flex-start', borderRadius: 2, color: 'rgba(255,255,255,0.7)', borderColor: 'rgba(255,255,255,0.2)', '&:hover': { borderColor: COLORS.secondary, color: COLORS.secondary, bgcolor: `${COLORS.secondary}11` } }}>Add Connection (Edge)</Button>
-          <Box sx={{ flexGrow: 1 }} />
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 2, letterSpacing: 1 }}>RELATIONSHIP TOOLS</Typography>
+                      <Button 
+                        variant={isEdgeCreationMode ? "contained" : "outlined"} 
+                        fullWidth 
+                        startIcon={<LinkIcon />} 
+                        onClick={() => setIsEdgeCreationMode(!isEdgeCreationMode)}
+                        sx={{ 
+                          textTransform: 'none', 
+                          justifyContent: 'flex-start', 
+                          borderRadius: 2, 
+                          mb: 1,
+                          bgcolor: isEdgeCreationMode ? COLORS.secondary : 'transparent',
+                          color: isEdgeCreationMode ? '#fff' : 'rgba(255,255,255,0.7)', 
+                          borderColor: isEdgeCreationMode ? COLORS.secondary : 'rgba(255,255,255,0.2)', 
+                          '&:hover': { 
+                            borderColor: COLORS.secondary, 
+                            bgcolor: isEdgeCreationMode ? COLORS.secondary : `${COLORS.secondary}11` 
+                          } 
+                        }}
+                      >
+                        {isEdgeCreationMode ? "Cancel Drawing" : "Add Connection (Edge)"}
+                      </Button>
+                      <Box sx={{ flexGrow: 1 }} />
+          
           <Typography variant="caption" sx={{ textAlign: 'center', color: 'rgba(255,255,255,0.2)' }}>KeyLines OS Editor Mode v0.1</Typography>
         </Box>
       </Drawer>
 
       <Box sx={{ flexGrow: 1, height: '100%', position: 'relative', transition: 'all 0.3s ease' }}>
-        <ReactFlow
-          nodes={visibleNodes} edges={visibleEdges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
-          onNodeClick={(e, n) => e.shiftKey ? openDetails(n) : expandNode(n.id)}
-          onEdgeClick={(e, edge) => e.shiftKey && openEdgeDetails(edge)}
-          onPaneClick={() => { closeSidebar(); setHighlightedTypes(new Set()); }}
-          onMove={(e, v) => setZoomLevel(v.zoom)} onDrop={onDrop} onDragOver={onDragOver}
-          nodeTypes={nodeTypes} defaultEdgeOptions={{ type: 'straight' }} fitView
-        >
-          <Background color="#333" variant="dots" gap={20} size={1} />
+                  <ReactFlow
+                    nodes={visibleNodes} edges={visibleEdges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
+                    onNodeClick={(e, n) => e.shiftKey ? openDetails(n) : expandNode(n.id)}
+                    onEdgeClick={(e, edge) => e.shiftKey && openEdgeDetails(edge)}
+                    onConnect={onConnect}
+                    onPaneClick={() => { closeSidebar(); setHighlightedTypes(new Set()); }}
+                    onMove={(e, v) => setZoomLevel(v.zoom)} onDrop={onDrop} onDragOver={onDragOver}
+                                nodeTypes={nodeTypes} defaultEdgeOptions={{ type: 'straight' }} fitView
+                                nodesDraggable={!isEdgeCreationMode}
+                                nodesConnectable={true}
+                                selectNodesOnDrag={false}
+                                connectionMode="loose"
+                              >
+                              <Background color="#333" variant="dots" gap={20} size={1} />
           <Controls showInteractive={false} />
         </ReactFlow>
       </Box>
 
-              <Drawer anchor="right" open={!!selectedNode || !!selectedEdge || !!previewData} onClose={handleDrawerClose} variant="temporary" sx={{ width: 350, '& .MuiDrawer-paper': { width: 350, borderLeft: `4px solid ${sidebarColor}`, boxShadow: -5, bgcolor: COLORS.paper } }}>
+              <Drawer anchor="right" open={!!selectedNode || !!selectedEdge || !!previewData || !!pendingConnection} onClose={handleDrawerClose} variant="temporary" sx={{ width: 350, '& .MuiDrawer-paper': { width: 350, borderLeft: `4px solid ${sidebarColor}`, boxShadow: -5, bgcolor: COLORS.paper } }}>
       
         <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
           <Box sx={{ flexGrow: 1, overflowY: 'auto' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                  <Avatar sx={{ bgcolor: sidebarColor, width: 64, height: 64, boxShadow: '0 0 20px ' + sidebarColor + '44' }}>
-                                    {selectedNode ? React.createElement(Icons[selectedNode.data.icon] || Icons.HelpOutline, { sx: { fontSize: 32, color: '#fff' } }) : selectedEdge ? <Icons.Link sx={{ fontSize: 32, color: '#fff' }} /> : <GroupIcon sx={{ fontSize: 32, color: '#fff' }} />}
-                                  </Avatar>
-                                  {(selectedNode || selectedEdge) && (
-                                    <Tooltip title={selectedEdge ? "Edit Edge (Coming Soon)" : (isEditingNode ? "View Info" : "Edit Properties")}>
-                                      <span>
-                                        <IconButton 
-                                          onClick={() => {
-                                            if (selectedEdge) return;
-                                            if (!isEditingNode) {
-                                              setEditSnapshot({ label: selectedNode.data.label, description: selectedNode.data.description, icon: selectedNode.data.icon });
-                                            } else {
-                                              setEditSnapshot(null);
-                                            }
-                                            setIsEditingNode(!isEditingNode);
-                                          }} 
-                                          disabled={!!selectedEdge}
-                                          sx={{ bgcolor: 'rgba(255,255,255,0.05)', '&:hover': { bgcolor: isEditingNode ? `${COLORS.secondary}22` : `${COLORS.primary}22` } }}
-                                        >
-                                          {isEditingNode ? <Icons.Visibility sx={{ fontSize: 20, color: COLORS.secondary }} /> : <Icons.Edit sx={{ fontSize: 20, color: COLORS.primary }} />}
-                                        </IconButton>
-                                      </span>
-                                    </Tooltip>
-                                  )}
-                
-              </Box>
+                                                    <Avatar sx={{ bgcolor: sidebarColor, width: 64, height: 64, boxShadow: '0 0 20px ' + sidebarColor + '44' }}>
+                                                      {selectedNode ? React.createElement(Icons[selectedNode.data.icon] || Icons.HelpOutline, { sx: { fontSize: 32, color: '#fff' } }) : (selectedEdge || pendingConnection) ? <Icons.Link sx={{ fontSize: 32, color: '#fff' }} /> : <GroupIcon sx={{ fontSize: 32, color: '#fff' }} />}
+                                                    </Avatar>
+                                  
+                                                    {(selectedNode || selectedEdge || pendingConnection) && (
+                                                      <Tooltip title={pendingConnection ? "Define Relationship" : selectedEdge ? "Edit Edge (Coming Soon)" : (isEditingNode ? "View Info" : "Edit Properties")}>
+                                                        <span>
+                                                          <IconButton 
+                                                            onClick={() => {
+                                                              if (selectedEdge || pendingConnection) return;
+                                                              if (!isEditingNode) {
+                                                                setEditSnapshot({ label: selectedNode.data.label, description: selectedNode.data.description, icon: selectedNode.data.icon });
+                                                              } else {
+                                                                setEditSnapshot(null);
+                                                              }
+                                                              setIsEditingNode(!isEditingNode);
+                                                            }} 
+                                                            disabled={!!selectedEdge || !!pendingConnection}
+                                                            sx={{ bgcolor: 'rgba(255,255,255,0.05)', '&:hover': { bgcolor: isEditingNode ? `${COLORS.secondary}22` : `${COLORS.primary}22` } }}
+                                                          >
+                                                            {isEditingNode ? <Icons.Visibility sx={{ fontSize: 20, color: COLORS.secondary }} /> : <Icons.Edit sx={{ fontSize: 20, color: COLORS.primary }} />}
+                                                          </IconButton>
+                                                        </span>
+                                                      </Tooltip>
+                                                    )}
+                                                </Box>
               <IconButton onClick={() => closeSidebar()}><CloseIcon /></IconButton>
             </Box>
 
@@ -1052,7 +1146,38 @@ export default function App() {
                   Delete from Database
                 </Button>
               </>
-                          ) : selectedEdge ? (
+                          ) : pendingConnection ? (
+                <>
+                  <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#fff' }}>New Connection</Typography>
+                  <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
+                  <Typography variant="body2" sx={{ mb: 3, color: 'rgba(255,255,255,0.7)' }}>
+                    Define the relationship between <b>{nodes.find(n => n.id === pendingConnection.source)?.data.label || 'Source'}</b> and <b>{nodes.find(n => n.id === pendingConnection.target)?.data.label || 'Target'}</b>:
+                  </Typography>
+                  <List>
+                    {['RELATES_TO', 'RULES', 'CONQUERED', 'PROTECTS', 'GUIDES', 'LIVES_ON', 'CREATED', 'TRAVELS_WITH', 'FOLLOWS'].map(type => (
+                      <ListItemButton 
+                        key={type} 
+                        onClick={() => confirmConnection(type)}
+                        sx={{ 
+                          borderRadius: 2, mb: 1, 
+                          bgcolor: 'rgba(255,255,255,0.03)', 
+                          border: '1px solid rgba(255,255,255,0.05)',
+                          '&:hover': { bgcolor: `${COLORS.primary}22`, borderColor: COLORS.primary } 
+                        }}
+                      >
+                        <ListItemIcon><Icons.AddLink sx={{ color: COLORS.primary }} /></ListItemIcon>
+                        <ListItemText primary={type.replace("_", " ")} primaryTypographyProps={{ style: { fontWeight: 'bold', fontSize: '0.9rem' } }} />
+                      </ListItemButton>
+                    ))}
+                  </List>
+                  <Button 
+                    variant="outlined" fullWidth onClick={() => setPendingConnection(null)}
+                    sx={{ mt: 2, borderRadius: 2, color: 'rgba(255,255,255,0.5)', borderColor: 'rgba(255,255,255,0.2)', textTransform: 'none' }}
+                  >
+                    Cancel
+                  </Button>
+                </>
+              ) : selectedEdge ? (
                             <>
                               <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#fff' }}>Relationship</Typography>
                               <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
