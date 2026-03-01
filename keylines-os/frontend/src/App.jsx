@@ -114,15 +114,16 @@ const deduplicate = (arr) => {
   return Array.from(map.values());
 };
 
-const getEdgeStyle = (type) => {
+const getEdgeStyle = (type, weight = 1) => {
+  const weightFactor = Math.max(1, Math.min(weight, 10)) * 0.8; // Scale between 1 and 8 roughly
   const edgeStyles = {
-    RULES: { stroke: EDGE_TYPES.rules, strokeWidth: 3 },
-    CONQUERED: { stroke: EDGE_TYPES.conquered, strokeWidth: 3 },
-    PROTECTS: { stroke: EDGE_TYPES.protects, strokeWidth: 2 },
-    GUIDES: { stroke: EDGE_TYPES.guides, strokeWidth: 2, strokeDasharray: '5,5' },
-    LIVES_ON: { stroke: EDGE_TYPES.livesOn, strokeWidth: 1.5 },
-    CREATED: { stroke: EDGE_TYPES.created, strokeWidth: 2 },
-    default: { stroke: EDGE_TYPES.default, strokeWidth: 1.5 }
+    RULES: { stroke: EDGE_TYPES.rules, strokeWidth: 2 + weightFactor },
+    CONQUERED: { stroke: EDGE_TYPES.conquered, strokeWidth: 2 + weightFactor },
+    PROTECTS: { stroke: EDGE_TYPES.protects, strokeWidth: 1.5 + weightFactor },
+    GUIDES: { stroke: EDGE_TYPES.guides, strokeWidth: 1.5 + weightFactor, strokeDasharray: '5,5' },
+    LIVES_ON: { stroke: EDGE_TYPES.livesOn, strokeWidth: 1 + weightFactor },
+    CREATED: { stroke: EDGE_TYPES.created, strokeWidth: 1.5 + weightFactor },
+    default: { stroke: EDGE_TYPES.default, strokeWidth: 1 + weightFactor }
   };
   return edgeStyles[type] || edgeStyles.default;
 };
@@ -295,7 +296,7 @@ const getConcentricLayout = (nodes) => {
       if (!edgesMap.has(newEdge.id)) {
         edgesMap.set(newEdge.id, {
           ...newEdge, data: { ...newEdge.data, isNew: true }, 
-          style: getEdgeStyle(enableEdgeColoring ? (newEdge.data?.type || 'default') : 'default'),
+          style: getEdgeStyle(enableEdgeColoring ? (newEdge.data?.type || 'default') : 'default', newEdge.data?.weight || 1),
           labelStyle: { fill: COLORS.nodeLabel, fontWeight: 600, fontSize: '10px', fontFamily: '"Open Sans", sans-serif' },
           labelBgStyle: { fill: COLORS.background, fillOpacity: 0.8 }, labelBgPadding: [4, 2], labelBgBorderRadius: 4
         });
@@ -374,7 +375,7 @@ export default function App() {
       
             setEdges(eds => eds.map(edge => ({
               ...edge,
-              style: getEdgeStyle(enableEdgeColoring ? (edge.data?.type || 'default') : 'default')
+              style: getEdgeStyle(enableEdgeColoring ? (edge.data?.type || 'default') : 'default', edge.data?.weight || 1)
             })));
           }, [enableEdgeColoring, setEdges]);
       
@@ -482,7 +483,7 @@ export default function App() {
           // Lokal die Kante aktualisieren (Stil neu berechnen falls Typ geändert)
           setEdges(eds => eds.map(e => e.id === edge.id ? {
             ...e,
-            style: getEdgeStyle(enableEdgeColoring ? type : 'default')
+            style: getEdgeStyle(enableEdgeColoring ? type : 'default', properties.weight || 1)
           } : e));
         } catch (e) {
           console.error("Persist edge error:", e);
@@ -672,7 +673,7 @@ export default function App() {
                                 id: `e-${source}-${type}-${target}`,
                                 label: type.replace("_", " ").toLowerCase(),
                                 data: { type },
-                                style: getEdgeStyle(enableEdgeColoring ? type : 'default'),
+                                style: getEdgeStyle(enableEdgeColoring ? type : 'default', 1),
                                 animated: ["TRAVELS_WITH", "CONNECTS", "FOLLOWS"].includes(type)
                               };
                               try {
@@ -843,7 +844,7 @@ export default function App() {
                     label: edgeData?.label || relType.replace("_", " ").toLowerCase(),
                     animated: edgeData?.animated || ["TRAVELS_WITH", "CONNECTS", "FOLLOWS"].includes(relType), 
                     data: edgeData?.data || { type: relType }, 
-                    style: getEdgeStyle(enableEdgeColoring ? relType : 'default') 
+                    style: getEdgeStyle(enableEdgeColoring ? relType : 'default', edgeData?.data?.weight || 1) 
                   };
                   
                   setNodes(nds => deduplicate([...nds, newNode]));
@@ -1253,7 +1254,7 @@ export default function App() {
 
       {/* HISTOGRAM (RIGHT) */}
       <Box sx={{ position: 'absolute', top: 16, right: 16, zIndex: 1200 }}>
-        <Paper elevation={3} sx={{ p: 2, width: 220, bgcolor: 'rgba(30, 30, 30, 0.9)', borderRadius: 2, border: `1px solid ${COLORS.panelBorder}` }}>
+        <Paper elevation={3} sx={{ p: 2, width: 220, bgcolor: 'rgba(30, 30, 30, 0.9)', borderRadius: 2, border: `1px solid ${COLORS.panelBorder}`, userSelect: 'none' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}><FilterIcon size="small" sx={{ mr: 1, color: 'text.secondary' }} /><Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>Entity Types</Typography></Box>
           <FormGroup>
             {stats.map(([type, count]) => {

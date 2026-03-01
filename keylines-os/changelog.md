@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.28.0] - 2026-03-01
+
+### Added
+- **Weighted Edge Thickness**: Implemented dynamic stroke width for relationships. Edges now scale their thickness based on the `weight` property (1-10) provided by the database, allowing for immediate visual identification of relationship strength.
+- **Backend Property Passthrough**: The expansion engine now automatically includes all relationship properties (like `weight`) in the edge data sent to the frontend.
+
+### Changed
+- **Histogram Interaction Refinement**: Applied `user-select: none` to the Entity Types panel. This prevents accidental text selection when using `Shift+Click` for multi-type highlighting, ensuring a smoother and more focused user experience.
+
 ## [1.27.0] - 2026-02-28
 
 ### Added
