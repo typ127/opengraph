@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.23.0] - 2026-02-28
+
+### Added
+- **Edge Path Customization**: Users can now choose between different visual styles for relationship lines in the Settings panel: `Straight`, `Bezier (Curved)`, `Step`, `Smooth Step`, and `Simple Bezier`.
+- **Settings Persistence**: All visualization preferences (Edge Coloring, Node Donuts, and Edge Path Style) are now automatically saved to `localStorage` and restored upon browser reload.
+- **Dynamic Style Sync**: Existing edges on the canvas update their path style in real-time when the setting is changed.
+
+### Changed
+- **Subtle Interaction Model**: Removed all visible handles and hover outlines during edge creation to maintain a clean, immersive aesthetic. Feedback is now provided solely through cursor changes and the animated connection line.
+- **Enhanced Reliability**: Relationship deletion is now fully direction-agnostic and synchronized across all UI components (Stage, Profile Drawer, and Segment Preview).
+
+### Fixed
+- **Edge Style Consistency**: Unified `defaultEdgeOptions` with global settings to ensure newly expanded or created edges immediately match the active visualization rules.
+- **Settings Initialization**: Fixed a bug where default visualization states could conflict with user preferences on first load.
+
 ## [1.22.0] - 2026-02-28
 
 ### Added

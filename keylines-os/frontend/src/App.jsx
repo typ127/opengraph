@@ -40,7 +40,11 @@ import {
   TextField,
   InputAdornment,
   Button,
-  Switch
+  Switch,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel
 } from '@mui/material';
 import { 
   AccountTree as TreeIcon, 
@@ -299,11 +303,23 @@ export default function App() {
   const [highlightedTypes, setHighlightedTypes] = useState(new Set());
   const [searchResults, setSearchResults] = useState([]);
       const [isLeftDrawerOpen, setIsLeftDrawerOpen] = useState(false);
-      const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-          const [enableEdgeColoring, setEnableEdgeColoring] = useState(true);
-              const [enableDonuts, setEnableDonuts] = useState(true);
-                  const [pendingConnection, setPendingConnection] = useState(null);
-                  const [isEdgeCreationMode, setIsEdgeCreationMode] = useState(false);
+          const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+          
+          // Settings mit LocalStorage Initialisierung
+          const [enableEdgeColoring, setEnableEdgeColoring] = useState(() => {
+            const saved = localStorage.getItem('kl_enableEdgeColoring');
+            return saved !== null ? JSON.parse(saved) : true;
+          });
+          const [enableDonuts, setEnableDonuts] = useState(() => {
+            const saved = localStorage.getItem('kl_enableDonuts');
+            return saved !== null ? JSON.parse(saved) : true;
+          });
+          const [edgePathType, setEdgePathType] = useState(() => {
+            return localStorage.getItem('kl_edgePathType') || 'straight';
+          });
+      
+          const [pendingConnection, setPendingConnection] = useState(null);
+                        const [isEdgeCreationMode, setIsEdgeCreationMode] = useState(false);
                   
                   const [isEditingNode, setIsEditingNode] = useState(false);
               
@@ -314,22 +330,38 @@ export default function App() {
   const activeLayoutRef = useRef(activeLayout);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   useEffect(() => { edgesRef.current = edges; }, [edges]);
-      useEffect(() => { activeLayoutRef.current = activeLayout; }, [activeLayout]);
-  
+          useEffect(() => { activeLayoutRef.current = activeLayout; }, [activeLayout]);
+      
+          // Persist Settings to LocalStorage
           useEffect(() => {
+            localStorage.setItem('kl_enableEdgeColoring', JSON.stringify(enableEdgeColoring));
+            localStorage.setItem('kl_enableDonuts', JSON.stringify(enableDonuts));
+            localStorage.setItem('kl_edgePathType', edgePathType);
+          }, [enableEdgeColoring, enableDonuts, edgePathType]);
+      
+          useEffect(() => {
+      
             setEdges(eds => eds.map(edge => ({
               ...edge,
               style: getEdgeStyle(enableEdgeColoring ? (edge.data?.type || 'default') : 'default')
             })));
           }, [enableEdgeColoring, setEdges]);
       
-                      useEffect(() => {
-                        setNodes(nds => nds.map(node => ({
-                          ...node,
-                          className: isEdgeCreationMode ? 'edge-mode-node' : '',
-                          data: { ...node.data, showDonuts: enableDonuts, isEdgeCreationMode: isEdgeCreationMode }
-                        })));
-                      }, [enableDonuts, isEdgeCreationMode, setNodes]);
+                          useEffect(() => {
+                            setNodes(nds => nds.map(node => ({
+                              ...node,
+                              className: isEdgeCreationMode ? 'edge-mode-node' : '',
+                              data: { ...node.data, showDonuts: enableDonuts, isEdgeCreationMode: isEdgeCreationMode }
+                            })));
+                          }, [enableDonuts, isEdgeCreationMode, setNodes]);
+                      
+                          useEffect(() => {
+                            setEdges(eds => eds.map(edge => ({
+                              ...edge,
+                              type: edgePathType
+                            })));
+                          }, [edgePathType, setEdges]);
+                      
                                 // Funktion zum manuellen Anpassen der Kamera an neue Knotenpositionen,
   // ignoriert CSS-Animationen für mehr Präzision.
   const fitToNodes = useCallback((nds) => {
@@ -1153,9 +1185,10 @@ export default function App() {
                     onEdgeClick={(e, edge) => e.shiftKey && openEdgeDetails(edge)}
                     onConnect={onConnect}
                     onPaneClick={() => { closeSidebar(); setHighlightedTypes(new Set()); }}
-                    onMove={(e, v) => setZoomLevel(v.zoom)} onDrop={onDrop} onDragOver={onDragOver}
-                                nodeTypes={nodeTypes} defaultEdgeOptions={{ type: 'straight' }} fitView
+                                onMove={(e, v) => setZoomLevel(v.zoom)} onDrop={onDrop} onDragOver={onDragOver}
+                                nodeTypes={nodeTypes} defaultEdgeOptions={{ type: edgePathType }} fitView
                                 nodesDraggable={!isEdgeCreationMode}
+                    
                                 nodesConnectable={true}
                                 selectNodesOnDrag={false}
                                 connectionMode="loose"
@@ -1430,7 +1463,31 @@ export default function App() {
               />
               <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', ml: 4, mb: 2, display: 'block' }}>Display neighbor distribution rings around nodes</Typography>
             </FormGroup>
+            
             <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
+            
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 2, letterSpacing: 1 }}>EDGE PATH STYLE</Typography>
+            <FormControl fullWidth size="small" sx={{ px: 1, mt: 1 }}>
+              <InputLabel id="edge-style-label" sx={{ ml: 1, color: 'rgba(255,255,255,0.5)' }}>Path Type</InputLabel>
+              <Select
+                labelId="edge-style-label"
+                value={edgePathType}
+                label="Path Type"
+                onChange={(e) => setEdgePathType(e.target.value)}
+                sx={{ 
+                  bgcolor: 'rgba(255,255,255,0.03)',
+                  color: '#fff',
+                  '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' }
+                }}
+              >
+                <MenuItem value="straight">Straight</MenuItem>
+                <MenuItem value="bezier">Bezier (Curved)</MenuItem>
+                <MenuItem value="step">Step</MenuItem>
+                <MenuItem value="smoothstep">Smooth Step</MenuItem>
+                <MenuItem value="simplebezier">Simple Bezier</MenuItem>
+              </Select>
+            </FormControl>
+            <Box sx={{ flexGrow: 1 }} />
           </Box>
         </Drawer>
               </Box>
