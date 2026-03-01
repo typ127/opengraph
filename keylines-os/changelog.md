@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.24.0] - 2026-02-28
+
+### Added
+- **Full Relationship Editing**: Users can now modify existing relationships in the right drawer. This includes changing the relationship type (via a dropdown) and editing custom properties like `weight`, `since`, or `status`.
+- **Intelligent Neighbor Addition**: Neighbors added via the drawer now correctly inherit their real database type and properties on the stage, replacing the generic "manual" label.
+- **Backend Edge Update Engine**: Implemented a robust `/update-edge` endpoint that handles relationship type renames by managing edge deletion and recreation in Memgraph while preserving properties.
+
+### Changed
+- **Optimized Drawer Logic**: Lifted relationship lookup logic to ensure all actions (Add/Delete) in the neighbor list have access to full database metadata.
+- **Improved Interaction Flow**: Selecting an edge for editing now creates a data snapshot, allowing users to revert changes using the `Escape` key.
+
+### Fixed
+- **ReferenceError Fix**: Resolved a scope issue in the drawer where `dbEdge` was not accessible to all interaction buttons.
+- **Backend Syntax Compatibility**: Fixed a Python `SyntaxError` by moving string escaping logic outside of f-string expressions, ensuring compatibility with Python 3.11.
+
 ## [1.23.0] - 2026-02-28
 
 ### Added

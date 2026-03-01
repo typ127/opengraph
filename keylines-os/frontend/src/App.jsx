@@ -321,11 +321,11 @@ export default function App() {
           const [pendingConnection, setPendingConnection] = useState(null);
                         const [isEdgeCreationMode, setIsEdgeCreationMode] = useState(false);
                   
-                  const [isEditingNode, setIsEditingNode] = useState(false);
-              
-            const [editSnapshot, setEditSnapshot] = useState(null);
-
-  const nodesRef = useRef(nodes);
+                      const [isEditingNode, setIsEditingNode] = useState(false);
+                      const [isEditingEdge, setIsEditingEdge] = useState(false);
+                      const [editSnapshot, setEditSnapshot] = useState(null);
+                      const [edgeEditSnapshot, setEdgeEditSnapshot] = useState(null);
+                    const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
   const activeLayoutRef = useRef(activeLayout);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
@@ -387,62 +387,123 @@ export default function App() {
     setSelectedNode(prev => prev && prev.id === nodeId ? { ...prev, data: { ...prev.data, ...newData } } : prev);
   }, [setNodes]);
 
-  const persistNode = useCallback(async (node) => {
-    if (!node) return;
-    console.log("PERSISTING NODE:", node.id, node.data.label);
-    
-    // Draft-Flag entfernen, da wir jetzt speichern
-    const nodeToPersist = {
-      ...node,
-      data: { ...node.data, isDraft: false }
-    };
-
-    try {
-      await fetch('http://localhost:8000/upsert-node', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: nodeToPersist.id, data: nodeToPersist.data })
-      });
-      
-      // Lokal das Flag ebenfalls löschen
-      setNodes(nds => nds.map(n => n.id === node.id ? nodeToPersist : n));
-    } catch (e) {
-      console.error("Persist error:", e);
-    }
-  }, [setNodes]);
-
-      const closeSidebar = useCallback((skipPersist = false) => { 
-        // Wenn wir im Edit-Modus waren, speichern wir die Änderungen (außer beim Löschen oder Abbrechen)
-        if (selectedNode && isEditingNode && !skipPersist) {
-          persistNode(selectedNode);
+      const persistNode = useCallback(async (node) => {
+        if (!node) return;
+        console.log("PERSISTING NODE:", node.id, node.data.label);
+        
+        // Draft-Flag entfernen, da wir jetzt speichern
+        const nodeToPersist = {
+          ...node,
+          data: { ...node.data, isDraft: false }
+        };
+  
+        try {
+          await fetch('http://localhost:8000/upsert-node', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: nodeToPersist.id, data: nodeToPersist.data })
+          });
+          
+          // Lokal das Flag ebenfalls löschen
+          setNodes(nds => nds.map(n => n.id === node.id ? nodeToPersist : n));
+        } catch (e) {
+          console.error("Persist error:", e);
         }
+      }, [setNodes]);
+  
+      const updateEdgeData = useCallback((edgeId, newData) => {
+        setEdges((eds) =>
+          eds.map((edge) => {
+            if (edge.id === edgeId) {
+              // Falls der Typ geändert wird, auch das Label anpassen
+              const label = newData.type ? newData.type.replace("_", " ").toLowerCase() : edge.label;
+              return { ...edge, label, data: { ...edge.data, ...newData } };
+            }
+            return edge;
+          })
+        );
+        // Auch den lokalen State der selektierten Kante aktualisieren
+        setSelectedEdge(prev => prev && prev.id === edgeId ? { 
+          ...prev, 
+          label: newData.type ? newData.type.replace("_", " ").toLowerCase() : prev.label,
+          data: { ...prev.data, ...newData } 
+        } : prev);
+      }, [setEdges]);
+  
+      const persistEdge = useCallback(async (edge) => {
+        if (!edge || !edgeEditSnapshot) return;
+        console.log("PERSISTING EDGE:", edge.id);
+  
+        try {
+          const { type, isNew, ...properties } = edge.data;
+          await fetch('http://localhost:8000/update-edge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              source: edge.source, 
+              target: edge.target, 
+              old_type: edgeEditSnapshot.type,
+              new_type: type,
+              properties
+            })
+          });
+          
+          // Lokal die Kante aktualisieren (Stil neu berechnen falls Typ geändert)
+          setEdges(eds => eds.map(e => e.id === edge.id ? {
+            ...e,
+            style: getEdgeStyle(enableEdgeColoring ? type : 'default')
+          } : e));
+        } catch (e) {
+          console.error("Persist edge error:", e);
+        }
+      }, [edgeEditSnapshot, enableEdgeColoring, setEdges]);
+            const closeSidebar = useCallback((skipPersist = false) => { 
+              // Wenn wir im Edit-Modus waren, speichern wir die Änderungen (außer beim Löschen oder Abbrechen)
+              if (selectedNode && isEditingNode && !skipPersist) {
+                persistNode(selectedNode);
+              }
+              if (selectedEdge && isEditingEdge && !skipPersist) {
+                persistEdge(selectedEdge);
+              }
+              
               setSelectedNode(null); 
               setSelectedEdge(null);
               setPendingConnection(null);
               setPreviewData(null); 
-         
-        setSelectedNodeNeighbors([]); 
-        setIsEditingNode(false);
-        setEditSnapshot(null);
-      }, [selectedNode, isEditingNode, persistNode]);
-    const cancelEditing = useCallback(() => {
-    if (!selectedNode) return;
-    
-    // Fall 1: Echter, ungespeicherter Entwurf -> Löschen
-    if (selectedNode.data.isDraft) {
-      setNodes(nds => nds.filter(n => n.id !== selectedNode.id));
-    } 
-    // Fall 2: Existierender Knoten (bereits in DB oder geladen) -> Revert auf Snapshot
-    else if (editSnapshot) {
-      setNodes(nds => nds.map(node => 
-        node.id === selectedNode.id ? { ...node, data: { ...node.data, ...editSnapshot } } : node
-      ));
-    }
-    
-    closeSidebar(true);
-  }, [selectedNode, editSnapshot, setNodes, closeSidebar]);
-
-  const deleteNodePermanently = useCallback(async (nodeId) => {
+              setSelectedNodeNeighbors([]); 
+              setSelectedNodeEdges([]);
+              setIsEditingNode(false);
+              setIsEditingEdge(false);
+              setEditSnapshot(null);
+              setEdgeEditSnapshot(null);
+            }, [selectedNode, isEditingNode, persistNode, selectedEdge, isEditingEdge, persistEdge]);
+        
+        const cancelEditing = useCallback(() => {
+          // Fall 1: Knoten-Edit abbrechen
+          if (selectedNode) {
+            if (selectedNode.data.isDraft) {
+              setNodes(nds => nds.filter(n => n.id !== selectedNode.id));
+            } else if (editSnapshot) {
+              setNodes(nds => nds.map(node => 
+                node.id === selectedNode.id ? { ...node, data: { ...node.data, ...editSnapshot } } : node
+              ));
+            }
+          }
+          
+          // Fall 2: Kanten-Edit abbrechen
+          if (selectedEdge && edgeEditSnapshot) {
+            setEdges(eds => eds.map(edge => 
+              edge.id === selectedEdge.id ? { 
+                ...edge, 
+                label: edgeEditSnapshot.type.replace("_", " ").toLowerCase(),
+                data: { ...edge.data, ...edgeEditSnapshot } 
+              } : edge
+            ));
+          }
+          
+          closeSidebar(true);
+        }, [selectedNode, editSnapshot, selectedEdge, edgeEditSnapshot, setNodes, setEdges, closeSidebar]);
+      const deleteNodePermanently = useCallback(async (nodeId) => {
     if (!window.confirm("Do you really want to delete this entity permanently from the database?")) return;
     
     try {
@@ -551,17 +612,19 @@ export default function App() {
     
         }, [selectedNode, isEditingNode, persistNode]);
     
-            const openEdgeDetails = useCallback((edge) => {
-              // Wenn wir gerade einen Knoten editiert haben, speichern wir diesen erst
-              if (selectedNode && isEditingNode) {
-                persistNode(selectedNode);
-              }
-              setSelectedEdge(edge);
-              setSelectedNode(null);
-              setPendingConnection(null);
-              setPreviewData(null);
-              setIsEditingNode(false);
-            }, [selectedNode, isEditingNode, persistNode]);
+    const openEdgeDetails = useCallback((edge) => {
+      // Wenn wir gerade einen Knoten editiert haben, speichern wir diesen erst
+      if (selectedNode && isEditingNode) {
+        persistNode(selectedNode);
+      }
+      setSelectedEdge(edge);
+      setSelectedNode(null);
+      setPendingConnection(null);
+      setPreviewData(null);
+      setIsEditingNode(false);
+      setIsEditingEdge(false);
+      setEdgeEditSnapshot(null);
+    }, [selectedNode, isEditingNode, persistNode]);
         
                 const onConnect = useCallback((params) => {
                   console.log("Connection initiated:", params);
@@ -629,15 +692,14 @@ export default function App() {
                             }, [pendingConnection, enableEdgeColoring, setEdges, setNodes]);
                         
         
-      const handleDrawerClose = useCallback((event, reason) => {
-    if (reason === 'escapeKeyDown' && isEditingNode) {
-      cancelEditing();
-    } else {
-      closeSidebar();
-    }
-  }, [isEditingNode, cancelEditing, closeSidebar]);
-
-  const applyLayout = useCallback((nds, eds, type) => {
+          const handleDrawerClose = useCallback((event, reason) => {
+            if (reason === 'escapeKeyDown' && (isEditingNode || isEditingEdge)) {
+              cancelEditing();
+            } else {
+              closeSidebar();
+            }
+          }, [isEditingNode, isEditingEdge, cancelEditing, closeSidebar]);
+        const applyLayout = useCallback((nds, eds, type) => {
     if (type === 'hierarchical') return getLayoutedElements(nds, eds);
     if (type === 'circular') return getCircularLayout(nds);
     if (type === 'force') return getForceLayout(nds, eds);
@@ -727,32 +789,41 @@ export default function App() {
                     } catch (error) { console.error(error); }
                   }, [applyLayout, fitToNodes, setNodes, setEdges, enableEdgeColoring, enableDonuts]);
               
-            const addSingleNode = useCallback((sourceId, targetNode) => {
-              const currentNodes = nodesRef.current;
-              const currentEdges = edgesRef.current;
-              if (currentNodes.find(n => n.id === targetNode.id)) return;
-              const sourceNode = currentNodes.find(n => n.id === sourceId);
-              const newNode = { 
-                ...targetNode, 
-                type: 'keylines', 
-                position: { ...(sourceNode?.position || {x:400,y:400}) }, 
-                data: { 
-                  ...targetNode.data, 
-                  showDonuts: enableDonuts,
-                  onSegmentClick: (cat, e) => expandNode(targetNode.id, cat, e) 
-                } 
-              };
-              const newEdge = { id: `e-${sourceId}-manual-${targetNode.id}`, source: sourceId, target: targetNode.id, animated: true, data: { type: 'manual' }, style: getEdgeStyle('default') };
-              
-              setNodes(nds => deduplicate([...nds, newNode]));
-              setEdges(eds => deduplicate([...eds, newEdge]));
-              setTimeout(() => {
-                setNodes(nds => applyLayout(nds, edgesRef.current, activeLayoutRef.current));
-                setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
-              }, 50);
-            }, [expandNode, applyLayout, fitView, setNodes, setEdges, enableEdgeColoring, enableDonuts]);
-        
-      const onDrillDown = useCallback(() => {
+                const addSingleNode = useCallback((sourceId, targetNode, edgeData = null) => {
+                  const currentNodes = nodesRef.current;
+                  const currentEdges = edgesRef.current;
+                  if (currentNodes.find(n => n.id === targetNode.id)) return;
+                  const sourceNode = currentNodes.find(n => n.id === sourceId);
+                  const newNode = { 
+                    ...targetNode, 
+                    type: 'keylines', 
+                    position: { ...(sourceNode?.position || {x:400,y:400}) }, 
+                    data: { 
+                      ...targetNode.data, 
+                      showDonuts: enableDonuts,
+                      onSegmentClick: (cat, e) => expandNode(targetNode.id, cat, e) 
+                    } 
+                  };
+            
+                  const relType = edgeData?.data?.type || 'RELATES_TO';
+                  const newEdge = { 
+                    id: edgeData?.id || `e-${sourceId}-${relType}-${targetNode.id}`, 
+                    source: sourceId, 
+                    target: targetNode.id, 
+                    label: edgeData?.label || relType.replace("_", " ").toLowerCase(),
+                    animated: edgeData?.animated || ["TRAVELS_WITH", "CONNECTS", "FOLLOWS"].includes(relType), 
+                    data: edgeData?.data || { type: relType }, 
+                    style: getEdgeStyle(enableEdgeColoring ? relType : 'default') 
+                  };
+                  
+                  setNodes(nds => deduplicate([...nds, newNode]));
+                  setEdges(eds => deduplicate([...eds, newEdge]));
+                  setTimeout(() => {
+                    setNodes(nds => applyLayout(nds, edgesRef.current, activeLayoutRef.current));
+                    setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
+                  }, 50);
+                }, [expandNode, applyLayout, fitView, setNodes, setEdges, enableEdgeColoring, enableDonuts]);
+                  const onDrillDown = useCallback(() => {
     if (highlightedTypes.size === 0) return;
     setNodes((nds) => {
       const remainingNodes = nds.filter(n => highlightedTypes.has(n.data.type));
@@ -862,27 +933,30 @@ export default function App() {
     if (selectedNode && nodeIdsToRemove.has(selectedNode.id)) closeSidebar();
   }, [selectedNode, setNodes, setEdges, closeSidebar]);
 
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
-      if (e.code === 'Space') { e.preventDefault(); const nodeIds = nodesRef.current.map(n => n.id); if (nodeIds.length > 0) batchExpandNodes(nodeIds); }
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        e.preventDefault();
-        if (e.shiftKey) {
-          const selectedNodes = nodesRef.current.filter(n => n.selected);
-          const selectedIds = new Set(selectedNodes.map(n => n.id));
-          if (selectedIds.size > 0) {
-            setNodes(selectedNodes); setEdges(eds => eds.filter(edge => selectedIds.has(edge.source) && selectedIds.has(edge.target)));
-            if (selectedNode && !selectedIds.has(selectedNode.id)) closeSidebar();
+      useEffect(() => {
+        const handleKeyDown = (e) => {
+          if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
+            if (e.key === 'Escape') cancelEditing();
+            return;
           }
-        } else deleteSelectedElements();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [expandNode, batchExpandNodes, deleteSelectedElements, selectedNode, closeSidebar]);
-
-  const onDragOver = useCallback((event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; }, []);
+          if (e.code === 'Space') { e.preventDefault(); const nodeIds = nodesRef.current.map(n => n.id); if (nodeIds.length > 0) batchExpandNodes(nodeIds); }
+          if (e.key === 'Escape') cancelEditing();
+          if (e.key === 'Delete' || e.key === 'Backspace') {
+            e.preventDefault();
+            if (e.shiftKey) {
+              const selectedNodes = nodesRef.current.filter(n => n.selected);
+              const selectedIds = new Set(selectedNodes.map(n => n.id));
+              if (selectedIds.size > 0) {
+                setNodes(selectedNodes); setEdges(eds => eds.filter(edge => selectedIds.has(edge.source) && selectedIds.has(edge.target)));
+                if (selectedNode && !selectedIds.has(selectedNode.id)) closeSidebar();
+              }
+            } else deleteSelectedElements();
+          }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+      }, [expandNode, batchExpandNodes, deleteSelectedElements, selectedNode, closeSidebar, cancelEditing, isEditingNode, isEditingEdge]);
+    const onDragOver = useCallback((event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; }, []);
 
   const onDrop = useCallback((event) => {
     event.preventDefault();
@@ -1208,27 +1282,37 @@ export default function App() {
                                                       {selectedNode ? React.createElement(Icons[selectedNode.data.icon] || Icons.HelpOutline, { sx: { fontSize: 32, color: '#fff' } }) : (selectedEdge || pendingConnection) ? <Icons.Link sx={{ fontSize: 32, color: '#fff' }} /> : <GroupIcon sx={{ fontSize: 32, color: '#fff' }} />}
                                                     </Avatar>
                                   
-                                                    {(selectedNode || selectedEdge || pendingConnection) && (
-                                                      <Tooltip title={pendingConnection ? "Define Relationship" : selectedEdge ? "Edit Edge (Coming Soon)" : (isEditingNode ? "View Info" : "Edit Properties")}>
-                                                        <span>
-                                                          <IconButton 
-                                                            onClick={() => {
-                                                              if (selectedEdge || pendingConnection) return;
-                                                              if (!isEditingNode) {
-                                                                setEditSnapshot({ label: selectedNode.data.label, description: selectedNode.data.description, icon: selectedNode.data.icon });
-                                                              } else {
-                                                                setEditSnapshot(null);
-                                                              }
-                                                              setIsEditingNode(!isEditingNode);
-                                                            }} 
-                                                            disabled={!!selectedEdge || !!pendingConnection}
-                                                            sx={{ bgcolor: 'rgba(255,255,255,0.05)', '&:hover': { bgcolor: isEditingNode ? `${COLORS.secondary}22` : `${COLORS.primary}22` } }}
-                                                          >
-                                                            {isEditingNode ? <Icons.Visibility sx={{ fontSize: 20, color: COLORS.secondary }} /> : <Icons.Edit sx={{ fontSize: 20, color: COLORS.primary }} />}
-                                                          </IconButton>
-                                                        </span>
-                                                      </Tooltip>
-                                                    )}
+                                                                      {(selectedNode || selectedEdge || pendingConnection) && (
+                                                                        <Tooltip title={pendingConnection ? "Define Relationship" : (selectedEdge ? (isEditingEdge ? "View Info" : "Edit Relationship") : (isEditingNode ? "View Info" : "Edit Properties"))}>
+                                                                          <span>
+                                                                            <IconButton 
+                                                                              onClick={() => {
+                                                                                if (pendingConnection) return;
+                                                                                if (selectedEdge) {
+                                                                                  if (!isEditingEdge) {
+                                                                                    setEdgeEditSnapshot({ ...selectedEdge.data });
+                                                                                  } else {
+                                                                                    setEdgeEditSnapshot(null);
+                                                                                  }
+                                                                                  setIsEditingEdge(!isEditingEdge);
+                                                                                } else {
+                                                                                  if (!isEditingNode) {
+                                                                                    setEditSnapshot({ label: selectedNode.data.label, description: selectedNode.data.description, icon: selectedNode.data.icon });
+                                                                                  } else {
+                                                                                    setEditSnapshot(null);
+                                                                                  }
+                                                                                  setIsEditingNode(!isEditingNode);
+                                                                                }
+                                                                              }} 
+                                                                              disabled={!!pendingConnection}
+                                                                              sx={{ bgcolor: 'rgba(255,255,255,0.05)', '&:hover': { bgcolor: (isEditingNode || isEditingEdge) ? `${COLORS.secondary}22` : `${COLORS.primary}22` } }}
+                                                                            >
+                                                                              {(isEditingNode || isEditingEdge) ? <Icons.Visibility sx={{ fontSize: 20, color: COLORS.secondary }} /> : <Icons.Edit sx={{ fontSize: 20, color: COLORS.primary }} />}
+                                                                            </IconButton>
+                                                                          </span>
+                                                                        </Tooltip>
+                                                                      )}
+                                                    
                                                 </Box>
               <IconButton onClick={() => closeSidebar()}><CloseIcon /></IconButton>
             </Box>
@@ -1318,6 +1402,74 @@ export default function App() {
                     Cancel
                   </Button>
                 </>
+              ) : selectedEdge && isEditingEdge ? (
+                <>
+                  <Typography variant="caption" sx={{ color: COLORS.primary, fontWeight: 'bold', letterSpacing: 1, display: 'block', mb: 2 }}>EDIT RELATIONSHIP</Typography>
+                  <FormControl fullWidth size="small" sx={{ mb: 3 }}>
+                    <InputLabel id="rel-type-label" sx={{ color: 'rgba(255,255,255,0.5)' }}>Relationship Type</InputLabel>
+                    <Select
+                      labelId="rel-type-label"
+                      value={selectedEdge.data?.type || 'RELATES_TO'}
+                      label="Relationship Type"
+                      onChange={(e) => updateEdgeData(selectedEdge.id, { type: e.target.value })}
+                      sx={{ bgcolor: 'rgba(255,255,255,0.03)', color: '#fff' }}
+                    >
+                      {['RELATES_TO', 'RULES', 'CONQUERED', 'PROTECTS', 'GUIDES', 'LIVES_ON', 'CREATED', 'TRAVELS_WITH', 'FOLLOWS'].map(t => (
+                        <MenuItem key={t} value={t}>{t.replace("_", " ")}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  
+                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 1, display: 'block' }}>PROPERTIES</Typography>
+                  {Object.entries(selectedEdge.data || {})
+                    .filter(([key]) => !['type', 'isNew'].includes(key))
+                    .map(([key, value]) => (
+                      <TextField
+                        key={key}
+                        fullWidth label={key.charAt(0).toUpperCase() + key.slice(1)}
+                        variant="outlined" size="small"
+                        value={value || ''}
+                        onChange={(e) => updateEdgeData(selectedEdge.id, { [key]: e.target.value })}
+                        onKeyDown={(e) => { if (e.key === 'Enter') closeSidebar(); if (e.key === 'Escape') cancelEditing(); }}
+                        sx={{ mb: 2 }}
+                      />
+                    ))
+                  }
+
+                  <Box sx={{ mt: 2, mb: 3 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', display: 'block', mb: 1 }}>CONNECTED NODES</Typography>
+                    <List dense>
+                      {(() => {
+                        const s = nodes.find(n => n.id === selectedEdge.source);
+                        const t = nodes.find(n => n.id === selectedEdge.target);
+                        return (
+                          <>
+                            <ListItem sx={{ px: 0 }}>
+                              <ListItemIcon><Icons.ArrowOutward sx={{ color: s ? getHexColor(s.data.type) : 'gray', fontSize: 18 }} /></ListItemIcon>
+                              <ListItemText primary="Source" secondary={s?.data.label || selectedEdge.source} primaryTypographyProps={{ variant: 'body2' }} secondaryTypographyProps={{ style: { color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' } }} />
+                            </ListItem>
+                            <ListItem sx={{ px: 0 }}>
+                              <ListItemIcon><Icons.ArrowDownward sx={{ color: t ? getHexColor(t.data.type) : 'gray', fontSize: 18 }} /></ListItemIcon>
+                              <ListItemText primary="Target" secondary={t?.data.label || selectedEdge.target} primaryTypographyProps={{ variant: 'body2' }} secondaryTypographyProps={{ style: { color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' } }} />
+                            </ListItem>
+                          </>
+                        );
+                      })()}
+                    </List>
+                  </Box>
+
+                  <Box sx={{ flexGrow: 1 }} />
+                  <Button 
+                    variant="outlined" 
+                    color="error" 
+                    fullWidth 
+                    startIcon={<Icons.DeleteForever />} 
+                    onClick={() => deleteEdgePermanently(selectedEdge)}
+                    sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 'bold', mb: 2, borderColor: 'rgba(211, 47, 47, 0.3)' }}
+                  >
+                    Delete Relationship
+                  </Button>
+                </>
               ) : selectedEdge ? (
                             <>
                               <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#fff' }}>Relationship</Typography>
@@ -1394,42 +1546,41 @@ export default function App() {
                               <List>
                                 {(previewData ? previewData.nodes : selectedNodeNeighbors)
                                   .sort((a, b) => (a.data.type || '').localeCompare(b.data.type || ''))
-                                  .map(node => (
-                                    <ListItem key={node.id} sx={{ px: 0 }}>
-                                      <ListItemAvatar><Avatar sx={{ bgcolor: getHexColor(node.data.type), width: 32, height: 32 }}>{React.createElement(Icons[node.data.icon] || Icons.HelpOutline, { sx: { fontSize: 18, color: '#fff' } })}</Avatar></ListItemAvatar>
-                                      <ListItemText primary={node.data.label} secondary={node.data.type} primaryTypographyProps={{ style: { fontSize: '0.9rem' } }} secondaryTypographyProps={{ style: { fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' } }} />
-                                                                                      <ListItemSecondaryAction sx={{ display: 'flex', gap: 0.5 }}>
-                                                                                        {(() => {
-                                                                                          const sourceId = selectedNode?.id || previewData?.sourceId;
-                                                                                          const relevantEdges = previewData ? previewData.edges : selectedNodeEdges;
-                                                                                          const dbEdge = relevantEdges?.find(e => 
-                                                                                            (e.source === sourceId && e.target === node.id) || 
-                                                                                            (e.source === node.id && e.target === sourceId)
-                                                                                          );
-                                                                                          
-                                                                                          // Falls die Kante auf der Stage ist, nutzen wir das Stage-Objekt (für Styles etc.),
-                                                                                          // ansonsten das DB-Objekt für das Löschen.
-                                                                                          const edgeOnStage = edges.find(e => 
-                                                                                            (e.source === sourceId && e.target === node.id) || 
-                                                                                            (e.source === node.id && e.target === sourceId)
-                                                                                          );
-                                                                                          
-                                                                                          const edgeToDelete = edgeOnStage || dbEdge;
-                                                              
-                                                                                          return edgeToDelete ? (
-                                                                                            <Tooltip title="Delete Relationship Permanently">
-                                                                                              <IconButton size="small" onClick={() => deleteEdgePermanently(edgeToDelete)} sx={{ color: 'rgba(211, 47, 47, 0.6)', '&:hover': { color: 'error.main' } }}>
-                                                                                                <Icons.LinkOff sx={{ fontSize: 20 }} />
-                                                                                              </IconButton>
-                                                                                            </Tooltip>
-                                                                                          ) : null;
-                                                                                        })()}
-                                                                                        <IconButton edge="end" color="primary" disabled={nodes.some(n => n.id === node.id)} onClick={() => addSingleNode(selectedNode?.id || previewData?.sourceId, node)}>
-                                                                                          {nodes.some(n => n.id === node.id) ? <CheckIcon sx={{ color: 'success.main' }} /> : <AddIcon />}
-                                                                                        </IconButton>
-                                                                                      </ListItemSecondaryAction>
-                                                                                                  </ListItem>
-                                  ))}
+                                                      .map(node => {
+                                                        const sourceId = selectedNode?.id || previewData?.sourceId;
+                                                        const relevantEdges = previewData ? previewData.edges : selectedNodeEdges;
+                                                        const dbEdge = relevantEdges?.find(e => 
+                                                          (e.source === sourceId && e.target === node.id) || 
+                                                          (e.source === node.id && e.target === sourceId)
+                                                        );
+                                                        
+                                                        const edgeOnStage = edges.find(e => 
+                                                          (e.source === sourceId && e.target === node.id) || 
+                                                          (e.source === node.id && e.target === sourceId)
+                                                        );
+                                                        
+                                                        const edgeToDelete = edgeOnStage || dbEdge;
+                                  
+                                                        return (
+                                                          <ListItem key={node.id} sx={{ px: 0 }}>
+                                                            <ListItemAvatar><Avatar sx={{ bgcolor: getHexColor(node.data.type), width: 32, height: 32 }}>{React.createElement(Icons[node.data.icon] || Icons.HelpOutline, { sx: { fontSize: 18, color: '#fff' } })}</Avatar></ListItemAvatar>
+                                                            <ListItemText primary={node.data.label} secondary={node.data.type} primaryTypographyProps={{ style: { fontSize: '0.9rem' } }} secondaryTypographyProps={{ style: { fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' } }} />
+                                                            <ListItemSecondaryAction sx={{ display: 'flex', gap: 0.5 }}>
+                                                              {edgeToDelete && (
+                                                                <Tooltip title="Delete Relationship Permanently">
+                                                                  <IconButton size="small" onClick={() => deleteEdgePermanently(edgeToDelete)} sx={{ color: 'rgba(211, 47, 47, 0.6)', '&:hover': { color: 'error.main' } }}>
+                                                                    <Icons.LinkOff sx={{ fontSize: 20 }} />
+                                                                  </IconButton>
+                                                                </Tooltip>
+                                                              )}
+                                                              <IconButton edge="end" color="primary" disabled={nodes.some(n => n.id === node.id)} onClick={() => addSingleNode(sourceId, node, dbEdge)}>
+                                                                {nodes.some(n => n.id === node.id) ? <CheckIcon sx={{ color: 'success.main' }} /> : <AddIcon />}
+                                                              </IconButton>
+                                                            </ListItemSecondaryAction>
+                                                          </ListItem>
+                                                        );
+                                                      })}
+                                  
                               </List>
                             </>
                           )}

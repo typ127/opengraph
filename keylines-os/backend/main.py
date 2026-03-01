@@ -311,6 +311,13 @@ class EdgeCreate(BaseModel):
     target: str
     type: str
 
+class EdgeUpdate(BaseModel):
+    source: str
+    target: str
+    old_type: str
+    new_type: str
+    properties: Dict[str, Any] = {}
+
 @app.post("/create-edge")
 async def create_edge(edge: EdgeCreate):
     rel_type = edge.type.upper().replace(" ", "_")
@@ -327,6 +334,41 @@ async def create_edge(edge: EdgeCreate):
         return {"status": "success"}
     except Exception as e:
         print(f"Edge creation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/update-edge")
+async def update_edge(update: EdgeUpdate):
+    old_type = update.old_type.upper().replace(" ", "_")
+    new_type = update.new_type.upper().replace(" ", "_")
+    
+    # 1. Falls der Typ sich ändert, müssen wir die alte Kante löschen und eine neue erstellen
+    if old_type != new_type:
+        delete_query = f"MATCH (a {{id: '{update.source}'}})-[e:{old_type}]-(b {{id: '{update.target}'}}) DELETE e;"
+        memgraph.execute(delete_query)
+    
+    # 2. Neue Kante mergen (oder bestehende updaten) und Properties setzen
+    props_set = ""
+    if update.properties:
+        props_list = []
+        for k, v in update.properties.items():
+            if isinstance(v, str):
+                safe_v = v.replace("'", "\\'")
+                props_list.append(f"e.{k} = '{safe_v}'")
+            else:
+                props_list.append(f"e.{k} = {v}")
+        props_set = ", " + ", ".join(props_list)
+
+    query = f"""
+    MATCH (a {{id: '{update.source}'}}), (b {{id: '{update.target}'}})
+    MERGE (a)-[e:{new_type}]->(b)
+    SET e.type = '{new_type}' {props_set}
+    RETURN e;
+    """
+    try:
+        memgraph.execute(query)
+        return {"status": "success"}
+    except Exception as e:
+        print(f"Edge update error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/delete-edge")
