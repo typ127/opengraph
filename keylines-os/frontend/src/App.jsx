@@ -6,9 +6,14 @@ import ReactFlow, {
   Controls, 
   Panel, 
   useReactFlow,
-  getRectOfNodes,
+  getNodesBounds,
   addEdge,
-  MarkerType
+  MarkerType,
+  BaseEdge,
+  getBezierPath,
+  getStraightPath,
+  getSmoothStepPath,
+  getSimpleBezierPath
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import KeyLinesNode from './KeyLinesNode';
@@ -88,6 +93,62 @@ import {
   const nodeTypes = {
     keylines: KeyLinesNode,
   };
+
+  const PathEdge = ({
+    id,
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
+    style = {},
+    markerEnd,
+    data,
+  }) => {
+    let edgePath = '';
+    let labelX, labelY;
+
+    const pathParams = { sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition };
+    const type = data?.pathType || 'straight';
+
+    if (type === 'bezier') [edgePath, labelX, labelY] = getBezierPath(pathParams);
+    else if (type === 'step') [edgePath, labelX, labelY] = getSmoothStepPath({ ...pathParams, borderRadius: 0 });
+    else if (type === 'smoothstep') [edgePath, labelX, labelY] = getSmoothStepPath(pathParams);
+    else if (type === 'simplebezier') [edgePath, labelX, labelY] = getSimpleBezierPath(pathParams);
+    else [edgePath, labelX, labelY] = getStraightPath(pathParams);
+
+    const intermediateCount = data?.intermediateCount || 0;
+
+    return (
+      <>
+        <BaseEdge path={edgePath} markerEnd={markerEnd} style={style} />
+        {intermediateCount > 0 && (
+          <g transform={`translate(${labelX}, ${labelY})`} style={{ pointerEvents: 'none' }}>
+            <circle
+              r="10"
+              fill={COLORS.secondary}
+              stroke="none"
+              style={{ filter: 'drop-shadow(0px 2px 2px rgba(0,0,0,0.4))' }}
+            />
+            <text
+              y="1"
+              fill="#fff"
+              textAnchor="middle"
+              dominantBaseline="middle"
+              style={{ fontSize: '10px', fontWeight: 800, userSelect: 'none' }}
+            >
+              {intermediateCount}
+            </text>
+          </g>
+        )}
+      </>
+    );
+  };
+
+  const edgeTypes = {
+    pathEdge: PathEdge,
+  };
   
   const ExpandableText = ({ text, maxLength = 100 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
@@ -114,21 +175,19 @@ const deduplicate = (arr) => {
   return Array.from(map.values());
 };
 
-const getEdgeStyle = (type, weight = 1, useWeight = true) => {
-  // Normalize weight to 0-1 range (backend sends 0.1 to 0.95)
-  const w = useWeight ? Math.max(0, Math.min(weight, 1)) : 0;
-  const weightFactor = w * 4.4; // Range extension to reach 5.0 from 0.6
+const getEdgeStyle = (type) => {
+  if (type === 'PATH') {
+    return { 
+      stroke: COLORS.secondary, 
+      strokeWidth: 3, 
+      strokeDasharray: '8,4' 
+    };
+  }
   
-  const edgeStyles = {
-    RULES: { stroke: EDGE_TYPES.rules, strokeWidth: (useWeight ? 1.0 : 0.6) + weightFactor * 0.9 },
-    CONQUERED: { stroke: EDGE_TYPES.conquered, strokeWidth: (useWeight ? 1.0 : 0.6) + weightFactor * 0.9 },
-    PROTECTS: { stroke: EDGE_TYPES.protects, strokeWidth: (useWeight ? 0.8 : 0.6) + weightFactor * 0.9 },
-    GUIDES: { stroke: EDGE_TYPES.guides, strokeWidth: (useWeight ? 0.8 : 0.6) + weightFactor * 0.9, strokeDasharray: '5,5' },
-    LIVES_ON: { stroke: EDGE_TYPES.livesOn, strokeWidth: 0.6 + weightFactor },
-    CREATED: { stroke: EDGE_TYPES.created, strokeWidth: (useWeight ? 0.8 : 0.6) + weightFactor * 0.9 },
-    default: { stroke: EDGE_TYPES.default, strokeWidth: 0.6 + weightFactor }
+  return { 
+    stroke: COLORS.primary, 
+    strokeWidth: 1 
   };
-  return edgeStyles[type] || edgeStyles.default;
 };
 
 const getDescendants = (nodeId, edges, visited = new Set()) => {
@@ -150,7 +209,7 @@ const getLayoutedElements = (nodes, edges, direction = 'TB') => {
   if (nodes.length === 0) return [];
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
-  dagreGraph.setGraph({ rankdir: direction, nodesep: 70, ranksep: 100 });
+  dagreGraph.setGraph({ rankdir: direction, nodesep: 120, ranksep: 200 });
   
   const selectedIds = new Set(nodes.filter(n => n.selected).map(n => n.id));
   const nodeMap = new Map(nodes.map(n => [n.id, n]));
@@ -200,7 +259,7 @@ const getLayoutedElements = (nodes, edges, direction = 'TB') => {
 
 const getCircularLayout = (nodes) => {
   if (nodes.length === 0) return [];
-  const radius = Math.max(200, nodes.length * 40);
+  const radius = Math.max(300, nodes.length * 60);
   const center = { x: 400, y: 400 };
   return nodes.map((node, index) => {
     const angle = (index / nodes.length) * 2 * Math.PI;
@@ -213,12 +272,12 @@ const getForceLayout = (nodes, edges) => {
   const simNodes = nodes.map(n => ({ id: n.id, x: n.position.x, y: n.position.y }));
   const nodeIds = new Set(simNodes.map(n => n.id));
   const simLinks = edges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target)).map(e => ({ source: e.source, target: e.target }));
-  const repulsion = nodes.length > 20 ? -1000 : -800;
+  const repulsion = nodes.length > 20 ? -2500 : -1500;
   const simulation = d3Force.forceSimulation(simNodes)
-    .force('link', d3Force.forceLink(simLinks).id(d => d.id).distance(200).strength(0.4))
+    .force('link', d3Force.forceLink(simLinks).id(d => d.id).distance(350).strength(0.4))
     .force('charge', d3Force.forceManyBody().strength(repulsion))
     .force('center', d3Force.forceCenter(400, 400))
-    .force('collide', d3Force.forceCollide().radius(80))
+    .force('collide', d3Force.forceCollide().radius(120))
     .stop();
   for (let i = 0; i < 300; ++i) simulation.tick();
   return nodes.map(node => {
@@ -231,7 +290,7 @@ const getGridLayout = (nodes) => {
   if (nodes.length === 0) return [];
   const count = nodes.length;
   const cols = Math.ceil(Math.sqrt(count));
-  const spacing = 250;
+  const spacing = 400;
   return nodes.map((node, index) => {
     const row = Math.floor(index / cols);
     const col = index % cols;
@@ -247,7 +306,7 @@ const getConcentricLayout = (nodes) => {
   const ringCapacities = [1, 5, 12, 20, 30];
   let nodeIndex = 0;
   ringCapacities.forEach((capacity, ringIndex) => {
-    const radius = ringIndex * 250;
+    const radius = ringIndex * 400;
     const countInRing = Math.min(capacity, sortedNodes.length - nodeIndex);
     for (let i = 0; i < countInRing; i++) {
       const node = sortedNodes[nodeIndex++];
@@ -255,7 +314,7 @@ const getConcentricLayout = (nodes) => {
       layoutedNodes.push({ ...node, position: { x: center.x + radius * Math.cos(angle), y: center.y + radius * Math.sin(angle) } });
     }
   });
-  const outerRadius = ringCapacities.length * 250;
+  const outerRadius = ringCapacities.length * 400;
   const remainingCount = sortedNodes.length - nodeIndex;
   for (let i = 0; i < remainingCount; i++) {
     const node = sortedNodes[nodeIndex++];
@@ -265,7 +324,7 @@ const getConcentricLayout = (nodes) => {
   return layoutedNodes;
 };
 
-  const integrateNewData = (currentNodes, currentEdges, newData, sourceNodeId, expandNodeFn, enableEdgeColoring, enableDonuts, enableWeightedEdges) => {
+  const integrateNewData = (currentNodes, currentEdges, newData, sourceNodeId, expandNodeFn, enableDonuts) => {
     const sourceNode = currentNodes.find(n => n.id === sourceNodeId);
     const sourcePos = sourceNode ? sourceNode.position : { x: 400, y: 400 };
     const nodesMap = new Map(currentNodes.map(n => [n.id, n]));
@@ -299,7 +358,7 @@ const getConcentricLayout = (nodes) => {
       if (!edgesMap.has(newEdge.id)) {
         edgesMap.set(newEdge.id, {
           ...newEdge, data: { ...newEdge.data, isNew: true }, 
-          style: getEdgeStyle(enableEdgeColoring ? (newEdge.data?.type || 'default') : 'default', newEdge.data?.weight || 1, enableWeightedEdges),
+          style: getEdgeStyle(newEdge.data?.type || 'default'),
           labelStyle: { fill: COLORS.nodeLabel, fontWeight: 600, fontSize: '10px', fontFamily: '"Open Sans", sans-serif' },
           labelBgStyle: { fill: COLORS.background, fillOpacity: 0.8 }, labelBgPadding: [4, 2], labelBgBorderRadius: 4
         });
@@ -312,6 +371,7 @@ export default function App() {
   
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [pathEdges, setPathEdges] = useState([]);
   const [activeLayout, setActiveLayout] = useState('force');
   const [activeAlgorithm, setActiveAlgorithm] = useState('degree');
   const [selectedNode, setSelectedNode] = useState(null);
@@ -357,16 +417,8 @@ export default function App() {
           const [isSettingsOpen, setIsSettingsOpen] = useState(false);
           
           // Settings mit LocalStorage Initialisierung
-          const [enableEdgeColoring, setEnableEdgeColoring] = useState(() => {
-            const saved = localStorage.getItem('kl_enableEdgeColoring');
-            return saved !== null ? JSON.parse(saved) : true;
-          });
           const [enableDonuts, setEnableDonuts] = useState(() => {
             const saved = localStorage.getItem('kl_enableDonuts');
-            return saved !== null ? JSON.parse(saved) : true;
-          });
-          const [enableWeightedEdges, setEnableWeightedEdges] = useState(() => {
-            const saved = localStorage.getItem('kl_enableWeightedEdges');
             return saved !== null ? JSON.parse(saved) : true;
           });
           const [edgePathType, setEdgePathType] = useState(() => {
@@ -382,26 +434,83 @@ export default function App() {
                       const [edgeEditSnapshot, setEdgeEditSnapshot] = useState(null);
                     const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
+  const pathEdgesRef = useRef(pathEdges);
   const activeLayoutRef = useRef(activeLayout);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   useEffect(() => { edgesRef.current = edges; }, [edges]);
+  useEffect(() => { pathEdgesRef.current = pathEdges; }, [pathEdges]);
           useEffect(() => { activeLayoutRef.current = activeLayout; }, [activeLayout]);
       
           // Persist Settings to LocalStorage
           useEffect(() => {
-            localStorage.setItem('kl_enableEdgeColoring', JSON.stringify(enableEdgeColoring));
             localStorage.setItem('kl_enableDonuts', JSON.stringify(enableDonuts));
-            localStorage.setItem('kl_enableWeightedEdges', JSON.stringify(enableWeightedEdges));
             localStorage.setItem('kl_edgePathType', edgePathType);
-          }, [enableEdgeColoring, enableDonuts, enableWeightedEdges, edgePathType]);
+          }, [enableDonuts, edgePathType]);
       
           useEffect(() => {
       
             setEdges(eds => eds.map(edge => ({
               ...edge,
-              style: getEdgeStyle(enableEdgeColoring ? (edge.data?.type || 'default') : 'default', edge.data?.weight || 1, enableWeightedEdges)
+              style: getEdgeStyle(edge.data?.type || 'default')
             })));
-          }, [enableEdgeColoring, enableWeightedEdges, setEdges]);
+          }, [setEdges]);
+
+          // --- PATH FINDING LOGIC ---
+          const updatePaths = useCallback(async (currentNodes) => {
+            const nodeIds = currentNodes
+              .map(n => n.id)
+              .filter(id => !id.startsWith('new-'));
+
+            if (nodeIds.length < 2) {
+              setPathEdges([]);
+              return;
+            }
+
+            try {
+              const response = await fetch('http://localhost:8000/find-paths', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ node_ids: nodeIds })
+              });
+              
+              if (!response.ok) return;
+
+              const discoveredPaths = await response.json();
+              
+              const newPathEdges = discoveredPaths.map(p => {
+                const isDirect = p.length === 1;
+                const intermediateCount = p.length - 1;
+                
+                return {
+                  id: `path-${p.source}-${p.target}`,
+                  source: p.source,
+                  target: p.target,
+                  type: 'pathEdge', 
+                  data: { 
+                    type: isDirect ? 'DIRECT_RELATION' : 'PATH',
+                    length: p.length,
+                    fullPathNodes: p.nodes || [], // Speichert jetzt volle Objekte [{id, label, type, icon}, ...]
+                    intermediateCount: intermediateCount,
+                    pathType: edgePathType
+                  },
+                  style: getEdgeStyle(isDirect ? 'default' : 'PATH'),
+                  animated: false,
+                  selectable: true,
+                  focusable: true,
+                  zIndex: isDirect ? -2 : -1
+                };
+              });
+
+              setPathEdges(newPathEdges);
+            } catch (e) {
+              console.error("Pathfinder connection error:", e);
+            }
+          }, [edgePathType]);
+
+          // Trigger path finding only when the set of Node IDs changes
+          useEffect(() => {
+            updatePaths(nodes);
+          }, [nodes.map(n => n.id).join(','), updatePaths]);
       
                           useEffect(() => {
                             setNodes(nds => nds.map(node => ({
@@ -422,7 +531,7 @@ export default function App() {
   // ignoriert CSS-Animationen für mehr Präzision.
   const fitToNodes = useCallback((nds) => {
     if (nds.length === 0) return;
-    const rect = getRectOfNodes(nds);
+    const rect = getNodesBounds(nds);
     fitView({ 
       duration: 800, 
       padding: 0.2, 
@@ -507,12 +616,12 @@ export default function App() {
       // Lokal die Kante aktualisieren (Stil neu berechnen falls Typ geändert)
       setEdges(eds => eds.map(e => e.id === edge.id ? {
         ...e,
-        style: getEdgeStyle(enableEdgeColoring ? type : 'default', properties.weight || 1, enableWeightedEdges)
+        style: getEdgeStyle(type)
       } : e));
     } catch (e) {
       console.error("Persist edge error:", e);
     }
-  }, [edgeEditSnapshot, enableEdgeColoring, enableWeightedEdges, setEdges]);
+  }, [edgeEditSnapshot, setEdges]);
             const closeSidebar = useCallback((skipPersist = false) => { 
               // Wenn wir im Edit-Modus waren, speichern wir die Änderungen (außer beim Löschen oder Abbrechen)
               if (selectedNode && isEditingNode && !skipPersist) {
@@ -697,7 +806,7 @@ export default function App() {
                                 id: `e-${source}-${type}-${target}`,
                                 label: type.replace("_", " ").toLowerCase(),
                                 data: { type },
-                                style: getEdgeStyle(enableEdgeColoring ? type : 'default', 1, enableWeightedEdges),
+                                style: getEdgeStyle(type),
                                 animated: ["TRAVELS_WITH", "CONNECTS", "FOLLOWS"].includes(type)
                               };
                               try {
@@ -744,7 +853,7 @@ export default function App() {
                                 setPendingConnection(null);
                                 setIsEdgeCreationMode(false);
                               } catch (e) { console.error("Edge creation failed:", e); }
-                            }, [pendingConnection, enableEdgeColoring, enableWeightedEdges, setEdges, setNodes]);
+                            }, [pendingConnection, setEdges, setNodes]);
                         
         
           const handleDrawerClose = useCallback((event, reason) => {
@@ -765,7 +874,8 @@ export default function App() {
 
   const onLayoutClick = useCallback((type) => {
     setActiveLayout(type);
-    const layouted = applyLayout(nodes, edgesRef.current, type);
+    const allRelevantEdges = [...edgesRef.current, ...pathEdgesRef.current];
+    const layouted = applyLayout(nodes, allRelevantEdges, type);
     setNodes(layouted);
     // Kamera zieht früher nach (300ms)
     setTimeout(() => fitToNodes(layouted), 300);
@@ -801,48 +911,75 @@ export default function App() {
     .finally(() => { if (controls) controls.style.display = 'flex'; });
   }, []);
 
+  const collectLeaves = useCallback((nodeId) => {
+    const currentEdges = edgesRef.current;
+    
+    // Finde alle Nachbarn auf der Stage
+    const neighborEdges = currentEdges.filter(e => e.source === nodeId || e.target === nodeId);
+    const neighborIds = neighborEdges.map(e => e.source === nodeId ? e.target : e.source);
+    
+    const leavesToRemove = new Set();
+    
+    neighborIds.forEach(nbId => {
+      // Ein Knoten ist ein Blatt auf der Stage, wenn er nur genau eine Verbindung hat (zu uns)
+      const nbEdges = currentEdges.filter(e => e.source === nbId || e.target === nbId);
+      if (nbEdges.length === 1) {
+        leavesToRemove.add(nbId);
+      }
+    });
+    
+    if (leavesToRemove.size > 0) {
+      setNodes(nds => nds.filter(n => !leavesToRemove.has(n.id)));
+      setEdges(eds => eds.filter(e => !leavesToRemove.has(e.source) && !leavesToRemove.has(e.target)));
+    }
+  }, [setNodes, setEdges]);
+
   const expandNode = useCallback(async (nodeId, filterCategory = null, event = null) => {
     const currentNodes = nodesRef.current;
     const currentEdges = edgesRef.current;
-    if (filterCategory && event?.shiftKey) {
-              try {
-                const response = await fetch(`http://localhost:8000/expand/${nodeId}?filter_category=${filterCategory}`);
-                const data = await response.json();
-                setPreviewData({ 
-                  category: filterCategory, 
-                  sourceId: nodeId, 
-                  nodes: data.nodes.filter(n => n.id !== nodeId),
-                  edges: data.edges || []
-                });
-                setSelectedNode(null); return;
-              } catch (e) { console.error(e); return; }
-      
-    }
-    if (filterCategory) {
-      const directChildren = currentEdges.filter(e => e.source === nodeId).map(e => currentNodes.find(n => n.id === e.target)).filter(n => n && categoryMap[n.data.type?.toLowerCase()] === filterCategory);
+
+    // Wenn keine Kategorie übergeben wurde (direkter Klick auf Knoten), 
+    // machen wir nichts mehr, da onNodeClick das jetzt handhabt.
+    if (!filterCategory) return;
+
+    // 1. Shift+Klick auf Segment: Aufräumen / Einklappen
+    if (event?.shiftKey) {
+      const directChildren = currentEdges
+        .filter(e => e.source === nodeId || e.target === nodeId)
+        .map(e => {
+          const neighborId = e.source === nodeId ? e.target : e.source;
+          return currentNodes.find(n => n.id === neighborId);
+        })
+        .filter(n => n && categoryMap[n.data.type?.toLowerCase()] === filterCategory);
+
       if (directChildren.length > 0) {
         const childIds = directChildren.map(n => n.id);
         const allToCollapse = new Set(childIds);
+        // Auch deren Nachfahren einsammeln, falls gewünscht (rekursiv)
         childIds.forEach(id => getDescendants(id, currentEdges).forEach(d => allToCollapse.add(d)));
+        
         setNodes(nds => nds.filter(n => !allToCollapse.has(n.id)));
         setEdges(eds => eds.filter(e => !allToCollapse.has(e.source) && !allToCollapse.has(e.target)));
         return;
       }
+      return;
     }
+
+    // 2. Einfacher Klick auf Segment: Gruppen Drawer öffnen
     try {
-      const response = await fetch(`http://localhost:8000/expand/${nodeId}${filterCategory ? `?filter_category=${filterCategory}` : ''}`);
+      const response = await fetch(`http://localhost:8000/expand/${nodeId}?filter_category=${filterCategory}`);
       const data = await response.json();
-                      const { nodes: integratedNodes, edges: integratedEdges } = integrateNewData(currentNodes, currentEdges, data, nodeId, expandNode, enableEdgeColoring, enableDonuts, enableWeightedEdges);
-                      setNodes(integratedNodes); setEdges(integratedEdges);
-                      setTimeout(() => {
-                        const layoutedNodes = applyLayout(integratedNodes, integratedEdges, activeLayoutRef.current);
-                        setNodes(layoutedNodes);
-                        // Vorzeitiger Kamera-Zoom (300ms) für flüssigeres Gefühl
-                        setTimeout(() => fitToNodes(layoutedNodes), 300);
-                      }, 150);
-                      setTimeout(() => setEdges(integratedEdges.map(e => ({ ...e, data: { ...e.data, isNew: false } }))), 200);
-                    } catch (error) { console.error(error); }
-                  }, [applyLayout, fitToNodes, setNodes, setEdges, enableEdgeColoring, enableWeightedEdges, enableDonuts]);
+      setPreviewData({ 
+        category: filterCategory, 
+        sourceId: nodeId, 
+        nodes: data.nodes.filter(n => n.id !== nodeId),
+        edges: data.edges || []
+      });
+      setSelectedNode(null);
+    } catch (e) { 
+      console.error("Failed to load group data:", e); 
+    }
+  }, [setNodes, setEdges]);
               
                 const addSingleNode = useCallback((sourceId, targetNode, edgeData = null) => {
                   const currentNodes = nodesRef.current;
@@ -868,16 +1005,17 @@ export default function App() {
                     label: edgeData?.label || relType.replace("_", " ").toLowerCase(),
                     animated: edgeData?.animated || ["TRAVELS_WITH", "CONNECTS", "FOLLOWS"].includes(relType), 
                     data: edgeData?.data || { type: relType }, 
-                    style: getEdgeStyle(enableEdgeColoring ? relType : 'default', edgeData?.data?.weight || 1, enableWeightedEdges) 
+                    style: getEdgeStyle(relType) 
                   };
                   
                   setNodes(nds => deduplicate([...nds, newNode]));
                   setEdges(eds => deduplicate([...eds, newEdge]));
                   setTimeout(() => {
-                    setNodes(nds => applyLayout(nds, edgesRef.current, activeLayoutRef.current));
+                    const allRelevantEdges = [...edgesRef.current, ...pathEdgesRef.current];
+                    setNodes(nds => applyLayout(nds, allRelevantEdges, activeLayoutRef.current));
                     setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
                   }, 50);
-                }, [expandNode, applyLayout, fitView, setNodes, setEdges, enableEdgeColoring, enableWeightedEdges, enableDonuts]);
+                }, [expandNode, applyLayout, fitView, setNodes, setEdges, enableDonuts]);
                   const addAllNodesOfType = useCallback(async (category) => {
       console.log(`FETCHING ALL ${category.toUpperCase()} NODES...`);
       try {
@@ -916,7 +1054,8 @@ export default function App() {
         
         // Layout triggern
         setTimeout(() => {
-          setNodes(nds => applyLayout(nds, edgesRef.current, activeLayoutRef.current));
+          const allRelevantEdges = [...edgesRef.current, ...pathEdgesRef.current];
+          setNodes(nds => applyLayout(nds, allRelevantEdges, activeLayoutRef.current));
           setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
         }, 50);
       } catch (e) {
@@ -1010,28 +1149,6 @@ export default function App() {
         setEdges([]);
         setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
       }, [selectedNode, setNodes, setEdges, fitView]);
-    const batchExpandNodes = useCallback(async (nodeIds) => {
-    const currentNodes = nodesRef.current;
-    const currentEdges = edgesRef.current;
-    try {
-      const promises = nodeIds.map(id => fetch(`http://localhost:8000/expand/${id}`).then(r => r.json()));
-      const allResults = await Promise.all(promises);
-      let nextNodes = [...currentNodes]; let nextEdges = [...currentEdges];
-                      allResults.forEach((data, index) => {
-                        const integrated = integrateNewData(nextNodes, nextEdges, data, nodeIds[index], expandNode, enableEdgeColoring, enableDonuts, enableWeightedEdges);
-                        nextNodes = integrated.nodes; nextEdges = integrated.edges;
-                      });
-                      const integratedNodes = nextNodes;
-                      setNodes(integratedNodes); setEdges(nextEdges);
-                      setTimeout(() => {
-                        const layouted = applyLayout(integratedNodes, nextEdges, activeLayoutRef.current);
-                        setNodes(layouted);
-                        // Früherer Kamera-Zoom
-                        setTimeout(() => fitToNodes(layouted), 300);
-                      }, 150);
-                      setTimeout(() => setEdges(nextEdges.map(e => ({ ...e, data: { ...e.data, isNew: false } }))), 200);
-                    } catch (e) { console.error('Batch expansion failed:', e); }
-                  }, [expandNode, applyLayout, fitToNodes, setNodes, setEdges, enableEdgeColoring, enableWeightedEdges, enableDonuts]);
               
                               const deleteSelectedElements = useCallback(() => {
     const nodeIdsToRemove = new Set(nodesRef.current.filter(n => n.selected).map(n => n.id));
@@ -1048,7 +1165,6 @@ export default function App() {
             if (e.key === 'Escape') cancelEditing();
             return;
           }
-          if (e.code === 'Space') { e.preventDefault(); const nodeIds = nodesRef.current.map(n => n.id); if (nodeIds.length > 0) batchExpandNodes(nodeIds); }
           if (e.key === 'Escape') cancelEditing();
           if (e.key === 'Delete' || e.key === 'Backspace') {
             e.preventDefault();
@@ -1064,7 +1180,7 @@ export default function App() {
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-      }, [expandNode, batchExpandNodes, deleteSelectedElements, selectedNode, closeSidebar, cancelEditing, isEditingNode, isEditingEdge]);
+      }, [expandNode, deleteSelectedElements, selectedNode, closeSidebar, cancelEditing, isEditingNode, isEditingEdge]);
     const onDragOver = useCallback((event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; }, []);
 
   const onDrop = useCallback((event) => {
@@ -1116,22 +1232,24 @@ export default function App() {
                 });
       
                 // Berechne verbleibende Counts für den Donut
+                const originalTotal = (n.data.donut || []).reduce((sum, s) => sum + (s.total_count || 0), 0);
+                
                 newDonut = newDonut.map(segment => {
                   const currentOnStage = stageCounts[segment.category] || 0;
                   const remaining = Math.max(0, (segment.total_count || 0) - currentOnStage);
-                  return { ...segment, value: remaining }; // Wir nutzen hier den absoluten Wert für die Berechnung
+                  return { ...segment, value: remaining }; 
                 }).filter(s => s.value > 0);
       
-                          // Normalisiere die Werte wieder auf Prozente für die SVG-Anzeige
-                          const totalRemaining = newDonut.reduce((sum, s) => sum + s.value, 0);
-                          if (totalRemaining > 0) {
-                            newDonut = newDonut.map(s => ({
-                              ...s,
-                              value: (s.value / totalRemaining) * 100
-                            }));
-                          } else {
-                            newDonut = [];
-                          }
+                // Normalisiere die Werte relativ zum URSPRÜNGLICHEN Total, 
+                // damit Lücken entstehen, wenn Nachbarn auf der Stage sind.
+                if (originalTotal > 0) {
+                  newDonut = newDonut.map(s => ({
+                    ...s,
+                    value: (s.value / originalTotal) * 100
+                  }));
+                } else {
+                  newDonut = [];
+                }
                 
               }
       
@@ -1145,23 +1263,71 @@ export default function App() {
         const visibleEdges = useMemo(() => {
     const nodeIds = new Set(visibleNodes.map(n => n.id));
     const hasHighlight = highlightedTypes.size > 0;
-    return edges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target)).map(edge => {
-      const sourceNode = nodes.find(n => n.id === edge.source); const targetNode = nodes.find(n => n.id === edge.target);
+    
+    // 1. Reale Kanten filtern
+    const activeRealEdges = edges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target));
+    
+    // 2. Pfade filtern
+    const filteredPathEdges = pathEdges.filter(pe => {
+      const { source, target } = pe;
+      const pathIds = pe.data?.fullPathIds || [];
+      const length = pe.data?.length || 0;
+
+      if (!nodeIds.has(source) || !nodeIds.has(target)) return false;
+      
+      const alreadyHasDirectEdge = activeRealEdges.some(re => 
+        (re.source === source && re.target === target) || 
+        (re.source === target && re.target === source)
+      );
+      if (alreadyHasDirectEdge) return false;
+
+      if (length === 1) {
+        return true;
+      } else {
+        const fullPathNodes = pe.data?.fullPathNodes || [];
+        const pathIds = fullPathNodes.map(n => n.id);
+        const intermediateIds = pathIds.filter(id => id !== source && id !== target);
+        const allIntermediatesOnStage = intermediateIds.length > 0 && intermediateIds.every(id => nodeIds.has(id));
+        
+        return !allIntermediatesOnStage;
+      }
+    });
+
+    const allEdges = [...activeRealEdges, ...filteredPathEdges];
+    
+    return allEdges.map(edge => {
+      const sourceNode = nodes.find(n => n.id === edge.source); 
+      const targetNode = nodes.find(n => n.id === edge.target);
+      const isPath = edge.data?.type === 'PATH' || edge.data?.type === 'DIRECT_RELATION';
       const isHighlighted = hasHighlight ? (highlightedTypes.has(sourceNode?.data.type) || highlightedTypes.has(targetNode?.data.type)) : true;
-      const highlightOpacity = hasHighlight ? (isHighlighted ? 0.8 : 0.1) : 1;
+      
+      const highlightOpacity = isPath ? 1.0 : (hasHighlight ? (isHighlighted ? 0.8 : 0.1) : 1.0);
+      
+      // For custom path edges, we update the pathType in data so it reacts to settings
+      const updatedData = isPath ? { ...edge.data, pathType: edgePathType } : edge.data;
+
       return { 
-        ...edge, label: zoomLevel > 0.6 ? (edge.data?.type?.replace("_", " ").toLowerCase()) : "", 
-        style: { ...edge.style, opacity: edge.data?.isNew ? 0 : highlightOpacity, transition: edge.data?.isNew ? 'none' : 'opacity 1.0s ease-in-out, stroke 0.3s ease' } 
+        ...edge, 
+        type: isPath ? 'pathEdge' : edgePathType, 
+        data: updatedData,
+        label: isPath ? "" : (zoomLevel > 0.6 ? (edge.data?.type?.replace("_", " ").toLowerCase()) : ""), 
+        className: isPath ? 'path-edge' : '',
+        zIndex: isPath ? -2 : -1, 
+        style: { 
+          ...edge.style, 
+          opacity: edge.data?.isNew ? 0 : highlightOpacity, 
+          transition: edge.data?.isNew ? 'none' : 'opacity 1.0s ease-in-out, stroke 0.3s ease' 
+        } 
       };
     });
-  }, [edges, visibleNodes, zoomLevel, highlightedTypes, nodes]);
+  }, [edges, pathEdges, visibleNodes, zoomLevel, highlightedTypes, nodes, edgePathType]);
 
   const stats = useMemo(() => {
     const counts = {}; nodes.forEach(n => { const type = n.data.type || 'Unknown'; counts[type] = (counts[type] || 0) + 1; });
     return Object.entries(counts).sort((a, b) => b[1] - a[1]);
   }, [nodes]);
 
-      const sidebarColor = selectedNode ? getHexColor(selectedNode.data.type) : (selectedEdge || pendingConnection) ? COLORS.secondary : previewData ? typeColors[previewData.category] : typeColors.other;
+      const sidebarColor = selectedNode ? getHexColor(selectedNode.data.type) : (selectedEdge?.data?.type === 'PATH' || selectedEdge?.data?.type === 'DIRECT_RELATION' || pendingConnection) ? COLORS.secondary : selectedEdge ? COLORS.primary : previewData ? typeColors[previewData.category] : typeColors.other;
     const topBarHeight = 48; // Common height for the top toolbars
     const statusBarHeight = 30;
 
@@ -1171,10 +1337,22 @@ export default function App() {
         body { margin: 0; padding: 0; overflow: hidden; background: ${COLORS.background}; }
         .react-flow__node { transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) !important; will-change: transform; }
         .react-flow__node.dragging { transition: none !important; }
-        .react-flow__edge-path { transition: d 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); }
-        .react-flow__edge-textwrapper { transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease; opacity: ${zoomLevel > 0.6 ? 1 : 0}; }
+        
+        /* Edges and Labels should stick immediately to nodes during movement - NO TRANSITIONS */
+        .react-flow__edge-path, 
+        .react-flow__edge-textwrapper, 
+        .react-flow__edge-textbg,
+        .react-flow__edge-text { 
+          transition: none !important; 
+        }
+        
+        .react-flow__edge-textwrapper { 
+          opacity: ${zoomLevel > 0.6 ? 1 : 0}; 
+        }
+        
         .react-flow__edge-text { fill: ${COLORS.nodeLabel} !important; }
         .react-flow__edge-textbg { fill: ${COLORS.background} !important; fill-opacity: 0.8 !important; }
+        
         .react-flow__controls { box-shadow: 0 0 10px rgba(0,0,0,0.5); }
         .react-flow__controls-button { background: ${COLORS.paper} !important; border-bottom: 1px solid ${COLORS.panelBorder} !important; fill: ${COLORS.textSecondary} !important; }
         .react-flow__controls-button:hover { background: #2a2a2a !important; fill: ${COLORS.primary} !important; }
@@ -1433,24 +1611,25 @@ export default function App() {
       </Drawer>
 
       <Box sx={{ flexGrow: 1, height: 'auto', position: 'relative', transition: 'all 0.3s ease' }}>
-                  <ReactFlow
-                    nodes={visibleNodes} edges={visibleEdges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
-                    onNodeClick={(e, n) => e.shiftKey ? openDetails(n) : expandNode(n.id)}
-                    onEdgeClick={(e, edge) => e.shiftKey && openEdgeDetails(edge)}
-                    onConnect={onConnect}
-                    onPaneClick={() => { closeSidebar(); setHighlightedTypes(new Set()); }}
-                                onMove={(e, v) => setZoomLevel(v.zoom)} onDrop={onDrop} onDragOver={onDragOver}
-                                onNodeMouseEnter={(e, n) => setStatusParts([
-                                  { trigger: 'CLICK', action: n.data.isDraft ? 'Select' : 'Expand' },
-                                  { trigger: 'SHIFT+CLICK', action: 'Show Details' },
-                                  { trigger: 'DRAG', action: 'Reposition' }
-                                ])}
-                                onNodeMouseLeave={() => setStatusParts([])}
-                                onEdgeMouseEnter={(e, edge) => setStatusParts([
-                                  { trigger: 'SHIFT+CLICK', action: 'Show Edge Details' }
-                                ])}
-                                onEdgeMouseLeave={() => setStatusParts([])}
-                                nodeTypes={nodeTypes} defaultEdgeOptions={{ type: edgePathType }} fitView
+        <ReactFlow
+          nodes={visibleNodes} edges={visibleEdges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
+          onNodeClick={(e, n) => e.shiftKey ? collectLeaves(n.id) : openDetails(n)}
+          onEdgeClick={(e, edge) => openEdgeDetails(edge)}
+          onConnect={onConnect}
+          onPaneClick={() => { closeSidebar(); setHighlightedTypes(new Set()); }}
+          onMove={(e, v) => setZoomLevel(v.zoom)} onDrop={onDrop} onDragOver={onDragOver}
+          onNodeMouseEnter={(e, n) => setStatusParts([
+            { trigger: 'CLICK', action: 'Show Details' },
+            { trigger: 'SHIFT+CLICK', action: 'Collect Leaves' },
+            { trigger: 'DRAG', action: 'Reposition' }
+          ])}
+          onNodeMouseLeave={() => setStatusParts([])}
+          onEdgeMouseEnter={(e, edge) => setStatusParts([
+            { trigger: 'CLICK', action: 'Show Edge Details' }
+          ])}                                onEdgeMouseLeave={() => setStatusParts([])}
+                                nodeTypes={nodeTypes} 
+                                edgeTypes={edgeTypes}
+                                defaultEdgeOptions={{ type: edgePathType }} fitView
                                 nodesDraggable={!isEdgeCreationMode}
                     
                                 nodesConnectable={true}
@@ -1661,6 +1840,56 @@ export default function App() {
                     Cancel
                   </Button>
                 </>
+              ) : selectedEdge && (selectedEdge.data?.type === 'PATH' || selectedEdge.data?.type === 'DIRECT_RELATION') ? (
+                <>
+                  <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#fff' }}>Pfad</Typography>
+                  <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
+                  <Typography variant="body2" sx={{ mb: 3, color: 'rgba(255,255,255,0.7)', fontStyle: 'italic' }}>
+                    Dieser Pfad überbrückt {selectedEdge.data.length} Sprünge in der Datenbank.
+                  </Typography>
+
+                  <Typography variant="caption" sx={{ color: COLORS.secondary, fontWeight: 'bold', letterSpacing: 1, display: 'block', mb: 1 }}>ENTHALTENE KNOTEN</Typography>
+                  <List>
+                    {(() => {
+                      return selectedEdge.data.fullPathNodes?.map(nodeInfo => {
+                        const id = nodeInfo.id;
+                        const isOnStage = nodes.some(n => n.id === id);
+                        
+                        return (
+                          <ListItem key={id} sx={{ px: 0 }}>
+                            <ListItemAvatar>
+                              <Avatar sx={{ bgcolor: getHexColor(nodeInfo.type), width: 32, height: 32 }}>
+                                {React.createElement(Icons[nodeInfo.icon] || Icons.HelpOutline, { sx: { fontSize: 18, color: '#fff' } })}
+                              </Avatar>
+                            </ListItemAvatar>
+                            <ListItemText 
+                              primary={nodeInfo.label} 
+                              secondary={nodeInfo.type} 
+                              primaryTypographyProps={{ style: { fontSize: '0.9rem', color: isOnStage ? '#fff' : 'rgba(255,255,255,0.5)' } }}
+                              secondaryTypographyProps={{ style: { fontSize: '0.7rem' } }}
+                            />
+                            {!isOnStage && (
+                              <ListItemSecondaryAction>
+                                <IconButton 
+                                  size="small" color="primary" 
+                                  onClick={async () => {
+                                    // Wir haben die Daten bereits, nutzen aber expand für die Konsistenz der integrateNewData Logik
+                                    const res = await fetch(`http://localhost:8000/expand/${id}`);
+                                    const data = await res.json();
+                                    const fullNode = data.nodes.find(n => n.id === id);
+                                    if (fullNode) addSingleNode(selectedEdge.source, fullNode);
+                                  }}
+                                >
+                                  <AddIcon />
+                                </IconButton>
+                              </ListItemSecondaryAction>
+                            )}
+                          </ListItem>
+                        );
+                      });
+                    })()}
+                  </List>
+                </>
               ) : selectedEdge && isEditingEdge ? (
                 <>
                   <Typography variant="caption" sx={{ color: COLORS.primary, fontWeight: 'bold', letterSpacing: 1, display: 'block', mb: 2 }}>EDIT RELATIONSHIP</Typography>
@@ -1832,11 +2061,25 @@ export default function App() {
                                                         );
                                                         
                                                         const edgeToDelete = edgeOnStage || dbEdge;
+                                                        const isOutgoing = edgeToDelete?.source === sourceId;
+                                                        const relationLabel = edgeToDelete?.data?.type?.replace(/_/g, " ").toLowerCase() || node.data.type;
                                   
                                                         return (
                                                           <ListItem key={node.id} sx={{ px: 0 }}>
                                                             <ListItemAvatar><Avatar sx={{ bgcolor: getHexColor(node.data.type), width: 32, height: 32 }}>{React.createElement(Icons[node.data.icon] || Icons.HelpOutline, { sx: { fontSize: 18, color: '#fff' } })}</Avatar></ListItemAvatar>
-                                                            <ListItemText primary={node.data.label} secondary={node.data.type} primaryTypographyProps={{ style: { fontSize: '0.9rem' } }} secondaryTypographyProps={{ style: { fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' } }} />
+                                                            <ListItemText 
+                                                              primary={node.data.label} 
+                                                              secondary={
+                                                                <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                                  {isOutgoing ? <Icons.ChevronRight sx={{ fontSize: '0.9rem', color: COLORS.primary }} /> : <Icons.ChevronLeft sx={{ fontSize: '0.9rem', color: COLORS.secondary }} />}
+                                                                  <Typography component="span" variant="caption" sx={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', textTransform: 'capitalize' }}>
+                                                                    {relationLabel}
+                                                                  </Typography>
+                                                                </Box>
+                                                              } 
+                                                              primaryTypographyProps={{ style: { fontSize: '0.9rem' } }} 
+                                                              secondaryTypographyProps={{ component: 'span' }}
+                                                            />
                                                             <ListItemSecondaryAction sx={{ display: 'flex', gap: 0.5 }}>
                                                               {edgeToDelete && (
                                                                 <Tooltip title="Delete Relationship Permanently">
@@ -1914,20 +2157,10 @@ export default function App() {
             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 2, letterSpacing: 1 }}>VISUALIZATION RULES</Typography>
             <FormGroup sx={{ px: 1 }}>
               <FormControlLabel 
-                control={<Switch checked={enableEdgeColoring} onChange={(e) => setEnableEdgeColoring(e.target.checked)} color="secondary" />} 
-                label={<Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>Edge Coloring Rules</Typography>} 
-              />
-              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', ml: 4, mb: 2, display: 'block' }}>Color-code edges by relationship type (Rules, Conquests, etc.)</Typography>
-              <FormControlLabel 
                 control={<Switch checked={enableDonuts} onChange={(e) => setEnableDonuts(e.target.checked)} color="secondary" />} 
                 label={<Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>Show Node Donuts</Typography>} 
               />
               <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', ml: 4, mb: 2, display: 'block' }}>Display neighbor distribution rings around nodes</Typography>
-              <FormControlLabel 
-                control={<Switch checked={enableWeightedEdges} onChange={(e) => setEnableWeightedEdges(e.target.checked)} color="secondary" />} 
-                label={<Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>Weighted Edges</Typography>} 
-              />
-              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', ml: 4, mb: 2, display: 'block' }}>Scale edge thickness based on relationship weight</Typography>
             </FormGroup>
             
             <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }} />

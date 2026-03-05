@@ -48,27 +48,47 @@ npm start
 
 ---
 
-## 4. Visualisierungs-Features
+## 4. Graph-Interaktion & Exploration
 
-### Layouts
-Über das Panel oben rechts können verschiedene Layout-Algorithmen getriggert werden:
-- **Hierarchisch:** Zeigt Strukturen (z.B. Management-Ebenen).
-- **Circular:** Ordnet alle Knoten übersichtlich im Kreis an.
-- **Force:** Physik-Simulation für organische Netzwerke.
+KeyLines OS verfolgt ein Modell der **kontrollierten Exploration**, um auch in großen Netzwerken den Überblick zu behalten. Automatische Massen-Expansionen sind deaktiviert; stattdessen steuert der Anwender den Datenfluss gezielt über Drawer.
 
-### Donuts (Look-ahead)
-Die Ringe um die Knoten zeigen die Verteilung der **direkten Nachbarn** eines Knotens an, auch wenn dieser noch nicht ausgeklappt ist:
-- **Blau:** Personen / Mutanten
-- **Grün:** Planeten
-- **Orange:** Roboter / Gegenstände
-- **Lila:** Entitäten / Wissenschaft
+### Knoten-Bedienung
+- **Einfacher Klick:** Öffnet den **Entity-Drawer** auf der rechten Seite. Hier können Beschreibungen gelesen, Eigenschaften editiert und Nachbarn gezielt zum Canvas hinzugefügt werden.
+- **Shift + Klick:** Führt die Funktion **"Collect Leaves"** aus. Dabei werden alle "Blätter" (Knoten, die nur eine einzige Verbindung zu diesem Knoten haben) von der Stage entfernt, während Pfade, die tiefer in das Netzwerk führen, erhalten bleiben.
 
-### Styling
-Die Knoten sind nach ihrem eigenen Typ eingefärbt (Hintergrund des Icons), was eine schnelle visuelle Klassifizierung ermöglicht.
+### Donut-Ringe (Look-ahead & Navigation)
+Die farbigen Ringe um die Knoten zeigen die Verteilung der **direkten Nachbarn** in der Datenbank an:
+- **Einfacher Klick auf Segment:** Öffnet den **Group-Drawer** mit einer Liste aller Nachbarn dieser Kategorie.
+- **Shift + Klick auf Segment:** Führt ein **Cleanup** durch. Alle Knoten dieser Kategorie (und deren Nachfahren) werden vom Canvas entfernt (**Einklappen**).
+
+### Kanten (Relationships)
+- **Einfacher Klick:** Öffnet den **Relationship-Drawer** mit Details zum Typ, der Richtung und benutzerdefinierten Eigenschaften (z. B. `weight`, `since`).
+
+### Nachbarn & Richtungsmarker
+In den Drawern werden Nachbarn mit ihrer spezifischen Relation angezeigt:
+- **Chevron Rechts (>)**: Eine ausgehende Verbindung vom Fokus-Knoten weg (**Outgoing**).
+- **Chevron Links (<)**: Eine eingehende Verbindung zum Fokus-Knoten hin (**Incoming**).
 
 ---
 
-## 5. Nützliche Cypher Queries (Memgraph Lab)
+## 5. Visualisierungs-Features
+
+### Layouts
+Über die Toolbar oben können verschiedene Algorithmen getriggert werden:
+- **Hierarchisch:** Sortiert Knoten nach Typ und Label in Ebenen.
+- **Circular:** Ordnet Hubs und deren Umfeld im Kreis an.
+- **Force:** Organische Physik-Simulation (Default).
+- **Concentric:** Platziert wichtige Knoten (hoher Score) im Zentrum.
+
+### Graph-Metriken (Social Network Analysis)
+Über die Analyse-Icons können Knoten basierend auf ihrer Bedeutung skaliert werden:
+- **Degree:** Anzahl der direkten Verbindungen.
+- **Betweenness:** Brücken-Funktion im Netzwerk.
+- **PageRank:** Wichtigkeit basierend auf der Wichtigkeit der Nachbarn.
+
+---
+
+## 6. Nützliche Cypher Queries (Memgraph Lab)
 
 ### Alles anzeigen
 ```cypher

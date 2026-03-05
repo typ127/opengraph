@@ -2,6 +2,50 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.32.0] - 2026-03-05
+
+### Added
+- **Intelligent Pathfinding Engine**: Implemented a background pathfinder using Memgraph's BFS algorithm. The system now automatically discovers "hidden" connections between any nodes currently on the stage (up to 10 hops deep).
+- **Custom `PathEdge` Component**: Developed a high-performance SVG edge component for path visualization.
+    - **Static Rendering**: Paths are static (no animation) to maintain focus, styled in the secondary Pink theme color.
+    - **Smart Glyphs**: Circular pink badges appear in the center of paths, displaying the exact count of intermediate nodes (excluding start/end).
+    - **Drop Shadows**: Added subtle depth to path glyphs for better visual separation.
+- **Dedicated "Pfad" Drawer**:
+    - Introduced a specific drawer mode for paths (Pink/Secondary) that lists all nodes in the discovered chain.
+    - **Interactive Exploration**: Added "+" buttons to every node in the path list, allowing users to surgically "unpack" a path by adding its bridge nodes to the stage.
+- **Enhanced Donut Visualization**: Overhauled the normalization logic for node rings. Segments now shrink relative to the original total count, creating "empty gaps" for neighbors already on stage. This provides a clear visual indicator of exploration progress.
+
+### Changed
+- **Visual Hierarchy Refinement**:
+    - **Rendering Order**: All edges (real and virtual) now render behind nodes. Virtual paths render behind real relations to minimize clutter.
+    - **Edge Styling**: Unified all real relationships to use the Primary Blue color, removing noisy type-based coloring rules.
+    - **Snappy Interaction**: Removed bouncy CSS transitions from edges and labels. Connections now stick perfectly to node centers during dragging, eliminating "lag" and "ghosting".
+- **Spacious Layouts**: Massive overhaul of all layout engines (Force, Dagre, Circular, Grid, Concentric). Increased link distances, repulsion, and ring radii by up to 100% to give the graph more room to "breathe".
+- **Dynamic Style Sync**: Virtual paths now respect global edge style settings (Bezier, Straight, etc.) and update instantly when changed.
+
+### Fixed
+- **Performance Optimization**: Optimized pathfinding triggers to only fire when the set of node IDs changes, preventing redundant database requests during node movement.
+- **DOM Consistency**: Fixed `validateDOMNesting` warnings in the neighbor lists by switching to `span` components for complex secondary text.
+- **ReactFlow Deprecations**: Replaced `getRectOfNodes` with the modern `getNodesBounds` API.
+- **Console Cleanup**: Silenced noisy debug logs and backend print statements for a cleaner developer experience.
+
+## [1.31.0] - 2026-03-05
+
+### Changed
+- **Redefined Graph Interaction Model**: Completely overhauled the exploration workflow to prioritize controlled discovery over automatic expansion.
+    - **Nodes**: Clicking a node now opens its details in the Sidebar instead of triggering an automatic neighbor expansion.
+    - **Donut Segments**: Single-clicking a segment now opens a "Group Drawer" listing all neighbors in that category, while `Shift+Click` performs a "Cleanup" (collapsing that specific category from the stage).
+- **Enhanced Neighbor List**: The "Neighbors" section in the drawers now displays relationship names (e.g., "lives on") instead of generic node types, providing immediate context for the link.
+- **Directional Awareness**: Added subtle chevron markers (`ChevronLeft` / `ChevronRight`) to neighbor rows to indicate whether a relationship is incoming or outgoing relative to the selected node.
+- **Simplified Edge Exploration**: Details for relationships are now accessible via a standard single `Click` (moved from `Shift+Click`).
+- **Minimalist Tooltips**: Removed interaction help text from donut segment tooltips to maintain a clean, high-signal visual aesthetic.
+
+### Added
+- **"Collect Leaves" Functionality**: Implemented a new `Shift+Click` action on nodes that surgically removes "leaf" nodes (those with only one connection to the target) while preserving nodes that lead deeper into the network.
+
+### Removed
+- **Full Expansion Logic**: Disabled all "Full Expand" triggers, including the Spacebar global expansion shortcut and the `batchExpandNodes` engine, to encourage intentional, step-by-step graph building.
+
 ## [1.30.0] - 2026-03-01
 
 ### Added

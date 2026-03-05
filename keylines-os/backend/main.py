@@ -376,6 +376,62 @@ class EdgeCreate(BaseModel):
     target: str
     type: str
 
+class FindPathsRequest(BaseModel):
+    node_ids: List[str]
+
+@app.post("/find-paths")
+async def find_paths(request: FindPathsRequest):
+    """Findet kürzeste Pfade zwischen allen Paaren der übergebenen Knoten-IDs."""
+    if len(request.node_ids) < 2:
+        return []
+
+    print(f"[PATHFINDER] Request for IDs: {request.node_ids}")
+
+    # Schritt 1: Prüfen, ob alle IDs in der DB existieren (Debug)
+    check_query = "MATCH (n) WHERE n.id IN $ids RETURN n.id as id, labels(n) as labels"
+    found_nodes = list(memgraph.execute_and_fetch(check_query, parameters={"ids": request.node_ids}))
+    print(f"[PATHFINDER] Found {len(found_nodes)}/{len(request.node_ids)} nodes in DB")
+
+    # Schritt 2: Pfade suchen (Kompatible Syntax für Memgraph ohne length())
+    query = """
+    MATCH (a), (b)
+    WHERE a.id IN $ids AND b.id IN $ids AND a.id < b.id
+    MATCH p = (a)-[*BFS ..10]-(b)
+    RETURN a.id as source, b.id as target, nodes(p) as path_nodes
+    LIMIT 50;
+    """
+    try:
+        results = list(memgraph.execute_and_fetch(query, parameters={"ids": request.node_ids}))
+        print(f"[PATHFINDER] Query returned {len(results)} rows")
+        
+        paths = []
+        for row in results:
+            p_nodes = row["path_nodes"]
+            path_nodes_info = []
+            for n in p_nodes:
+                # Extrahiere Eigenschaften sicher aus dem Memgraph Knoten-Objekt
+                props = n.properties if hasattr(n, "properties") else (n if isinstance(n, dict) else {})
+                path_nodes_info.append({
+                    "id": props.get("id"),
+                    "label": props.get("label") or props.get("id"),
+                    "type": props.get("type", "Unknown"),
+                    "icon": props.get("icon", "HelpOutline")
+                })
+
+            # Länge berechnen: Anzahl Knoten minus 1
+            calc_length = len(path_nodes_info) - 1 if path_nodes_info else 0
+
+            paths.append({
+                "source": row["source"], 
+                "target": row["target"], 
+                "nodes": path_nodes_info,
+                "length": calc_length
+            })
+        return paths
+    except Exception as e:
+        print(f"[PATHFINDER] Error during path query: {e}")
+        return []
+
 class EdgeUpdate(BaseModel):
     source: str
     target: str
