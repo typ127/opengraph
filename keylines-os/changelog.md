@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.33.0] - 2026-03-05
+
+### Added
+- **Dynamic Graph Spacing Control**: Introduced a "Graph Spacing" slider in the Settings drawer (range 0.5x to 2.5x). This allows users to adjust the "gravitation" and layout density of the entire graph in real-time.
+- **Immediate Re-layout**: Adjusting the spacing slider now triggers an instant re-calculation of the active layout, making the graph feel more interactive and "alive".
+- **Rich Path Metadata**: Nodes within discovered paths are now enriched with full database properties (Labels, Icons, Types), replacing generic "Unknown" placeholders in the Path Drawer.
+
+### Changed
+- **Node UI Refinement**:
+    - **Filigree Donuts**: Reduced donut ring thickness from 10 to 6 for a more elegant, less massive appearance.
+    - **Clean Masking**: Increased the inner icon border to 5px using the stage's background color, creating a sharp visual gap between the icon and the donut ring.
+    - **Flat Design**: Removed the glow/drop-shadow effect from nodes to achieve a cleaner, modern technical aesthetic.
+- **Advanced Layout Integration**:
+    - **Proportional Scaling**: All layout engines (Force, Circular, Grid, Concentric) now use the global spacing factor to scale distances, repulsion forces, and radii.
+    - **Precise Hierarchical Layout**: Completely overhauled the Dagre-based hierarchical engine. Centering is now calculated dynamically, and node dimensions scale with the spacing factor, ensuring perfectly aligned structures at any density.
+- **Snappy Interaction**: Completely disabled CSS transitions for edges and labels. Relationships and glyphs now stick instantly to node centers during movement, eliminating all lag and "swing-back" artifacts.
+
+### Fixed
+- **Slider Consistency**: Added persistence for the Graph Spacing setting using `localStorage`.
+- **Hierarchical Alignment**: Fixed shifty/offset positioning in hierarchical layouts that previously occurred when using non-default spacing values.
+
 ## [1.32.0] - 2026-03-05
 
 ### Added

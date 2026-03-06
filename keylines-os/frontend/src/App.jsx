@@ -49,7 +49,8 @@ import {
   Select,
   MenuItem,
   FormControl,
-  InputLabel
+  InputLabel,
+  Slider
 } from '@mui/material';
 import { 
   AccountTree as TreeIcon, 
@@ -205,43 +206,33 @@ const getDescendants = (nodeId, edges, visited = new Set()) => {
 };
 
 // --- LAYOUT ENGINES ---
-const getLayoutedElements = (nodes, edges, direction = 'TB') => {
+const getLayoutedElements = (nodes, edges, spacingFactor = 1.0, direction = 'TB') => {
   if (nodes.length === 0) return [];
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
-  dagreGraph.setGraph({ rankdir: direction, nodesep: 120, ranksep: 200 });
+  
+  // Scale internal node dimensions to help dagre calculate better gaps
+  const nodeWidth = 160 * spacingFactor;
+  const nodeHeight = 100 * spacingFactor;
+  
+  dagreGraph.setGraph({ 
+    rankdir: direction, 
+    nodesep: 80 * spacingFactor, 
+    ranksep: 150 * spacingFactor
+  });
   
   const selectedIds = new Set(nodes.filter(n => n.selected).map(n => n.id));
   const nodeMap = new Map(nodes.map(n => [n.id, n]));
   
-  // 1. Knoten sortieren für konsistente Initialisierung
-  const sortedNodes = [...nodes].sort((a, b) => {
-    const typeA = (a.data.type || '').toLowerCase();
-    const typeB = (b.data.type || '').toLowerCase();
-    if (typeA !== typeB) return typeA.localeCompare(typeB);
-    return (a.data.label || '').toLowerCase().localeCompare((b.data.label || '').toLowerCase());
+  // 1. Add nodes to dagre
+  nodes.forEach((node) => {
+    dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
   });
 
-  sortedNodes.forEach((node) => {
-    dagreGraph.setNode(node.id, { width: 150, height: 100 });
-  });
-
-  // 2. Kanten sortieren basierend auf dem Typ des ZIEL-Knotens
-  // Das ist der entscheidende Faktor für die horizontale Sortierung in Dagre
-  const sortedEdges = [...edges].sort((a, b) => {
-    const targetA = nodeMap.get(a.target);
-    const targetB = nodeMap.get(b.target);
-    if (!targetA || !targetB) return 0;
-    
-    const typeA = (targetA.data.type || '').toLowerCase();
-    const typeB = (targetB.data.type || '').toLowerCase();
-    if (typeA !== typeB) return typeA.localeCompare(typeB);
-    
-    return (targetA.data.label || '').toLowerCase().localeCompare((targetB.data.label || '').toLowerCase());
-  });
-
-  sortedEdges.forEach((edge) => {
-    if (dagreGraph.hasNode(edge.source) && dagreGraph.hasNode(edge.target)) {
+  // 2. Add edges to dagre (only if both nodes exist)
+  edges.forEach((edge) => {
+    if (nodeMap.has(edge.source) && nodeMap.has(edge.target)) {
+      // Invert edge direction for hierarchical flow if target is selected to push it to the top
       if (selectedIds.has(edge.target) && !selectedIds.has(edge.source)) {
         dagreGraph.setEdge(edge.target, edge.source);
       } else {
@@ -253,13 +244,19 @@ const getLayoutedElements = (nodes, edges, direction = 'TB') => {
   dagre.layout(dagreGraph);
   return nodes.map((node) => {
     const pos = dagreGraph.node(node.id);
-    return { ...node, position: { x: pos ? pos.x - 75 : node.position.x, y: pos ? pos.y - 50 : node.position.y } };
+    return { 
+      ...node, 
+      position: { 
+        x: pos ? pos.x - nodeWidth / 2 : node.position.x, 
+        y: pos ? pos.y - nodeHeight / 2 : node.position.y 
+      } 
+    };
   });
 };
 
-const getCircularLayout = (nodes) => {
+const getCircularLayout = (nodes, spacingFactor = 1.0) => {
   if (nodes.length === 0) return [];
-  const radius = Math.max(300, nodes.length * 60);
+  const radius = Math.max(300 * spacingFactor, nodes.length * 50 * spacingFactor);
   const center = { x: 400, y: 400 };
   return nodes.map((node, index) => {
     const angle = (index / nodes.length) * 2 * Math.PI;
@@ -267,17 +264,17 @@ const getCircularLayout = (nodes) => {
   });
 };
 
-const getForceLayout = (nodes, edges) => {
+const getForceLayout = (nodes, edges, spacingFactor = 1.0) => {
   if (nodes.length === 0) return [];
   const simNodes = nodes.map(n => ({ id: n.id, x: n.position.x, y: n.position.y }));
   const nodeIds = new Set(simNodes.map(n => n.id));
   const simLinks = edges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target)).map(e => ({ source: e.source, target: e.target }));
-  const repulsion = nodes.length > 20 ? -2500 : -1500;
+  const repulsion = (nodes.length > 20 ? -2000 : -1200) * spacingFactor;
   const simulation = d3Force.forceSimulation(simNodes)
-    .force('link', d3Force.forceLink(simLinks).id(d => d.id).distance(350).strength(0.4))
+    .force('link', d3Force.forceLink(simLinks).id(d => d.id).distance(300 * spacingFactor).strength(0.4))
     .force('charge', d3Force.forceManyBody().strength(repulsion))
     .force('center', d3Force.forceCenter(400, 400))
-    .force('collide', d3Force.forceCollide().radius(120))
+    .force('collide', d3Force.forceCollide().radius(100 * spacingFactor))
     .stop();
   for (let i = 0; i < 300; ++i) simulation.tick();
   return nodes.map(node => {
@@ -286,11 +283,11 @@ const getForceLayout = (nodes, edges) => {
   });
 };
 
-const getGridLayout = (nodes) => {
+const getGridLayout = (nodes, spacingFactor = 1.0) => {
   if (nodes.length === 0) return [];
   const count = nodes.length;
   const cols = Math.ceil(Math.sqrt(count));
-  const spacing = 400;
+  const spacing = 400 * spacingFactor;
   return nodes.map((node, index) => {
     const row = Math.floor(index / cols);
     const col = index % cols;
@@ -298,7 +295,7 @@ const getGridLayout = (nodes) => {
   });
 };
 
-const getConcentricLayout = (nodes) => {
+const getConcentricLayout = (nodes, spacingFactor = 1.0) => {
   if (nodes.length === 0) return [];
   const sortedNodes = [...nodes].sort((a, b) => (b.data?.score || 0) - (a.data?.score || 0));
   const center = { x: 400, y: 400 };
@@ -306,7 +303,7 @@ const getConcentricLayout = (nodes) => {
   const ringCapacities = [1, 5, 12, 20, 30];
   let nodeIndex = 0;
   ringCapacities.forEach((capacity, ringIndex) => {
-    const radius = ringIndex * 400;
+    const radius = ringIndex * 400 * spacingFactor;
     const countInRing = Math.min(capacity, sortedNodes.length - nodeIndex);
     for (let i = 0; i < countInRing; i++) {
       const node = sortedNodes[nodeIndex++];
@@ -314,7 +311,7 @@ const getConcentricLayout = (nodes) => {
       layoutedNodes.push({ ...node, position: { x: center.x + radius * Math.cos(angle), y: center.y + radius * Math.sin(angle) } });
     }
   });
-  const outerRadius = ringCapacities.length * 400;
+  const outerRadius = ringCapacities.length * 400 * spacingFactor;
   const remainingCount = sortedNodes.length - nodeIndex;
   for (let i = 0; i < remainingCount; i++) {
     const node = sortedNodes[nodeIndex++];
@@ -424,6 +421,10 @@ export default function App() {
           const [edgePathType, setEdgePathType] = useState(() => {
             return localStorage.getItem('kl_edgePathType') || 'straight';
           });
+          const [layoutSpacing, setLayoutSpacing] = useState(() => {
+            const saved = localStorage.getItem('kl_layoutSpacing');
+            return saved !== null ? parseFloat(saved) : 1.0;
+          });
       
           const [pendingConnection, setPendingConnection] = useState(null);
                         const [isEdgeCreationMode, setIsEdgeCreationMode] = useState(false);
@@ -445,7 +446,8 @@ export default function App() {
           useEffect(() => {
             localStorage.setItem('kl_enableDonuts', JSON.stringify(enableDonuts));
             localStorage.setItem('kl_edgePathType', edgePathType);
-          }, [enableDonuts, edgePathType]);
+            localStorage.setItem('kl_layoutSpacing', layoutSpacing.toString());
+          }, [enableDonuts, edgePathType, layoutSpacing]);
       
           useEffect(() => {
       
@@ -863,23 +865,30 @@ export default function App() {
               closeSidebar();
             }
           }, [isEditingNode, isEditingEdge, cancelEditing, closeSidebar]);
-        const applyLayout = useCallback((nds, eds, type) => {
-    if (type === 'hierarchical') return getLayoutedElements(nds, eds);
-    if (type === 'circular') return getCircularLayout(nds);
-    if (type === 'force') return getForceLayout(nds, eds);
-    if (type === 'grid') return getGridLayout(nds);
-    if (type === 'concentric') return getConcentricLayout(nds);
+        const applyLayout = useCallback((nds, eds, type, spacingFactor = 1.0) => {
+    if (type === 'hierarchical') return getLayoutedElements(nds, eds, spacingFactor);
+    if (type === 'circular') return getCircularLayout(nds, spacingFactor);
+    if (type === 'force') return getForceLayout(nds, eds, spacingFactor);
+    if (type === 'grid') return getGridLayout(nds, spacingFactor);
+    if (type === 'concentric') return getConcentricLayout(nds, spacingFactor);
     return nds;
   }, []);
 
   const onLayoutClick = useCallback((type) => {
     setActiveLayout(type);
     const allRelevantEdges = [...edgesRef.current, ...pathEdgesRef.current];
-    const layouted = applyLayout(nodes, allRelevantEdges, type);
+    const layouted = applyLayout(nodes, allRelevantEdges, type, layoutSpacing);
     setNodes(layouted);
     // Kamera zieht früher nach (300ms)
     setTimeout(() => fitToNodes(layouted), 300);
-  }, [applyLayout, fitToNodes, setNodes, nodes]);
+  }, [applyLayout, fitToNodes, setNodes, nodes, layoutSpacing]);
+
+  // Trigger re-layout when spacing changes
+  useEffect(() => {
+    const allRelevantEdges = [...edgesRef.current, ...pathEdgesRef.current];
+    const layouted = applyLayout(nodesRef.current, allRelevantEdges, activeLayout, layoutSpacing);
+    setNodes(layouted);
+  }, [layoutSpacing, activeLayout, applyLayout, setNodes]);
 
   const onAnalyze = useCallback(async (algorithm) => {
     setActiveAlgorithm(algorithm);
@@ -1012,10 +1021,10 @@ export default function App() {
                   setEdges(eds => deduplicate([...eds, newEdge]));
                   setTimeout(() => {
                     const allRelevantEdges = [...edgesRef.current, ...pathEdgesRef.current];
-                    setNodes(nds => applyLayout(nds, allRelevantEdges, activeLayoutRef.current));
+                    setNodes(nds => applyLayout(nds, allRelevantEdges, activeLayoutRef.current, layoutSpacing));
                     setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
                   }, 50);
-                }, [expandNode, applyLayout, fitView, setNodes, setEdges, enableDonuts]);
+                }, [expandNode, applyLayout, fitView, setNodes, setEdges, enableDonuts, layoutSpacing]);
                   const addAllNodesOfType = useCallback(async (category) => {
       console.log(`FETCHING ALL ${category.toUpperCase()} NODES...`);
       try {
@@ -1055,7 +1064,7 @@ export default function App() {
         // Layout triggern
         setTimeout(() => {
           const allRelevantEdges = [...edgesRef.current, ...pathEdgesRef.current];
-          setNodes(nds => applyLayout(nds, allRelevantEdges, activeLayoutRef.current));
+          setNodes(nds => applyLayout(nds, allRelevantEdges, activeLayoutRef.current, layoutSpacing));
           setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
         }, 50);
       } catch (e) {
@@ -2163,6 +2172,20 @@ export default function App() {
               <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', ml: 4, mb: 2, display: 'block' }}>Display neighbor distribution rings around nodes</Typography>
             </FormGroup>
             
+            <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
+            
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 2, letterSpacing: 1 }}>GRAPH SPACING</Typography>
+            <Box sx={{ px: 2, mt: 1 }}>
+              <Slider 
+                value={layoutSpacing} 
+                min={0.5} max={2.5} step={0.1}
+                onChange={(e, v) => setLayoutSpacing(v)}
+                color="secondary"
+                valueLabelDisplay="auto"
+              />
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', display: 'block', mt: 1 }}>Adjust the distance and repulsion between nodes</Typography>
+            </Box>
+
             <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
             
             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 2, letterSpacing: 1 }}>EDGE PATH STYLE</Typography>

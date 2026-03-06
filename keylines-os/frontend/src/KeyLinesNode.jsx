@@ -40,7 +40,7 @@ const KeyLinesNode = ({ data }) => {
           position: 'relative', 
           width: size, 
           height: size,
-          filter: score > 0.4 ? `drop-shadow(0 0 ${glowIntensity}px ${glowColor}88)` : 'none'
+          filter: 'none' // Glow entfernt
         }}
       >
         {/* SVG Donut Ring */}
@@ -83,7 +83,7 @@ const KeyLinesNode = ({ data }) => {
                     r={radius}
                     fill="none"
                     stroke={color}
-                    strokeWidth="10"
+                    strokeWidth="6"
                     strokeDasharray={strokeDasharray}
                     strokeDashoffset={strokeDashoffset}
                     strokeLinecap="butt"
@@ -98,8 +98,8 @@ const KeyLinesNode = ({ data }) => {
                         data.onSegmentClick(segment.category, e);
                       }
                     }}
-                    onMouseEnter={(e) => e.target.setAttribute('stroke-width', '14')}
-                    onMouseLeave={(e) => e.target.setAttribute('stroke-width', '10')}
+                    onMouseEnter={(e) => e.target.setAttribute('stroke-width', '10')}
+                    onMouseLeave={(e) => e.target.setAttribute('stroke-width', '6')}
                   />
                 </Tooltip>
               );
@@ -120,8 +120,7 @@ const KeyLinesNode = ({ data }) => {
           borderRadius: '50%',
           width: 34,
           height: 34,
-          boxShadow: 2,
-          border: `2px solid ${COLORS.background}`
+          border: `5px solid ${COLORS.background}`
         }}>
           <IconComponent sx={{ fontSize: 24, color: 'white' }} />
         </Box>
