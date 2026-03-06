@@ -141,7 +141,8 @@ import {
                 background: COLORS.background,
                 padding: '2px 4px',
                 borderRadius: 4,
-                fontStyle: 'italic'
+                fontStyle: 'italic',
+                zIndex: 1000,
               }}
               className="nodrag nopan"
             >
@@ -237,6 +238,13 @@ const getDescendants = (nodeId, edges, visited = new Set()) => {
 };
 
 // --- LAYOUT ENGINES ---
+const getLayoutCenter = (nodes) => {
+  if (!nodes || nodes.length === 0) return { x: 400, y: 400 };
+  const avgX = nodes.reduce((sum, n) => sum + n.position.x, 0) / nodes.length;
+  const avgY = nodes.reduce((sum, n) => sum + n.position.y, 0) / nodes.length;
+  return { x: avgX, y: avgY };
+};
+
 const getLayoutedElements = (nodes, edges, spacingFactor = 1.0, direction = 'TB') => {
   if (nodes.length === 0) return [];
   const dagreGraph = new dagre.graphlib.Graph();
@@ -263,7 +271,6 @@ const getLayoutedElements = (nodes, edges, spacingFactor = 1.0, direction = 'TB'
   });
 
   // 2. Add edges to dagre (only if both nodes exist)
-  // We use a direction-sensitive key to allow reciprocal links while preventing redundant calls
   const addedEdges = new Set();
   edges.forEach((edge) => {
     if (nodeMap.has(edge.source) && nodeMap.has(edge.target)) {
@@ -271,7 +278,6 @@ const getLayoutedElements = (nodes, edges, spacingFactor = 1.0, direction = 'TB'
       if (addedEdges.has(edgeKey)) return;
       addedEdges.add(edgeKey);
 
-      // Invert edge direction for hierarchical flow if target is selected to push it to the top
       if (selectedIds.has(edge.target) && !selectedIds.has(edge.source)) {
         dagreGraph.setEdge(edge.target, edge.source);
       } else {
@@ -282,10 +288,9 @@ const getLayoutedElements = (nodes, edges, spacingFactor = 1.0, direction = 'TB'
 
   dagre.layout(dagreGraph);
 
-  // 3. Apply Dagre's calculated positions directly
-  // We remove the manual horizontal re-sorting as it breaks Dagre's cross-minimization 
-  // and sub-tree separation logic.
-  return nodes.map((node) => {
+  // 3. Apply Dagre's calculated positions
+  const center = getLayoutCenter(nodes);
+  const layoutedNodes = nodes.map((node) => {
     const pos = dagreGraph.node(node.id);
     return { 
       ...node, 
@@ -295,12 +300,22 @@ const getLayoutedElements = (nodes, edges, spacingFactor = 1.0, direction = 'TB'
       }
     };
   });
+  
+  // Shift everything so the center of the new layout matches the previous center of gravity
+  const newCenter = getLayoutCenter(layoutedNodes);
+  const offsetX = center.x - newCenter.x;
+  const offsetY = center.y - newCenter.y;
+  
+  return layoutedNodes.map(n => ({
+    ...n,
+    position: { x: n.position.x + offsetX, y: n.position.y + offsetY }
+  }));
 };
 
 const getCircularLayout = (nodes, spacingFactor = 1.0) => {
   if (nodes.length === 0) return [];
-  const radius = Math.max(300 * spacingFactor, nodes.length * 50 * spacingFactor);
-  const center = { x: 400, y: 400 };
+  const center = getLayoutCenter(nodes);
+  const radius = Math.max(300 * spacingFactor, nodes.length * 60 * spacingFactor);
   return nodes.map((node, index) => {
     const angle = (index / nodes.length) * 2 * Math.PI;
     return { ...node, position: { x: center.x + radius * Math.cos(angle), y: center.y + radius * Math.sin(angle) } };
@@ -309,17 +324,28 @@ const getCircularLayout = (nodes, spacingFactor = 1.0) => {
 
 const getForceLayout = (nodes, edges, spacingFactor = 1.0) => {
   if (nodes.length === 0) return [];
+  const center = getLayoutCenter(nodes);
   const simNodes = nodes.map(n => ({ id: n.id, x: n.position.x, y: n.position.y }));
   const nodeIds = new Set(simNodes.map(n => n.id));
   const simLinks = edges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target)).map(e => ({ source: e.source, target: e.target }));
-  const repulsion = (nodes.length > 20 ? -2000 : -1200) * spacingFactor;
+  
+  // Enhanced force parameters:
+  // - Increased repulsion for clarity
+  // - Limited distance of repulsion to avoid scattering far-away nodes
+  // - Stronger link strength
+  // - Centering at current center of gravity
+  const repulsion = (nodes.length > 20 ? -3500 : -1800) * spacingFactor;
+  
   const simulation = d3Force.forceSimulation(simNodes)
-    .force('link', d3Force.forceLink(simLinks).id(d => d.id).distance(300 * spacingFactor).strength(0.4))
-    .force('charge', d3Force.forceManyBody().strength(repulsion))
-    .force('center', d3Force.forceCenter(400, 400))
-    .force('collide', d3Force.forceCollide().radius(100 * spacingFactor))
+    .force('link', d3Force.forceLink(simLinks).id(d => d.id).distance(350 * spacingFactor).strength(1))
+    .force('charge', d3Force.forceManyBody().strength(repulsion).distanceMax(1200 * spacingFactor))
+    .force('x', d3Force.forceX(center.x).strength(0.1))
+    .force('y', d3Force.forceY(center.y).strength(0.1))
+    .force('collide', d3Force.forceCollide().radius(140 * spacingFactor))
     .stop();
-  for (let i = 0; i < 300; ++i) simulation.tick();
+    
+  for (let i = 0; i < 350; ++i) simulation.tick();
+  
   return nodes.map(node => {
     const sn = simNodes.find(s => s.id === node.id);
     return { ...node, position: { x: sn ? sn.x : node.position.x, y: sn ? sn.y : node.position.y } };
@@ -328,20 +354,31 @@ const getForceLayout = (nodes, edges, spacingFactor = 1.0) => {
 
 const getGridLayout = (nodes, spacingFactor = 1.0) => {
   if (nodes.length === 0) return [];
+  const center = getLayoutCenter(nodes);
   const count = nodes.length;
   const cols = Math.ceil(Math.sqrt(count));
   const spacing = 400 * spacingFactor;
-  return nodes.map((node, index) => {
+  
+  const gridNodes = nodes.map((node, index) => {
     const row = Math.floor(index / cols);
     const col = index % cols;
     return { ...node, position: { x: col * spacing, y: row * spacing } };
   });
+  
+  const gridCenter = getLayoutCenter(gridNodes);
+  const offsetX = center.x - gridCenter.x;
+  const offsetY = center.y - gridCenter.y;
+  
+  return gridNodes.map(n => ({
+    ...n,
+    position: { x: n.position.x + offsetX, y: n.position.y + offsetY }
+  }));
 };
 
 const getConcentricLayout = (nodes, spacingFactor = 1.0) => {
   if (nodes.length === 0) return [];
+  const center = getLayoutCenter(nodes);
   const sortedNodes = [...nodes].sort((a, b) => (b.data?.score || 0) - (a.data?.score || 0));
-  const center = { x: 400, y: 400 };
   const layoutedNodes = [];
   const ringCapacities = [1, 5, 12, 20, 30];
   let nodeIndex = 0;
@@ -363,58 +400,8 @@ const getConcentricLayout = (nodes, spacingFactor = 1.0) => {
   }
   return layoutedNodes;
 };
-
-  const integrateNewData = (currentNodes, currentEdges, newData, sourceNodeId, expandNodeFn, enableDonuts) => {
-    const sourceNode = currentNodes.find(n => n.id === sourceNodeId);
-    const sourcePos = sourceNode ? sourceNode.position : { x: 400, y: 400 };
-    const nodesMap = new Map(currentNodes.map(n => [n.id, n]));
-    const edgesMap = new Map(currentEdges.map(e => [e.id, e]));
-    newData.nodes.forEach(newNode => {
-      const importance = newNode.data.importance ?? 0.5;
-      const initialScore = activeAlgorithm === null ? importance : (newNode.data.score ?? importance);
-
-      if (nodesMap.has(newNode.id)) {
-        const existing = nodesMap.get(newNode.id);
-        nodesMap.set(newNode.id, { 
-          ...existing, 
-          data: { 
-            ...existing.data, 
-            ...newNode.data, 
-            importance,
-            score: initialScore,
-            showDonuts: enableDonuts,
-            onSegmentClick: (cat, e) => expandNodeFn(newNode.id, cat, e) 
-          } 
-        });
-      } else {
-        nodesMap.set(newNode.id, { 
-          ...newNode, 
-          type: 'keylines', 
-          position: { ...sourcePos }, 
-          data: { 
-            ...newNode.data, 
-            importance,
-            score: initialScore,
-            showDonuts: enableDonuts,
-            onSegmentClick: (cat, e) => expandNodeFn(newNode.id, cat, e) 
-          } 
-        });
-      }
-    });
-    newData.edges.forEach(newEdge => {
-      if (!edgesMap.has(newEdge.id)) {
-        edgesMap.set(newEdge.id, {
-          ...newEdge, data: { ...newEdge.data, isNew: true }, 
-          style: getEdgeStyle(newEdge.data?.type || 'default'),
-          labelStyle: { fill: COLORS.nodeLabel, fontWeight: 600, fontSize: '10px', fontFamily: '"Open Sans", sans-serif', fontStyle: 'italic' },
-          labelBgStyle: { fill: COLORS.background, fillOpacity: 1 }, labelBgPadding: [4, 2], labelBgBorderRadius: 4
-        });
-      }
-    });
-    return { nodes: Array.from(nodesMap.values()), edges: Array.from(edgesMap.values()) };
-  };
 export default function App() {
-  const { fitView, setCenter, screenToFlowPosition } = useReactFlow();
+  const { fitView, setCenter, screenToFlowPosition, getViewport } = useReactFlow();
   
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -588,7 +575,7 @@ export default function App() {
                   animated: false,
                   selectable: true,
                   focusable: true,
-                  zIndex: isDirect ? -1 : -2
+                  zIndex: isDirect ? -2 : -1
                 };
               });
 
@@ -987,21 +974,87 @@ export default function App() {
     return nds;
   }, []);
 
+  const getSmartPosition = useCallback((sourceNode = null) => {
+    const visibleNodesOnStage = nodesRef.current.filter(n => !hiddenTypes.has(n.data.type));
+    
+    if (sourceNode) {
+      // Place near source with random offset to prevent stacking
+      return {
+        x: sourceNode.position.x + (Math.random() - 0.5) * 200,
+        y: sourceNode.position.y + (Math.random() - 0.5) * 200,
+      };
+    }
+
+    if (visibleNodesOnStage.length > 0) {
+      // Find center of gravity of visible graph and add near it
+      const center = getLayoutCenter(visibleNodesOnStage);
+      return {
+        x: center.x + (Math.random() - 0.5) * 400,
+        y: center.y + (Math.random() - 0.5) * 400,
+      };
+    }
+
+    // Fallback: Place in current viewport center
+    const { x, y, zoom } = getViewport();
+    return { 
+      x: -x / zoom + (window.innerWidth / 2) / zoom, 
+      y: -y / zoom + (window.innerHeight / 2) / zoom 
+    };
+  }, [hiddenTypes, getViewport]);
+
+  const runLayout = useCallback((type, spacing = layoutSpacing) => {
+    const visibleNodesOnStage = nodesRef.current.filter(n => !hiddenTypes.has(n.data.type));
+    const visibleIds = new Set(visibleNodesOnStage.map(n => n.id));
+    const visibleEdgesOnStage = pathEdgesRef.current.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
+    
+    const layoutedVisible = applyLayout(visibleNodesOnStage, visibleEdgesOnStage, type, spacing);
+    const layoutedMap = new Map(layoutedVisible.map(n => [n.id, n.position]));
+    
+    setNodes(nds => nds.map(n => {
+      if (layoutedMap.has(n.id)) {
+        return { ...n, position: layoutedMap.get(n.id) };
+      }
+      return n;
+    }));
+    
+    return layoutedVisible;
+  }, [applyLayout, setNodes, hiddenTypes, layoutSpacing]);
+
+  const prevSpacingRef = useRef(layoutSpacing);
+
   const onLayoutClick = useCallback((type) => {
     setActiveLayout(type);
-    const allRelevantEdges = pathEdgesRef.current;
-    const layouted = applyLayout(nodes, allRelevantEdges, type, layoutSpacing);
-    setNodes(layouted);
-    // Kamera zieht früher nach (300ms)
-    setTimeout(() => fitToNodes(layouted), 300);
-  }, [applyLayout, fitToNodes, setNodes, nodes, layoutSpacing]);
+    const layoutedVisible = runLayout(type);
+    setTimeout(() => fitToNodes(layoutedVisible), 300);
+  }, [runLayout, fitToNodes]);
 
-  // Trigger re-layout when spacing changes
+  // Handle structural layout changes (button click)
   useEffect(() => {
-    const allRelevantEdges = pathEdgesRef.current;
-    const layouted = applyLayout(nodesRef.current, allRelevantEdges, activeLayout, layoutSpacing);
-    setNodes(layouted);
-  }, [layoutSpacing, activeLayout, applyLayout, setNodes]);
+    runLayout(activeLayout);
+  }, [activeLayout, runLayout]);
+
+  // Handle smooth scaling when spacing slider changes (no structural re-layout)
+  useEffect(() => {
+    if (prevSpacingRef.current !== layoutSpacing && nodes.length > 0) {
+      const ratio = layoutSpacing / prevSpacingRef.current;
+      const visibleNodesOnStage = nodes.filter(n => !hiddenTypes.has(n.data.type));
+      const center = getLayoutCenter(visibleNodesOnStage);
+      
+      setNodes(nds => nds.map(node => {
+        // We only scale visible nodes to keep the "stage" clean
+        if (hiddenTypes.has(node.data.type)) return node;
+        
+        return {
+          ...node,
+          position: {
+            x: center.x + (node.position.x - center.x) * ratio,
+            y: center.y + (node.position.y - center.y) * ratio
+          }
+        };
+      }));
+    }
+    prevSpacingRef.current = layoutSpacing;
+  }, [layoutSpacing, hiddenTypes, setNodes]);
 
   const onAnalyze = useCallback(async (algorithm) => {
     if (algorithm === activeAlgorithm) {
@@ -1176,10 +1229,11 @@ export default function App() {
                   const importance = targetNode.data.importance ?? 0.5;
                   const initialScore = activeAlgorithm === null ? importance : (targetNode.data.score ?? importance);
 
+                  // Improved placement using the smart position logic
                   const newNode = { 
                     ...targetNode, 
                     type: 'keylines', 
-                    position: { ...(sourceNode?.position || {x:400,y:400}) }, 
+                    position: getSmartPosition(sourceNode), 
                     data: { 
                       ...targetNode.data, 
                       importance,
@@ -1202,12 +1256,27 @@ export default function App() {
                   
                   setNodes(nds => deduplicate([...nds, newNode]));
                   setEdges(eds => deduplicate([...eds, newEdge]));
+                  
+                  // Trigger layout only for visible nodes
                   setTimeout(() => {
-                    const allRelevantEdges = pathEdgesRef.current;
-                    setNodes(nds => applyLayout(nds, allRelevantEdges, activeLayoutRef.current, layoutSpacing));
-                    setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
+                    const visibleOnStage = nodesRef.current.filter(n => !hiddenTypes.has(n.data.type));
+                    const visibleIds = new Set(visibleOnStage.map(n => n.id));
+                    const visibleEdges = pathEdgesRef.current.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
+                    
+                    const layoutedVisible = applyLayout(visibleOnStage, visibleEdges, activeLayoutRef.current, layoutSpacing);
+                    const layoutedMap = new Map(layoutedVisible.map(n => [n.id, n.position]));
+
+                    setNodes(nds => nds.map(n => {
+                      if (layoutedMap.has(n.id)) {
+                        return { ...n, position: layoutedMap.get(n.id) };
+                      }
+                      return n;
+                    }));
+                    
+                    setTimeout(() => fitToNodes(layoutedVisible), 300);
                   }, 50);
-                }, [expandNode, applyLayout, fitView, setNodes, setEdges, enableDonuts, layoutSpacing]);
+                }, [expandNode, applyLayout, fitToNodes, setNodes, setEdges, enableDonuts, layoutSpacing, getSmartPosition, hiddenTypes]);
+
                   const addAllNodesOfType = useCallback(async (category) => {
       console.log(`FETCHING ALL ${category.toUpperCase()} NODES...`);
       try {
@@ -1224,20 +1293,19 @@ export default function App() {
           return;
         }
 
-        // Wir nutzen existing nodesRef to check what we already have
         const currentNodes = nodesRef.current;
         const nodesToAdd = newNodesFromDB.filter(n => !currentNodes.find(existing => existing.id === n.id));
         
         if (nodesToAdd.length === 0) return;
 
-        // Positioniere neue Knoten im Zentrum oder zufällig, bevor das Layout greift
-        const centerPos = { x: 400, y: 400 };
+        // Position new nodes relative to the center of the existing graph
+        const basePos = getSmartPosition();
         const preparedNodes = nodesToAdd.map((n, i) => {
           const importance = n.data.importance ?? 0.5;
           const initialScore = activeAlgorithm === null ? importance : (n.data.score ?? importance);
           return {
             ...n,
-            position: { x: centerPos.x + (i % 5) * 50, y: centerPos.y + Math.floor(i / 5) * 50 },
+            position: { x: basePos.x + (i % 5) * 60, y: basePos.y + Math.floor(i / 5) * 60 },
             data: { 
               ...n.data, 
               importance,
@@ -1250,16 +1318,28 @@ export default function App() {
 
         setNodes(nds => deduplicate([...nds, ...preparedNodes]));
         
-        // Layout triggern
+        // Trigger layout
         setTimeout(() => {
-          const allRelevantEdges = pathEdgesRef.current;
-          setNodes(nds => applyLayout(nds, allRelevantEdges, activeLayoutRef.current, layoutSpacing));
-          setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
+          const visibleOnStage = nodesRef.current.filter(n => !hiddenTypes.has(n.data.type));
+          const visibleIds = new Set(visibleOnStage.map(n => n.id));
+          const visibleEdges = pathEdgesRef.current.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
+          
+          const layoutedVisible = applyLayout(visibleOnStage, visibleEdges, activeLayoutRef.current, layoutSpacing);
+          const layoutedMap = new Map(layoutedVisible.map(n => [n.id, n.position]));
+
+          setNodes(nds => nds.map(n => {
+            if (layoutedMap.has(n.id)) {
+              return { ...n, position: layoutedMap.get(n.id) };
+            }
+            return n;
+          }));
+          
+          setTimeout(() => fitToNodes(layoutedVisible), 300);
         }, 50);
       } catch (e) {
         console.error("Batch load error:", e);
       }
-    }, [enableDonuts, expandNode, applyLayout, fitView, setNodes]);
+    }, [enableDonuts, expandNode, applyLayout, fitToNodes, setNodes, getSmartPosition, layoutSpacing, hiddenTypes]);
 
     const onDrillDown = useCallback(() => {
     if (highlightedTypes.size === 0) return;
@@ -1304,22 +1384,13 @@ export default function App() {
       const data = await response.json();
       const fullNode = data.nodes.find(n => n.id === nodeInfo.id);
       if (fullNode) {
-        const currentNodes = nodesRef.current;
-        let newPos = { x: 400, y: 400 };
-        
-        if (currentNodes.length > 0) {
-          const maxX = Math.max(...currentNodes.map(n => n.position.x));
-          const rightmostNode = currentNodes.reduce((prev, curr) => (prev.position.x > curr.position.x) ? prev : curr);
-          newPos = { x: maxX + 200, y: rightmostNode.position.y };
-        }
-
                   const importance = fullNode.data.importance ?? 0.5;
                   const initialScore = activeAlgorithm === null ? importance : (fullNode.data.score ?? importance);
 
                   const newNode = { 
                     ...fullNode, 
                     type: 'keylines', 
-                    position: newPos, 
+                    position: getSmartPosition(), 
                     data: { 
                       ...fullNode.data, 
                       importance,
@@ -1510,7 +1581,7 @@ export default function App() {
         data: updatedData,
         label: isPath ? "" : (zoomLevel > 0.6 ? (edge.label || edge.data?.dbType?.replace("_", " ").toLowerCase()) : ""), 
         className: isPath ? 'path-edge' : '',
-        zIndex: isPath ? -2 : -1, 
+        zIndex: isPath ? -1 : -2, 
         labelStyle: { fill: COLORS.nodeLabel, fontWeight: 600, fontSize: '10px', fontFamily: '"Open Sans", sans-serif', fontStyle: 'italic' },
         labelBgStyle: { fill: COLORS.background, fillOpacity: 1 },
         labelBgPadding: [4, 2],
