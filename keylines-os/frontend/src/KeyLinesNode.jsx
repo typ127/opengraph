@@ -78,6 +78,7 @@ const KeyLinesNode = ({ data }) => {
                   }}
                 >
                   <circle
+                    className="donut-segment"
                     cx={center}
                     cy={center}
                     r={radius}
@@ -94,6 +95,7 @@ const KeyLinesNode = ({ data }) => {
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
+                      e.preventDefault();
                       if (data.onSegmentClick && segment.category) {
                         data.onSegmentClick(segment.category, e);
                       }

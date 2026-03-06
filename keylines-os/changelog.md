@@ -2,6 +2,93 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.41.8] - 2026-03-06
+
+### Fixed
+- **Dependency Initialization**: Resolved a "Cannot access 'expandNode' before initialization" runtime error by re-ordering hook definitions in `App.jsx`. This ensures that snapshot loading logic has reliable access to the node expansion handlers.
+
+## [1.41.7] - 2026-03-06
+
+### Fixed
+- **Snapshot Interaction Restoration**: Fixed a critical bug where donut segments on nodes loaded from snapshots were non-interactive. Since JSON serialization strips functional handlers from node data, the system now automatically re-injects the `onSegmentClick` handler to all nodes during the snapshot loading process.
+
+## [1.41.6] - 2026-03-06
+
+### Fixed
+- **Segment Drawer Interaction**: Resolved a conflict where clicking on a node donut segment would immediately close the resulting drawer. The system now correctly distinguishes between a click on the central node (details) and a click on a donut segment (expansion), ensuring stable drawer transitions.
+
+## [1.41.5] - 2026-03-06
+
+### Fixed
+- **Visual Alignment**: Refined the vertical centering of the path glyph text by switching to `dominantBaseline="central"`, ensuring perfect alignment across different browsers and zoom levels.
+
+## [1.41.4] - 2026-03-06
+
+### Changed
+- **Visual Refinement**: Increased the path glyph count font size to `12px` to improve legibility on high-density displays.
+
+## [1.41.3] - 2026-03-06
+
+### Changed
+- **Typography Refinement**: Switched the path glyph count font to **Extra Bold** (900) for better contrast and visibility against the primary path color.
+
+## [1.41.2] - 2026-03-06
+
+### Changed
+- **Visual Refinement**: Improved the readability and aesthetic of the path glyph text (the node count in the center of paths). Explicitly applied the `"Open Sans"` font family and refined the font weight, size, and letter-spacing for a cleaner, more professional look.
+
+## [1.41.1] - 2026-03-06
+
+### Fixed
+- **Consistent Italic Labels**: Fixed a regression where some relationship labels (especially those from snapshots or specific edge types) were not appearing in italics.
+    - **Global CSS Force**: Added `font-style: italic !important;` to the global React Flow edge text class.
+    - **Reactive Memo Enforcement**: The `visibleEdges` logic now explicitly re-applies the italic `labelStyle` and solid `labelBgStyle` to every edge before rendering, ensuring total visual consistency across the entire graph.
+
+## [1.41.0] - 2026-03-06
+
+### Changed
+- **Typography Refinement**: All relationship labels across the stage (standard relations, paths, and manual connections) are now styled with **italics**. This helps to further distinguish relationship text from entity labels and technical UI elements.
+
+## [1.40.1] - 2026-03-06
+
+### Fixed
+- **Hierarchical Layout Integrity**: Restored the natural tree-like structure by removing manual horizontal sorting that overrode Dagre's optimized positioning. Sub-trees are now correctly spaced, and edge crossings are minimized.
+- **Direction-Sensitive Edge Handling**: Refined the layout engine to respect reciprocal relationships while still preventing redundant edge calculations.
+
+## [1.40.0] - 2026-03-06
+
+### Fixed
+- **Robust Hierarchical Layout**: Resolved stability issues in the Dagre-based hierarchical engine.
+    - **Edge Deduplication**: The layout engine now automatically deduplicates relationships between node pairs before calculation. This prevents layout artifacts and "broken" structures when nodes are connected by both standard relations and virtual paths.
+    - **Type-Aware Rank Sorting**: Restored and improved the horizontal sorting logic. Nodes within the same level (rank) are now grouped by **Entity Type** and then sorted alphabetically by **Label**, resulting in significantly cleaner and more structured tree views.
+    - **Full Relationship Inclusion**: Confirmed that all discovered paths and stage relations are correctly integrated into the layout calculation.
+
+## [1.39.1] - 2026-03-06
+
+### Changed
+- **CSS Style Sync**: Set the `fill-opacity` of the relationship label background (`.react-flow__edge-textbg`) to `1` in the global stylesheet. This ensures consistent, solid backgrounds across all edge types and prevents line bleed-through during camera movement.
+
+## [1.39.0] - 2026-03-06
+
+### Changed
+- **Edge Type Simplification**: Unified the visual representation of relationships.
+    - **Dual Category System**: The system now strictly distinguishes between only two visual edge types: **Relations** (Standard Blue) and **Paths** (DeepPink).
+    - **Unified Relations**: Direct relationships discovered by the pathfinder (length=1) are now visually identical to standard stage edges and manual connections. They use the primary color and standard line style.
+    - **Focused Pathfinding**: Only virtual paths (length > 1) use the `pathEdge` component and secondary color, making multi-hop connections immediately distinct from direct ones.
+
+## [1.38.1] - 2026-03-06
+
+### Changed
+- **Label Aesthetic Update**: Removed the explicit border around relationship labels. The labels now use a clean, solid background to isolate text from lines without the visual noise of a stroke, aligning with a more minimalist design.
+
+## [1.38.0] - 2026-03-06
+
+### Changed
+- **Relationship Label Refinement**: Improved label visibility and isolation from relationship lines.
+    - **Solid Background**: Removed transparency (`opacity: 0.8` -> `fillOpacity: 1`) to ensure labels completely mask the underlying lines.
+    - **Isolation Border**: Added a subtle `1px` border (`COLORS.panelBorder`) around all edge labels, providing a clean visual break between the text and the graph structure.
+    - **Consistent Styling**: Applied these refinements across all edge types, including standard relations, manual connections, and discovered paths.
+
 ## [1.37.1] - 2026-03-06
 
 ### Fixed

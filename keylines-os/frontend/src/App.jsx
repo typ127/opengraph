@@ -140,7 +140,7 @@ import {
                 background: COLORS.background,
                 padding: '2px 4px',
                 borderRadius: 4,
-                opacity: 0.8
+                fontStyle: 'italic'
               }}
               className="nodrag nopan"
             >
@@ -157,11 +157,17 @@ import {
               style={{ filter: 'drop-shadow(0px 2px 2px rgba(0,0,0,0.4))' }}
             />
             <text
-              y="1"
+              y="0"
               fill="#fff"
               textAnchor="middle"
-              dominantBaseline="middle"
-              style={{ fontSize: '10px', fontWeight: 800, userSelect: 'none' }}
+              dominantBaseline="central"
+              style={{ 
+                fontSize: '12px', 
+                fontWeight: 900, 
+                fontFamily: '"Open Sans", sans-serif',
+                userSelect: 'none',
+                letterSpacing: '-0.5px'
+              }}
             >
               {intermediateCount}
             </text>
@@ -241,8 +247,10 @@ const getLayoutedElements = (nodes, edges, spacingFactor = 1.0, direction = 'TB'
   
   dagreGraph.setGraph({ 
     rankdir: direction, 
-    nodesep: 80 * spacingFactor, 
-    ranksep: 150 * spacingFactor
+    nodesep: 100 * spacingFactor, 
+    ranksep: 150 * spacingFactor,
+    marginx: 50,
+    marginy: 50
   });
   
   const selectedIds = new Set(nodes.filter(n => n.selected).map(n => n.id));
@@ -254,8 +262,14 @@ const getLayoutedElements = (nodes, edges, spacingFactor = 1.0, direction = 'TB'
   });
 
   // 2. Add edges to dagre (only if both nodes exist)
+  // We use a direction-sensitive key to allow reciprocal links while preventing redundant calls
+  const addedEdges = new Set();
   edges.forEach((edge) => {
     if (nodeMap.has(edge.source) && nodeMap.has(edge.target)) {
+      const edgeKey = `${edge.source}->${edge.target}`;
+      if (addedEdges.has(edgeKey)) return;
+      addedEdges.add(edgeKey);
+
       // Invert edge direction for hierarchical flow if target is selected to push it to the top
       if (selectedIds.has(edge.target) && !selectedIds.has(edge.source)) {
         dagreGraph.setEdge(edge.target, edge.source);
@@ -266,6 +280,10 @@ const getLayoutedElements = (nodes, edges, spacingFactor = 1.0, direction = 'TB'
   });
 
   dagre.layout(dagreGraph);
+
+  // 3. Apply Dagre's calculated positions directly
+  // We remove the manual horizontal re-sorting as it breaks Dagre's cross-minimization 
+  // and sub-tree separation logic.
   return nodes.map((node) => {
     const pos = dagreGraph.node(node.id);
     return { 
@@ -273,7 +291,7 @@ const getLayoutedElements = (nodes, edges, spacingFactor = 1.0, direction = 'TB'
       position: { 
         x: pos ? pos.x - nodeWidth / 2 : node.position.x, 
         y: pos ? pos.y - nodeHeight / 2 : node.position.y 
-      } 
+      }
     };
   });
 };
@@ -380,8 +398,8 @@ const getConcentricLayout = (nodes, spacingFactor = 1.0) => {
         edgesMap.set(newEdge.id, {
           ...newEdge, data: { ...newEdge.data, isNew: true }, 
           style: getEdgeStyle(newEdge.data?.type || 'default'),
-          labelStyle: { fill: COLORS.nodeLabel, fontWeight: 600, fontSize: '10px', fontFamily: '"Open Sans", sans-serif' },
-          labelBgStyle: { fill: COLORS.background, fillOpacity: 0.8 }, labelBgPadding: [4, 2], labelBgBorderRadius: 4
+          labelStyle: { fill: COLORS.nodeLabel, fontWeight: 600, fontSize: '10px', fontFamily: '"Open Sans", sans-serif', fontStyle: 'italic' },
+          labelBgStyle: { fill: COLORS.background, fillOpacity: 1 }, labelBgPadding: [4, 2], labelBgBorderRadius: 4
         });
       }
     });
@@ -530,6 +548,10 @@ export default function App() {
                   },
                   label: isDirect ? relType.replace(/_/g, " ").toLowerCase() : "",
                   style: getEdgeStyle(isDirect ? 'default' : 'PATH'),
+                  labelStyle: { fill: COLORS.nodeLabel, fontWeight: 600, fontSize: '10px', fontFamily: '"Open Sans", sans-serif', fontStyle: 'italic' },
+                  labelBgStyle: { fill: COLORS.background, fillOpacity: 1 }, 
+                  labelBgPadding: [4, 2], 
+                  labelBgBorderRadius: 4,
                   animated: false,
                   selectable: true,
                   focusable: true,
@@ -843,6 +865,10 @@ export default function App() {
                                 label: type.replace("_", " ").toLowerCase(),
                                 data: { type },
                                 style: getEdgeStyle(type),
+                                labelStyle: { fill: COLORS.nodeLabel, fontWeight: 600, fontSize: '10px', fontFamily: '"Open Sans", sans-serif', fontStyle: 'italic' },
+                                labelBgStyle: { fill: COLORS.background, fillOpacity: 1 }, 
+                                labelBgPadding: [4, 2], 
+                                labelBgBorderRadius: 4,
                                 animated: ["TRAVELS_WITH", "CONNECTS", "FOLLOWS"].includes(type)
                               };
                               try {
@@ -1008,19 +1034,6 @@ export default function App() {
       if (controls) controls.style.display = 'flex'; 
       if (attribution) attribution.style.display = 'flex';
     });
-  }, []);
-
-  const onLoadSnapshot = useCallback((snapshot) => {
-    if (!snapshot) return;
-    setNodes(snapshot.nodes);
-    setEdges(snapshot.edges);
-    // Give it a moment to render then fit view
-    setTimeout(() => fitToNodes(snapshot.nodes), 100);
-    setIsSnapshotsOpen(false);
-  }, [setNodes, setEdges, fitToNodes]);
-
-  const onDeleteSnapshot = useCallback((id) => {
-    setSnapshots(prev => prev.filter(s => s.id !== id));
   }, []);
 
   const collectLeaves = useCallback((nodeId) => {
@@ -1416,21 +1429,24 @@ export default function App() {
       const sourceNode = nodes.find(n => n.id === edge.source); 
       const targetNode = nodes.find(n => n.id === edge.target);
       const isPath = edge.data?.type === 'PATH';
-      const isDirectRelation = edge.data?.type === 'DIRECT_RELATION';
       const isHighlighted = hasHighlight ? (highlightedTypes.has(sourceNode?.data.type) || highlightedTypes.has(targetNode?.data.type)) : true;
       
-      const highlightOpacity = (isPath || isDirectRelation) ? 1.0 : (hasHighlight ? (isHighlighted ? 0.8 : 0.1) : 1.0);
+      const highlightOpacity = isPath ? 1.0 : (hasHighlight ? (isHighlighted ? 0.8 : 0.1) : 1.0);
       
       // For custom path edges, we update the pathType in data so it reacts to settings
-      const updatedData = (isPath || isDirectRelation) ? { ...edge.data, pathType: edgePathType } : edge.data;
+      const updatedData = isPath ? { ...edge.data, pathType: edgePathType } : edge.data;
 
       return { 
         ...edge, 
-        type: (isPath || isDirectRelation) ? 'pathEdge' : edgePathType, 
+        type: isPath ? 'pathEdge' : edgePathType, 
         data: updatedData,
         label: isPath ? "" : (zoomLevel > 0.6 ? (edge.label || edge.data?.type?.replace("_", " ").toLowerCase()) : ""), 
         className: isPath ? 'path-edge' : '',
         zIndex: isPath ? -2 : -1, 
+        labelStyle: { fill: COLORS.nodeLabel, fontWeight: 600, fontSize: '10px', fontFamily: '"Open Sans", sans-serif', fontStyle: 'italic' },
+        labelBgStyle: { fill: COLORS.background, fillOpacity: 1 },
+        labelBgPadding: [4, 2],
+        labelBgBorderRadius: 4,
         style: { 
           ...edge.style, 
           stroke: isPath ? COLORS.secondary : COLORS.primary, // DeepPink for paths, Blue for relations
@@ -1441,12 +1457,36 @@ export default function App() {
     });
   }, [edges, pathEdges, visibleNodes, zoomLevel, highlightedTypes, nodes, edgePathType]);
 
+  const onLoadSnapshot = useCallback((snapshot) => {
+    if (!snapshot) return;
+    
+    // JSON serialization strips functions, so we MUST re-attach the handlers
+    const restoredNodes = snapshot.nodes.map(n => ({
+      ...n,
+      data: {
+        ...n.data,
+        showDonuts: enableDonuts,
+        onSegmentClick: (cat, e) => expandNode(n.id, cat, e)
+      }
+    }));
+
+    setNodes(restoredNodes);
+    setEdges(snapshot.edges);
+    // Give it a moment to render then fit view
+    setTimeout(() => fitToNodes(restoredNodes), 100);
+    setIsSnapshotsOpen(false);
+  }, [setNodes, setEdges, fitToNodes, expandNode, enableDonuts]);
+
+  const onDeleteSnapshot = useCallback((id) => {
+    setSnapshots(prev => prev.filter(s => s.id !== id));
+  }, []);
+
   const stats = useMemo(() => {
     const counts = {}; nodes.forEach(n => { const type = n.data.type || 'Unknown'; counts[type] = (counts[type] || 0) + 1; });
     return Object.entries(counts).sort((a, b) => b[1] - a[1]);
   }, [nodes]);
 
-      const sidebarColor = selectedNode ? getHexColor(selectedNode.data.type) : (selectedEdge?.data?.type === 'PATH' || selectedEdge?.data?.type === 'DIRECT_RELATION' || pendingConnection) ? COLORS.secondary : selectedEdge ? COLORS.primary : previewData ? typeColors[previewData.category] : typeColors.other;
+      const sidebarColor = selectedNode ? getHexColor(selectedNode.data.type) : (selectedEdge?.data?.type === 'PATH' || pendingConnection) ? COLORS.secondary : selectedEdge ? COLORS.primary : previewData ? typeColors[previewData.category] : typeColors.other;
     const topBarHeight = 48; // Common height for the top toolbars
     const statusBarHeight = 30;
 
@@ -1469,8 +1509,8 @@ export default function App() {
           opacity: ${zoomLevel > 0.6 ? 1 : 0}; 
         }
         
-        .react-flow__edge-text { fill: ${COLORS.nodeLabel} !important; }
-        .react-flow__edge-textbg { fill: ${COLORS.background} !important; fill-opacity: 0.8 !important; }
+        .react-flow__edge-text { fill: ${COLORS.nodeLabel} !important; font-style: italic !important; }
+        .react-flow__edge-textbg { fill: ${COLORS.background} !important; fill-opacity: 1 !important; }
         
         .react-flow__controls { box-shadow: 0 0 10px rgba(0,0,0,0.5); }
         .react-flow__controls-button { background: ${COLORS.paper} !important; border-bottom: 1px solid ${COLORS.panelBorder} !important; fill: ${COLORS.textSecondary} !important; }
@@ -1743,7 +1783,11 @@ export default function App() {
       <Box sx={{ flexGrow: 1, height: 'auto', position: 'relative', transition: 'all 0.3s ease' }}>
         <ReactFlow
           nodes={visibleNodes} edges={visibleEdges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
-          onNodeClick={(e, n) => e.shiftKey ? collectLeaves(n.id) : openDetails(n)}
+          onNodeClick={(e, n) => {
+            // Wenn auf ein Donut-Segment geklickt wurde, ignorieren wir den Node-Klick
+            if (e.target.classList.contains('donut-segment')) return;
+            e.shiftKey ? collectLeaves(n.id) : openDetails(n);
+          }}
           onEdgeClick={(e, edge) => openEdgeDetails(edge)}
           onConnect={onConnect}
           onPaneClick={() => { closeSidebar(); setHighlightedTypes(new Set()); }}
