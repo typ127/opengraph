@@ -160,7 +160,7 @@ const KeyLinesNode = ({ data }) => {
       <Typography 
         variant="caption" 
         sx={{ 
-          mt: 1, 
+          mt: -0.60, 
           fontWeight: 'bold', 
           color: label ? COLORS.nodeLabel : 'rgba(255,255,255,0.3)', 
           textAlign: 'center',

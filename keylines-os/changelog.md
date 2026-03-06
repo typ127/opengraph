@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.34.0] - 2026-03-06
+
+### Changed
+- **Node Label Refinement**: Adjusted the vertical positioning of node titles (labels). The labels have been moved significantly closer to the node center (from `mt: 1` to `mt: -0.60`) to create a more compact and integrated visual unit.
+
 ## [1.33.0] - 2026-03-05
 
 ### Added
@@ -261,6 +266,9 @@ All notable changes to this project will be documented in this file.
 - **Refined Color Palette**: Integrated `DeepSkyBlue` and `HotPink` as primary and secondary accent colors.
 - **Optimized Visibility**: Updated node labels, search field borders, and panel outlines for maximum readability and a cleaner look on dark backgrounds.
 - **Animation Timing**: Further refined the edge appearance delay (200ms) for a snappier, more responsive feel during graph growth.
+
+### Fixed
+- **Sync Consistency**: Unified category naming (e.g., using `person` instead of `people`) to match the backend database schema perfectly.
 
 ## [1.17.0] - 2026-02-27
 
