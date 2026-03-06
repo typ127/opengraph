@@ -481,6 +481,10 @@ export default function App() {
             const saved = localStorage.getItem('kl_layoutSpacing');
             return saved !== null ? parseFloat(saved) : 1.0;
           });
+          const [maxPathLength, setMaxPathLength] = useState(() => {
+            const saved = localStorage.getItem('kl_maxPathLength');
+            return saved !== null ? parseInt(saved) : 10;
+          });
       
           const [pendingConnection, setPendingConnection] = useState(null);
                         const [isEdgeCreationMode, setIsEdgeCreationMode] = useState(false);
@@ -503,8 +507,9 @@ export default function App() {
             localStorage.setItem('kl_enableDonuts', JSON.stringify(enableDonuts));
             localStorage.setItem('kl_edgePathType', edgePathType);
             localStorage.setItem('kl_layoutSpacing', layoutSpacing.toString());
+            localStorage.setItem('kl_maxPathLength', maxPathLength.toString());
             localStorage.setItem('kl_snapshots', JSON.stringify(snapshots));
-          }, [enableDonuts, edgePathType, layoutSpacing, snapshots]);
+          }, [enableDonuts, edgePathType, layoutSpacing, maxPathLength, snapshots]);
       
           useEffect(() => {
       
@@ -529,7 +534,10 @@ export default function App() {
               const response = await fetch('http://localhost:8000/find-paths', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ node_ids: nodeIds })
+                body: JSON.stringify({ 
+                  node_ids: nodeIds,
+                  max_length: maxPathLength
+                })
               });
               
               if (!response.ok) return;
@@ -580,12 +588,12 @@ export default function App() {
             } catch (e) {
               console.error("Pathfinder connection error:", e);
             }
-          }, [edgePathType]);
+          }, [edgePathType, maxPathLength]);
 
-          // Trigger path finding only when the set of Node IDs changes
+          // Trigger path finding only when the set of Node IDs or maxPathLength changes
           useEffect(() => {
             updatePaths(nodes);
-          }, [nodes.map(n => n.id).join(','), updatePaths]);
+          }, [nodes.map(n => n.id).join(','), maxPathLength, updatePaths]);
       
                           useEffect(() => {
                             setNodes(nds => nds.map(node => ({
@@ -2436,9 +2444,30 @@ export default function App() {
                 valueLabelDisplay="auto"
               />
               <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', display: 'block', mt: 1 }}>Adjust the distance and repulsion between nodes</Typography>
-            </Box>
+              </Box>
 
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 2, letterSpacing: 1 }}>EDGE PATH STYLE</Typography>
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 1, mt: 3, display: 'block', letterSpacing: 1 }}>PATH SEARCH DEPTH (MAX HOPS)</Typography>
+              <Box sx={{ px: 2, mt: 1 }}>
+              <Slider 
+                value={maxPathLength} 
+                min={1} max={10} step={1}
+                onChange={(e, v) => setMaxPathLength(v)}
+                color="secondary"
+                valueLabelDisplay="auto"
+                marks={[
+                  { value: 1, label: '1' },
+                  { value: 5, label: '5' },
+                  { value: 10, label: '10' }
+                ]}
+              />
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', display: 'block', mt: 1 }}>
+                {maxPathLength === 1 
+                  ? "Only direct relationships (Blue) are shown." 
+                  : `Show paths up to ${maxPathLength} hops deep (Pink).`}
+              </Typography>
+              </Box>
+
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 2, mt: 3, letterSpacing: 1 }}>EDGE PATH STYLE</Typography>
             <FormControl fullWidth size="small" sx={{ px: 1, mt: 1 }}>
               <InputLabel id="edge-style-label" sx={{ ml: 1, color: 'rgba(255,255,255,0.5)' }}>Path Type</InputLabel>
               <Select

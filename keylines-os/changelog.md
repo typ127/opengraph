@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.46.0] - 2026-03-06
+
+### Neu
+- **Variable Pfadsuch-Tiefe (Max Hops)**: Einführung eines Sliders in den Einstellungen zur Steuerung der maximalen Pfadlänge [1..10].
+    - **Interaktive Aktualisierung**: Der Graph auf der Stage aktualisiert sich sofort beim Verschieben des Sliders. Pfade, die die eingestellte Tiefe überschreiten, werden entfernt, während neue Pfade innerhalb der neuen Tiefe angefordert werden.
+    - **Exklusive Direktsicht (Tiefe 1)**: Bei Einstellung der Tiefe auf 1 werden ausschließlich direkte Datenbank-Beziehungen (blau) angezeigt, was eine fokussierte Analyse unmittelbarer Abhängigkeiten ermöglicht.
+    - **Persistente Einstellungen**: Die gewählte Pfadlänge wird im `localStorage` gespeichert und bleibt auch nach einem Browser-Reload erhalten.
+
+### Geändert
+- **Backend Pathfinder Optimierung**: Der Endpunkt `/find-paths` akzeptiert nun den Parameter `max_length` und nutzt diesen direkt in der Cypher-BFS-Abfrage (`[*BFS 2..n]`), was die Performance bei geringeren Tiefen verbessert.
+- **Backend-API**: Das Datenmodell `FindPathsRequest` wurde um das Feld `max_length` erweitert.
+
 ## [1.45.0] - 2026-03-06
 
 ### Fixed

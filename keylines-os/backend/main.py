@@ -378,6 +378,7 @@ class EdgeCreate(BaseModel):
 
 class FindPathsRequest(BaseModel):
     node_ids: List[str]
+    max_length: int = 10
 
 @app.post("/find-paths")
 async def find_paths(request: FindPathsRequest):
@@ -385,7 +386,8 @@ async def find_paths(request: FindPathsRequest):
     if len(request.node_ids) < 2:
         return []
 
-    print(f"[PATHFINDER] Request for IDs: {request.node_ids}")
+    max_len = max(1, min(request.max_length, 10))
+    print(f"[PATHFINDER] Request for IDs: {request.node_ids}, Max Length: {max_len}")
 
     # Schritt 1: Prüfen, ob alle IDs in der DB existieren (Debug)
     check_query = "MATCH (n) WHERE n.id IN $ids RETURN n.id as id, labels(n) as labels"
@@ -400,18 +402,21 @@ async def find_paths(request: FindPathsRequest):
     RETURN a.id as source, b.id as target, [a, b] as path_nodes, [e] as path_rels, 1 as length, type(e) as rel_type
     """
     
-    # Und dann alle virtuellen Pfade (Länge 2 bis 10)
-    path_query = """
+    # Und dann alle virtuellen Pfade (Länge 2 bis max_len)
+    path_query = f"""
     MATCH (a), (b)
     WHERE a.id IN $ids AND b.id IN $ids AND a.id < b.id
-    MATCH p = (a)-[*BFS 2..10]-(b)
+    MATCH p = (a)-[*BFS 2..{max_len}]-(b)
     RETURN a.id as source, b.id as target, nodes(p) as path_nodes, relationships(p) as path_rels, size(relationships(p)) as length, null as rel_type
     LIMIT 50;
     """
     
     try:
         direct_results = list(memgraph.execute_and_fetch(direct_query, parameters={"ids": request.node_ids}))
-        path_results = list(memgraph.execute_and_fetch(path_query, parameters={"ids": request.node_ids}))
+        
+        path_results = []
+        if max_len > 1:
+            path_results = list(memgraph.execute_and_fetch(path_query, parameters={"ids": request.node_ids}))
         
         results = direct_results + path_results
         print(f"[PATHFINDER] Found {len(direct_results)} direct and {len(path_results)} virtual paths")
