@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.43.0] - 2026-03-06
+
+### Added
+- **Enhanced Path Drawer**: The path drawer now visualizes relationships between nodes chronologically.
+    - **Directional Arrows**: Added `ArrowDownwardIcon` to indicate the flow of the path.
+    - **Italic Labels**: Relationship types (e.g., "lives on") are displayed in italics between nodes.
+    - **Sequence Styling**: Improved vertical spacing and added dashed connectors for a clearer "step-by-step" timeline feel.
+- **Importance-Based Scaling**: 
+    - Re-imported the dataset with specific `importance` values (0.1 to 1.0) for all nodes.
+    - The `importance` value is now the absolute baseline for node size.
+    - Social algorithms (Degree, PageRank, etc.) only override scaling when active; deselecting an algorithm now instantly restores nodes to their original `importance` scale.
+- **Robust String Escaping**: Updated the backend import engine to correctly handle single quotes in all data fields (Labels, Categories, Descriptions), preventing Cypher query failures (e.g., for "Star's End").
+
+### Fixed
+- **Drawer Crash**: Resolved a `TypeError` (Cannot read properties of null) by removing misplaced Importance sliders from the Settings and Group drawers.
+- **Import Reference Error**: Fixed a missing `ArrowDownwardIcon` import in `App.jsx`.
+- **Pathfinding Data Sync**: Updated the backend `/find-paths` endpoint to return full relationship metadata, ensuring the frontend has access to the correct edge types for path sequences.
+
 ## [1.42.0] - 2026-03-06
 
 ### Added

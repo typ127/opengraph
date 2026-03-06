@@ -11,10 +11,10 @@ def import_data():
 
     # Im Docker-Container ist das /app Verzeichnis das Root-Verzeichnis
     # Die Daten liegen also in /app/data/asimov_nodes.csv
-    nodes_path = "data/asimov_nodes.csv"
+    nodes_path = "data/asimov_nodes_expanded.csv"
     if not os.path.exists(nodes_path):
         # Fallback für lokalen Start ohne Docker
-        nodes_path = "backend/data/asimov_nodes.csv"
+        nodes_path = "backend/data/asimov_nodes_expanded.csv"
     
     if not os.path.exists(nodes_path):
         print(f"Error: Could not find nodes file in data/ or backend/data/")
@@ -25,24 +25,32 @@ def import_data():
         for row in reader:
             donut_list = [int(x) for x in row['donut'].split(';')]
             label = row.get('label', '').replace("'", "\\'")
+            type_val = row.get('type', '').replace("'", "\\'")
+            icon = row.get('icon', '').replace("'", "\\'")
+            planet = row.get('planet', '').replace("'", "\\'")
+            category = row.get('category', '').replace("'", "\\'")
             desc = row.get('description', '').replace("'", "\\'")
+            published = row.get('published', '').replace("'", "\\'")
+            importance = float(row.get('importance', 0.5))
+            
             query = f"""
             MERGE (n:Entity {{id: '{row['id']}'}})
             SET n.label = '{label}',
-                n.type = '{row['type']}',
-                n.icon = '{row['icon']}',
+                n.type = '{type_val}',
+                n.icon = '{icon}',
                 n.donut = {donut_list},
-                n.planet = '{row['planet']}',
-                n.category = '{row['category']}',
+                n.planet = '{planet}',
+                n.category = '{category}',
                 n.description = '{desc}',
-                n.published = '{row.get('published', '')}'
+                n.published = '{published}',
+                n.importance = {importance}
             """
             memgraph.execute(query)
             print(f"Imported Node: {row['label']}")
 
-    edges_path = "data/asimov_edges.csv"
+    edges_path = "data/asimov_edges_expanded.csv"
     if not os.path.exists(edges_path):
-        edges_path = "backend/data/asimov_edges.csv"
+        edges_path = "backend/data/asimov_edges_expanded.csv"
 
     with open(edges_path, mode='r', encoding='utf-8') as f:
         reader = csv.DictReader(f)

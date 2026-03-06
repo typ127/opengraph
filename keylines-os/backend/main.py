@@ -392,24 +392,24 @@ async def find_paths(request: FindPathsRequest):
     found_nodes = list(memgraph.execute_and_fetch(check_query, parameters={"ids": request.node_ids}))
     print(f"[PATHFINDER] Found {len(found_nodes)}/{len(request.node_ids)} nodes in DB")
 
-    # Schritt 2: Pfade suchen (Kompatible Syntax für Memgraph ohne length())
+    # Schritt 2: Pfade suchen (Inklusive Kanten für detaillierte Anzeige)
     query = """
     MATCH (a), (b)
     WHERE a.id IN $ids AND b.id IN $ids AND a.id < b.id
     MATCH p = (a)-[*BFS ..10]-(b)
-    RETURN a.id as source, b.id as target, nodes(p) as path_nodes
+    RETURN a.id as source, b.id as target, nodes(p) as path_nodes, relationships(p) as path_rels
     LIMIT 50;
     """
     try:
         results = list(memgraph.execute_and_fetch(query, parameters={"ids": request.node_ids}))
         print(f"[PATHFINDER] Query returned {len(results)} rows")
-        
+
         paths = []
         for row in results:
             p_nodes = row["path_nodes"]
+            p_rels = row["path_rels"]
             path_nodes_info = []
             for n in p_nodes:
-                # Extrahiere Eigenschaften sicher aus dem Memgraph Knoten-Objekt
                 props = n.properties if hasattr(n, "properties") else (n if isinstance(n, dict) else {})
                 path_nodes_info.append({
                     "id": props.get("id"),
@@ -418,9 +418,26 @@ async def find_paths(request: FindPathsRequest):
                     "icon": props.get("icon", "HelpOutline")
                 })
 
-            # Länge berechnen: Anzahl Knoten minus 1
+            path_rels_info = []
+            for r in p_rels:
+                # Extrahiere Metadaten der Kante
+                r_type = r.type if hasattr(r, "type") else "RELATES_TO"
+                r_source = r.start_node_id if hasattr(r, "start_node_id") else None
+                r_target = r.end_node_id if hasattr(r, "end_node_id") else None
+
+                # Memgraph IDs in unsere IDs umwandeln (falls möglich, sonst lassen wir es weg)
+                # Da wir oben nodes(p) haben, können wir die internen IDs zuordnen
+                path_rels_info.append({
+                    "type": r_type,
+                    "source": r_source,
+                    "target": r_target
+                })
+
+            # Da Memgraph interne IDs für start_node_id nutzt, müssen wir diese ggf. mappen
+            # Aber wir können auch einfach die Reihenfolge nutzen: Node[0] - Rel[0] -> Node[1]
+            # nodes(p) liefert n+1 Knoten für n Kanten.
+
             calc_length = len(path_nodes_info) - 1 if path_nodes_info else 0
-            
             # Bei Länge 1 (Direktverbindung) suchen wir den Typ der Kante für das Frontend
             rel_type = None
             if calc_length == 1 and len(path_nodes_info) == 2:
@@ -429,14 +446,15 @@ async def find_paths(request: FindPathsRequest):
                 edge_res = list(memgraph.execute_and_fetch(edge_query))
                 if edge_res:
                     rel_type = edge_res[0]["type"]
-
             paths.append({
-                "source": row["source"], 
-                "target": row["target"], 
+                "source": row["source"],
+                "target": row["target"],
                 "nodes": path_nodes_info,
+                "edges": path_rels_info,
                 "length": calc_length,
-                "rel_type": rel_type # Nur bei Länge 1 gefüllt
+                "rel_type": rel_type
             })
+
         return paths
     except Exception as e:
         print(f"[PATHFINDER] Error during path query: {e}")

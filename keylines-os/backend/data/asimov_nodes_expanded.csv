@@ -1,0 +1,157 @@
+id,label,type,icon,donut,planet,category,description,published,importance
+n1,Hari Seldon,Person,Person,100,Trantor,Psychohistorian,The father of Psychohistory and founder of the two Foundations. Spent his life on Trantor predicting the future of human society.,,0.95
+n2,Dors Venabili,Robot,Android,80,Trantor,Protector,A humaniform robot tasked by R. Daneel Olivaw to protect Hari Seldon. She became his wife and constant companion.,,0.2
+n3,Yugo Amaryl,Person,Person,85,Trantor,Mathematician,A heatsinker from Dahl who became Hari Seldon's greatest mathematical collaborator and the driving force behind the Prime Radiant.,,0.21
+n4,Wanda Seldon,Person,Person,70,Trantor,Mentalic,Hari Seldon's granddaughter and a powerful mentalic. She was instrumental in the creation of the Second Foundation.,,0.14
+n5,Raych Seldon,Person,Person,60,Trantor,Security,Hari Seldon's adopted son from the Billibotton sector. An expert fighter and loyal protector of the Seldon family.,,0.13
+n6,Cleon I,Person,Person,75,Trantor,Emperor,"The Galactic Emperor during Hari Seldon's early career. Relied heavily on his First Minister, Eto Demerzel.",,0.18
+n7,Eto Demerzel,Robot,Android,95,Trantor,First Minister,An alias used by R. Daneel Olivaw to influence the Galactic Empire and protect Hari Seldon.,,0.34
+n8,Linge Chen,Person,Person,80,Trantor,Commissioner,The Chief Commissioner of Public Safety who effectively ruled the Empire and exiled Seldon to Terminus.,,0.17
+n9,Salvor Hardin,Person,Person,90,Terminus,Mayor,The first Mayor of Terminus. Navigated the Foundation through its first two Seldon Crises without resorting to violence.,,0.34
+n10,Hober Mallow,Person,Person,85,Smyrno,Master Trader,The first Merchant Prince. He used economics and trade rather than religion to expand the Foundation's power.,,0.44
+n11,Poly Verisof,Person,Person,50,Terminus,Ambassador,High Priest of the Foundation's scientism religion and ambassador to Anacreon.,,0.14
+n12,Lord Dorwin,Person,Person,40,Trantor,Aristocrat,"An imperial diplomat who visited Terminus, known for speaking without actually saying anything of substance.",,0.17
+n13,Wienis,Person,Person,50,Anacreon,Regent,The power-hungry Prince Regent of Anacreon who attempted to conquer the Foundation.,,0.14
+n14,Bel Riose,Person,Person,80,Trantor,General,A brilliant Imperial General who tried to conquer the Foundation but was stopped by the dead hand of Hari Seldon's psychohistory.,,0.32
+n15,Ducem Barr,Person,Person,60,Siwenna,Patrician,A Siwennian patrician who secretly aided the Foundation against Bel Riose.,,0.26
+n16,Cleon II,Person,Person,70,Trantor,Emperor,"The last strong Galactic Emperor, whose paranoia led him to recall Bel Riose.",,0.24
+n17,Brodrig,Person,Person,55,Trantor,Privy Secretary,"Cleon II's trusted, corrupt secretary who accompanied Bel Riose and was subsequently executed.",,0.25
+n18,The Mule,Mutant,Psychology,100,Gaia,Conqueror,A mutant warlord who disrupted the Seldon Plan by conquering the Foundation with his emotional control abilities.,,0.95
+n19,Bayta Darell,Person,Person,85,Terminus,Hero,The woman who deduced The Mule's identity and killed Ebling Mis to protect the location of the Second Foundation.,,0.35
+n20,Toran Darell,Person,Person,55,Haven,Trader,"Husband to Bayta Darell, accompanied her in the flight from the Mule.",,0.17
+n21,Ebling Mis,Person,Person,70,Terminus,Scientist,"The greatest psychologist of the First Foundation, who discovered the location of the Second Foundation but was killed before he could reveal it.",,0.29
+n22,Han Pritcher,Person,Person,65,Terminus,General,An intelligence agent for the Foundation who was later converted into an unwavering loyalist by The Mule.,,0.18
+n23,Bail Channis,Person,Person,70,Trantor,Agent,A Second Foundation agent who tricked The Mule into believing the Second Foundation was on Tazenda.,,0.14
+n24,Arcadia Darell,Person,Person,80,Terminus,Writer,Bayta Darell's granddaughter who unwittingly carried a message to the First Foundation that the Second Foundation was 'at the other end of the Galaxy'.,,0.4
+n25,Dr. Darell,Person,Person,75,Terminus,Scientist,Invented the Mentalic Static device that allowed the First Foundation to capture Second Foundationers.,,0.2
+n26,Pelleas Anthor,Person,Person,50,Terminus,Agent,A supposed First Foundation researcher who was secretly a Second Foundation agent.,,0.28
+n27,Homir Munn,Person,Person,45,Terminus,Librarian,A collector of Mule memorabilia who went to Kalgan to investigate The Mule's origins.,,0.23
+n28,Preem Palver,Person,Person,90,Trantor,First Speaker,The First Speaker of the Second Foundation who orchestrated a masterful deception to put the Seldon Plan back on track.,,0.29
+n29,Golan Trevize,Person,Person,85,Terminus,Councilman,A Foundation councilman with an unerring ability to make the right decision. He chose the fate of the Galaxy (Galaxia).,,0.59
+n30,Janov Pelorat,Person,Person,75,Terminus,Historian,"A mythologist obsessed with finding the origin planet, Earth.",,0.29
+n31,Bliss,Person,Person,80,Gaia,Gaian,"A young Gaian woman who travels with Trevize and Pelorat, representing the collective consciousness of Gaia.",,0.3
+n32,Fallom,Person,Person,60,Solaria,Spacer,An intersex Solarian child taken aboard by Trevize and later merged with R. Daneel Olivaw.,,0.17
+n33,Sura Novi,Person,Person,50,Sayshell,Agent,An agent of Gaia posing as a simple peasant woman to observe the First Foundation.,,0.23
+n34,Stor Gendibal,Person,Person,70,Trantor,Speaker,An ambitious Speaker of the Second Foundation who raced to find the mysterious anti-Mule force.,,0.26
+n35,Harla Branno,Person,Person,75,Terminus,Mayor,The strong-willed Mayor of Terminus who tried to assert the First Foundation's dominance through sheer military and technological power.,,0.14
+n36,R. Daneel Olivaw,Robot,Android,100,Aurora,Eternal Guardian,A humaniform robot spanning the entire history of the Galaxy. Guided humanity via the Zeroth Law.,,0.95
+n37,Elijah Baley,Person,Person,95,Earth,Detective,"A Plainclothesman who solved interstellar murders, overcame his agoraphobia, and inspired humanity to settle the stars.",,0.43
+n38,Gladia Delmarre,Person,Person,80,Solaria,Spacer,"A Solarian woman who moved to Aurora, became Baley's lover, and later a symbol of spacer-settler cooperation.",,0.29
+n39,Han Fastolfe,Person,Person,85,Aurora,Roboticist,The creator of R. Daneel Olivaw and the leading voice on Aurora for allowing Earthmen to colonize the Galaxy.,,0.28
+n40,Kelden Amadiro,Person,Person,70,Aurora,Roboticist,"Fastolfe's rival, who wanted Spacers to rule the Galaxy and actively tried to destroy Earth.",,0.34
+n41,Vasilia Aliena,Person,Person,65,Aurora,Roboticist,"Fastolfe's estranged daughter, who unwittingly unlocked R. Giskard's telepathic abilities.",,0.31
+n42,R. Giskard Reventlov,Robot,Android,90,Aurora,Telepathic Robot,A telepathic robot who formulated the Zeroth Law of Robotics to protect humanity as a whole.,,0.37
+n43,R. Jander Panell,Robot,Android,50,Aurora,Android,A humaniform robot practically identical to Daneel. His 'murder' caused a major crisis on Aurora.,,0.21
+n44,Julius Enderby,Person,Person,60,Earth,Commissioner,"Baley's boss in the NYPD, who was secretly involved in a spacer murder conspiracy.",,0.19
+n45,R. Sammy,Robot,Android,40,Earth,Robot,A simple robot assigned to the NYPD. Was destroyed to hide evidence.,,0.1
+n46,Trantor,Planet,Public,100,Trantor,Empire Capital,"An ecumenopolis (city-planet) covering its entire landmass, serving as the capital of the Galactic Empire.",,0.95
+n47,Terminus,Planet,Public,95,Terminus,First Foundation,"A remote planet on the edge of the galaxy, home to the First Foundation.",,0.28
+n48,Earth,Planet,Public,90,Earth,Origin World,"The radioactive birthplace of humanity, slowly forgotten by the rest of the galaxy.",,0.95
+n49,Aurora,Planet,Public,85,Aurora,Spacer World,"The oldest and most powerful of the Spacer worlds, heavily reliant on robotic labor.",,0.7
+n50,Solaria,Planet,Public,80,Solaria,Spacer World,"A sparsely populated Spacer world where humans live in extreme isolation, communicating only via holograms.",,0.21
+n51,Gaia,Planet,Public,85,Gaia,Superorganism,A planet where all matter—living and inanimate—shares a single collective consciousness.,,0.21
+n52,Kalgan,Planet,Public,70,Kalgan,Resort World,An aristocratic resort world that briefly became the capital of the Mule's Union of Worlds.,,0.22
+n53,Smyrno,Planet,Public,60,Smyrno,Four Kingdoms,One of the Four Kingdoms bordering Terminus. Birthplace of Hober Mallow.,,0.15
+n54,Anacreon,Planet,Public,60,Anacreon,Four Kingdoms,The most aggressive of the Four Kingdoms that broke away from the Galactic Empire.,,0.15
+n55,Haven,Planet,Public,50,Haven,Independent Trade World,"A rugged planet of independent traders, home to Toran Darell.",,0.18
+n56,Sayshell,Planet,Public,55,Sayshell,Independent Sector,An independent planetary sector that managed to remain neutral during the Mule's conquests.,,0.15
+n57,Comporellon,Planet,Public,60,Comporellon,Sirius Sector,"A cold, puritanical planet, originally known as Baleyworld, settled by Earthers.",,0.1
+n58,Synnax,Planet,Public,50,Synnax,Imperial Province,"A water-world on the periphery of the Empire, birthplace of Gaal Dornick.",,0.14
+n59,Siwenna,Planet,Public,65,Siwenna,Imperial Province,"A former capital of the Normannic Sector, heavily devastated by Imperial forces.",,0.18
+n60,Tazenda,Planet,Public,40,Tazenda,Star's End,A cold planet mistaken by the Mule to be the home of the Second Foundation.,,0.11
+n61,Rossem,Planet,Public,45,Rossem,Prison World,"A barren, icy world used as a political prison, controlled by Tazenda.",,0.14
+n62,Psychohistory,Science,Science,100,,Science,"The mathematical science predicting the behavior of vast populations, relying on the ignorance of the subjects.",,0.21
+n63,Prime Radiant,Item,Science,90,,Instrument,"A device storing the complete equations of psychohistory, accessible only by the Second Foundation.",,0.25
+n64,Visi-Sonor,Item,AutoStories,70,,Instrument,A musical instrument that directly stimulates the visual cortex. Played masterfully by Magnifico (The Mule).,,0.25
+n65,Positronic Brain,Item,Science,100,,Technology,The sponge-like platinum-iridium brain that gives robots consciousness and enforces the Three Laws.,,0.28
+n66,Three Laws of Robotics,Science,Science,100,,Law,The core programming of positronic brains: 1. Do not harm humans. 2. Obey orders. 3. Protect own existence.,,0.1
+n67,Zeroth Law,Science,Science,90,,Law,"A law formulated by Giskard and Daneel: A robot may not harm humanity, or, by inaction, allow humanity to come to harm.",,0.17
+n68,Mentalic Static Device,Item,Science,60,Terminus,Technology,"An electronic device creating severe mental pain to telepaths, protecting the wearer from mind control.",,0.41
+n69,Neuronic Whip,Item,Science,50,,Weapon,"A common hand weapon that stimulates the pain nerves directly, capable of stunning or killing.",,0.17
+n70,Encyclopedia Galactica,Book,MenuBook,100,Terminus,Knowledge,"The compendium of all human knowledge, compiled by the First Foundation on Terminus.",,0.14
+n71,Galactic Empire,Entity,Public,95,Trantor,Government,"The galaxy-spanning human empire that ruled for 12,000 years before slowly decaying and falling.",,0.21
+n72,First Foundation,Entity,Public,90,Terminus,Organization,"The technological powerhouse established on Terminus to shorten the galaxy's dark age from 30,000 years to 1,000.",,1.0
+n73,Second Foundation,Entity,Public,95,Trantor,Organization,"A secret society of mentalics hiding at 'Star's End', tasked with maintaining the Seldon Plan.",,0.43
+n74,Spacers,Entity,Public,80,Aurora,Culture,"The first wave of human colonists. Long-lived, reliant on robots, and intensely agoraphobic and germaphobic.",,0.1
+n75,Settlers,Entity,Public,85,Earth,Culture,"The second wave of colonists from Earth. Short-lived but dynamic, rejecting robot labor.",,0.18
+n76,Julius Enderby,Person,Person,50,Earth,Commissioner,Commissioner of the New York City Police Department and secretly an anti-Spacer fanatic.,,0.18
+n77,R. Sammy,Robot,Android,30,Earth,Robot,"A clumsy administrative robot at the NYPD, murdered to cover up a conspiracy.",,0.19
+n78,Dr. Sarton,Person,Person,40,Aurora,Roboticist,"An Auroran roboticist who designed R. Daneel Olivaw, murdered in Spacetown on Earth.",,0.18
+n79,Jessie Baley,Person,Person,60,Earth,Civilian,"Elijah Baley's wife, briefly involved in a Medievalist conspiracy on Earth.",,0.22
+n80,Hannibal Leebig,Person,Person,70,Solaria,Roboticist,A Solarian roboticist who tried to bypass the First Law of Robotics by redefining what a 'human' is to a robot.,,0.19
+n81,Jothan Leebig,Person,Person,40,Solaria,Spacer,A Solarian who suffered from severe agoraphobia.,,0.3
+n82,Rikaine Delmarre,Person,Person,50,Solaria,Fetal Engineer,"Gladia's husband on Solaria, murdered due to his political and genetic ideologies.",,0.14
+n83,Gremionis,Person,Person,55,Aurora,Spacer,An Auroran citizen who repeatedly offered Gladia 'viewing' and 'seeing' privileges.,,0.13
+n84,Mandamus,Person,Person,75,Aurora,Scientist,An Auroran scientist working with Amadiro who designed the Nuclear Intensifier to irradiate Earth.,,0.18
+n85,D.G. Baley,Person,Person,80,Baleyworld,Trader,A descendant of Elijah Baley who helped Gladia and Giskard stop Amadiro.,,0.21
+n86,Nuclear Intensifier,Item,Science,90,,Weapon,A device designed to increase the natural radioactivity of a planet's crust. Used on Earth.,,0.18
+n87,Baleyworld,Planet,Public,60,Baleyworld,Settler World,"The first Settler world, named after Elijah Baley, later known as Comporellon.",,0.19
+n88,Joseph Schwartz,Person,Person,85,Earth,Mentalic,A 20th-century tailor randomly transported thousands of years into the future to a radioactive Earth.,,0.23
+n89,Bel Arvardan,Person,Person,70,Sirius,Archaeologist,An Imperial archaeologist who theorized Earth was the birthplace of humanity.,,0.2
+n90,Lord Ennius,Person,Person,65,Trantor,Procurator,The Imperial Procurator of Earth during the attempted rebellion.,,0.14
+n91,Biron Farrill,Person,Person,75,Nephelos,Aristocrat,"Son of the Rancher of Widemos, forced to investigate a conspiracy against the Tyranni.",,0.25
+n92,Aratap,Person,Person,80,Tyrann,Commissioner,A highly intelligent and pragmatic Tyranni commissioner.,,0.21
+n93,Rik,Person,Person,85,Earth,Scientist,A spatio-analyst whose mind was wiped after discovering Florina's sun was about to go nova.,,0.2
+n94,Valona March,Person,Person,60,Florina,Peasant,A Florinian peasant who took care of the amnesiac Rik.,,0.19
+n95,Florina,Planet,Public,75,Florina,Agricultural World,The only planet capable of growing the immensely valuable kyrt.,,0.21
+n96,Sark,Planet,Public,70,Sark,Ruling World,The planetary neighbor that brutally oppressed Florina to control the kyrt trade.,,0.22
+n97,Tyrann,Planet,Public,65,Tyrann,Empire,"A harsh, militaristic planet that conquered dozens of neighboring star systems in the Nebular Kingdoms.",,0.16
+n98,Lewis Pirenne,Person,Person,40,Terminus,Scientist,"Chairman of the Board of Trustees of the Encyclopedia Galactica, lacking political vision.",,0.25
+n99,Anselm haut Rodric,Person,Person,35,Anacreon,Ambassador,A crude nobleman from Anacreon sent to negotiate with Terminus.,,0.14
+n100,Jorane Sutt,Person,Person,50,Terminus,Politician,"Secretary to the Mayor, who tried to use religion to control the Foundation but was outmaneuvered by Mallow.",,0.18
+n101,Jaim Twer,Person,Person,45,Terminus,Trader,A Foundation trader who was secretly an agent for Jorane Sutt.,,0.13
+n102,Sennett Forell,Person,Person,60,Terminus,Merchant Prince,The illegitimate son of Hober Mallow and a wealthy Merchant Prince during the war with Bel Riose.,,0.19
+n103,Lathan Devers,Person,Person,65,Terminus,Trader,A Foundation trader who tried to bribe Brodrig and ultimately fled to Trantor to stop Bel Riose.,,0.21
+n104,Onum Barr,Person,Person,50,Siwenna,Patrician,An impoverished Siwennian patrician who helped Hober Mallow find the truth about Imperial nuclear power.,,0.14
+n105,Magnifico Giganticus,Person,Person,40,Kalgan,Clown,"The Mule's disguise as a pitiful clown, traveling with Bayta and Toran Darell.",,0.14
+n106,Lady Callia,Person,Person,60,Kalgan,Aristocrat,"The seemingly foolish mistress of Lord Stettin, who was secretly a Second Foundation agent.",,0.23
+n107,Lord Stettin,Person,Person,55,Kalgan,Warlord,The ruler of Kalgan who launched a disastrous war against the First Foundation.,,0.14
+n108,Jole Turbor,Person,Person,40,Terminus,Journalist,A holovision journalist who participated in the conspiracy to find the Second Foundation.,,0.14
+n109,Laskin Joranum,Person,Person,50,Trantor,Demagogue,"A charismatic populist who claimed to be from Mycogen but was actually from a fringe world, attempting to overthrow Demerzel.",,0.26
+n110,Chetter Hummin,Person,Person,90,Trantor,Journalist,"Another alias of R. Daneel Olivaw, posing as a journalist to aid Hari Seldon.",,0.17
+n111,Mandell Gruber,Person,Person,35,Trantor,Gardener,A simple Imperial gardener who panicked at being promoted and assassinated Cleon I.,,0.19
+n112,Clowzia,Person,Person,45,Trantor,Civilian,A woman who briefly worked with Hari Seldon in the Dahl sector.,,0.19
+n113,Mycogen,Planet,Public,65,Trantor,Sector,"An isolationist, hyper-traditionalist sector of Trantor, populated by descendants of Spacer worlds (specifically Aurora).",,0.12
+n114,Dahl,Planet,Public,60,Trantor,Sector,"A lower-class, geothermal-powered sector of Trantor, home to Yugo Amaryl and Raych.",,0.1
+n115,Wye,Planet,Public,60,Trantor,Sector,"A wealthy sector of Trantor situated at the South Pole, controlling much of the planet's heat-sink infrastructure.",,0.14
+n116,Rashelle,Person,Person,65,Trantor,Mayor,The ambitious Mayor of the Wye sector who attempted to secede from the Empire.,,0.14
+n117,Hiroko,Person,Person,45,Comporellon,Minister,A Comporellian Minister of Transportation who interacted with Golan Trevize.,,0.21
+n118,Bander,Person,Person,50,Solaria,Spacer,"A hermaphroditic Solarian who attempted to kill Trevize, Pelorat, and Bliss but was killed by Bliss's mentalic powers.",,0.22
+n119,Galaxia,Entity,Public,100,,Superorganism,The ultimate endpoint of the Seldon/Daneel plan: a living galaxy where every atom is part of a collective consciousness.,,0.14
+n120,Alpha,Planet,Public,60,Alpha,Planet,"A terraformed planet orbiting Alpha Centauri, settled by the last refugees of Earth's radioactive crust.",,0.14
+n121,Monolee,Person,Person,55,Alpha,Civilian,An Alphan who encountered Trevize and explained the history of New Earth.,,0.14
+n122,The Far Star,Item,AutoStories,80,,Spaceship,A highly advanced gravitic spaceship gifted to Golan Trevize for his mission.,,0.17
+n123,Jump Drive,Science,Science,95,,Technology,The technology that allows faster-than-light travel by 'jumping' through hyperspace.,,0.11
+n124,Blaster,Item,Science,50,,Weapon,A standard energy weapon used by military and civilians throughout the galaxy.,,0.14
+n125,Personal Shield,Item,Science,70,Terminus,Technology,"A Foundation invention that wraps the wearer in an invisible force field, absorbing kinetic and energy attacks.",,0.21
+n126,Isaac Asimov,Person,Person,100,Earth,Author,"The grandmaster of science fiction who created the Foundation, Robot, and Empire universes.",,0.95
+n128,Settler Ship 1,Item,AutoStories,47,Earth,Spaceship,A ship carrying Settlers to new worlds.,,0.14
+n129,Settler Ship 2,Item,AutoStories,56,Earth,Spaceship,A ship carrying Settlers to new worlds.,,0.15
+n130,Settler Ship 3,Item,AutoStories,57,Earth,Spaceship,A ship carrying Settlers to new worlds.,,0.2
+n131,Settler Ship 4,Item,AutoStories,35,Earth,Spaceship,A ship carrying Settlers to new worlds.,,0.28
+n132,Settler Ship 5,Item,AutoStories,59,Earth,Spaceship,A ship carrying Settlers to new worlds.,,0.11
+n133,Settler Ship 6,Item,AutoStories,63,Earth,Spaceship,A ship carrying Settlers to new worlds.,,0.11
+n134,Settler Ship 7,Item,AutoStories,69,Earth,Spaceship,A ship carrying Settlers to new worlds.,,0.11
+n135,Settler Ship 8,Item,AutoStories,51,Earth,Spaceship,A ship carrying Settlers to new worlds.,,0.11
+n136,Settler Ship 9,Item,AutoStories,47,Earth,Spaceship,A ship carrying Settlers to new worlds.,,0.11
+n137,Settler Ship 10,Item,AutoStories,60,Earth,Spaceship,A ship carrying Settlers to new worlds.,,0.26
+n138,Spacer World 1,Planet,Public,56,Spacer 1,Spacer World,One of the original 50 Spacer worlds.,,0.18
+n139,Spacer World 2,Planet,Public,52,Spacer 2,Spacer World,One of the original 50 Spacer worlds.,,0.25
+n140,Spacer World 3,Planet,Public,57,Spacer 3,Spacer World,One of the original 50 Spacer worlds.,,0.25
+n141,Spacer World 4,Planet,Public,60,Spacer 4,Spacer World,One of the original 50 Spacer worlds.,,0.26
+n142,Spacer World 5,Planet,Public,40,Spacer 5,Spacer World,One of the original 50 Spacer worlds.,,0.17
+n143,Spacer World 6,Planet,Public,45,Spacer 6,Spacer World,One of the original 50 Spacer worlds.,,0.24
+n144,Spacer World 7,Planet,Public,49,Spacer 7,Spacer World,One of the original 50 Spacer worlds.,,0.18
+n145,Spacer World 8,Planet,Public,42,Spacer 8,Spacer World,One of the original 50 Spacer worlds.,,0.21
+n146,Spacer World 9,Planet,Public,56,Spacer 9,Spacer World,One of the original 50 Spacer worlds.,,0.17
+n147,Spacer World 10,Planet,Public,48,Spacer 10,Spacer World,One of the original 50 Spacer worlds.,,0.17
+n148,Foundation Mayor 1,Person,Person,43,Terminus,Mayor,A historical Mayor of Terminus.,,0.15
+n149,Foundation Mayor 2,Person,Person,65,Terminus,Mayor,A historical Mayor of Terminus.,,0.19
+n150,Foundation Mayor 3,Person,Person,67,Terminus,Mayor,A historical Mayor of Terminus.,,0.17
+n151,Foundation Mayor 4,Person,Person,44,Terminus,Mayor,A historical Mayor of Terminus.,,0.25
+n152,Foundation Mayor 5,Person,Person,64,Terminus,Mayor,A historical Mayor of Terminus.,,0.23
+n153,Foundation Mayor 6,Person,Person,45,Terminus,Mayor,A historical Mayor of Terminus.,,0.14
+n154,Foundation Mayor 7,Person,Person,43,Terminus,Mayor,A historical Mayor of Terminus.,,0.18
+n155,Foundation Mayor 8,Person,Person,52,Terminus,Mayor,A historical Mayor of Terminus.,,0.18
+n156,Foundation Mayor 9,Person,Person,45,Terminus,Mayor,A historical Mayor of Terminus.,,0.14
+n157,Foundation Mayor 10,Person,Person,51,Terminus,Mayor,A historical Mayor of Terminus.,,0.19

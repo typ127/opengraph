@@ -88,7 +88,8 @@ import {
   AddLink as LinkIcon,
   MenuOpen as MenuIcon,
   CameraAlt as SnapshotIcon,
-  DeleteOutline as DeleteOutlineIcon
+  DeleteOutline as DeleteOutlineIcon,
+  ArrowDownward as ArrowDownwardIcon
   } from '@mui/icons-material';  import * as Icons from '@mui/icons-material';
   import { categoryMap, typeColors, getHexColor } from './constants';
   import { COLORS, EDGE_TYPES, NODE_CATEGORIES } from './theme';
@@ -550,6 +551,7 @@ export default function App() {
                     dbType: relType,
                     length: p.length,
                     fullPathNodes: p.nodes || [], 
+                    fullPathEdges: p.edges || [],
                     intermediateCount: intermediateCount,
                     pathType: edgePathType
                   },
@@ -1795,7 +1797,8 @@ export default function App() {
                                                 })}
                                               </Box>
                                             <Divider sx={{ mb: 3, borderColor: 'rgba(255,255,255,0.1)' }} />
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 2, letterSpacing: 1 }}>RELATIONSHIP TOOLS</Typography>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 1, letterSpacing: 1 }}>ACTIONS</Typography>
+
                       <Button 
                         variant={isEdgeCreationMode ? "contained" : "outlined"} 
                         fullWidth 
@@ -2087,16 +2090,21 @@ export default function App() {
                     Dieser Pfad überbrückt {selectedEdge.data.length} Sprünge in der Datenbank.
                   </Typography>
 
-                  <Typography variant="caption" sx={{ color: COLORS.secondary, fontWeight: 'bold', letterSpacing: 1, display: 'block', mb: 1 }}>ENTHALTENE KNOTEN</Typography>
-                  <List>
+                  <Typography variant="caption" sx={{ color: COLORS.secondary, fontWeight: 'bold', letterSpacing: 1, display: 'block', mb: 1 }}>PFAD-SEQUENZ</Typography>
+                  <List sx={{ pt: 0 }}>
                     {(() => {
-                      return selectedEdge.data.fullPathNodes?.map(nodeInfo => {
+                      const pathNodes = selectedEdge.data.fullPathNodes || [];
+                      const pathRels = selectedEdge.data.fullPathEdges || [];
+                      const items = [];
+
+                      pathNodes.forEach((nodeInfo, idx) => {
                         const id = nodeInfo.id;
                         const isOnStage = nodes.some(n => n.id === id);
                         
-                        return (
-                          <ListItem key={id} sx={{ px: 0 }}>
-                            <ListItemAvatar>
+                        // Knoten-Eintrag
+                        items.push(
+                          <ListItem key={`node-${id}-${idx}`} sx={{ px: 0, py: 0.5 }}>
+                            <ListItemAvatar sx={{ minWidth: 44 }}>
                               <Avatar sx={{ bgcolor: getHexColor(nodeInfo.type), width: 32, height: 32 }}>
                                 {React.createElement(Icons[nodeInfo.icon] || Icons.HelpOutline, { sx: { fontSize: 18, color: '#fff' } })}
                               </Avatar>
@@ -2104,28 +2112,49 @@ export default function App() {
                             <ListItemText 
                               primary={nodeInfo.label} 
                               secondary={nodeInfo.type} 
-                              primaryTypographyProps={{ style: { fontSize: '0.9rem', color: isOnStage ? '#fff' : 'rgba(255,255,255,0.5)' } }}
-                              secondaryTypographyProps={{ style: { fontSize: '0.7rem' } }}
+                              primaryTypographyProps={{ style: { fontSize: '0.85rem', color: isOnStage ? '#fff' : 'rgba(255,255,255,0.5)', fontWeight: 600 } }}
+                              secondaryTypographyProps={{ style: { fontSize: '0.65rem' } }}
                             />
                             {!isOnStage && (
                               <ListItemSecondaryAction>
                                 <IconButton 
                                   size="small" color="primary" 
                                   onClick={async () => {
-                                    // Wir haben die Daten bereits, nutzen aber expand für die Konsistenz der integrateNewData Logik
                                     const res = await fetch(`http://localhost:8000/expand/${id}`);
                                     const data = await res.json();
                                     const fullNode = data.nodes.find(n => n.id === id);
                                     if (fullNode) addSingleNode(selectedEdge.source, fullNode);
                                   }}
                                 >
-                                  <AddIcon />
+                                  <AddIcon sx={{ fontSize: 18 }} />
                                 </IconButton>
                               </ListItemSecondaryAction>
                             )}
                           </ListItem>
                         );
+
+                        // Wenn es einen nächsten Knoten gibt, zeige die Relation dazwischen
+                        if (idx < pathNodes.length - 1) {
+                          const rel = pathRels[idx];
+                          const relLabel = rel ? rel.type.replace(/_/g, " ").toLowerCase() : "verbindung";
+                          
+                          // Bestimme Richtung des Pfeils basierend auf DB-Relation
+                          // Memgraph gibt start_node_id / end_node_id (interne IDs) zurück.
+                          // Für die UI nehmen wir einfach einen Abwärtspfeil, da die Liste chronologisch ist.
+                          items.push(
+                            <ListItem key={`rel-${idx}`} sx={{ px: 0, py: 0, pl: 2, borderLeft: `2px dashed ${COLORS.secondary}44`, ml: 2, my: 0.5 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5 }}>
+                                <ArrowDownwardIcon sx={{ fontSize: 16, color: COLORS.secondary, mr: 1, opacity: 0.7 }} />
+                                <Typography variant="caption" sx={{ fontStyle: 'italic', color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>
+                                  {relLabel}
+                                </Typography>
+                              </Box>
+                            </ListItem>
+                          );
+                        }
                       });
+
+                      return items;
                     })()}
                   </List>
                 </>
@@ -2402,9 +2431,7 @@ export default function App() {
               <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', ml: 4, mb: 2, display: 'block' }}>Display neighbor distribution rings around nodes</Typography>
             </FormGroup>
             
-            <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
-            
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 2, letterSpacing: 1 }}>GRAPH SPACING</Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 1, letterSpacing: 1 }}>LAYOUT SPACING</Typography>
             <Box sx={{ px: 2, mt: 1 }}>
               <Slider 
                 value={layoutSpacing} 
@@ -2416,8 +2443,6 @@ export default function App() {
               <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', display: 'block', mt: 1 }}>Adjust the distance and repulsion between nodes</Typography>
             </Box>
 
-            <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
-            
             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 2, letterSpacing: 1 }}>EDGE PATH STYLE</Typography>
             <FormControl fullWidth size="small" sx={{ px: 1, mt: 1 }}>
               <InputLabel id="edge-style-label" sx={{ ml: 1, color: 'rgba(255,255,255,0.5)' }}>Path Type</InputLabel>
