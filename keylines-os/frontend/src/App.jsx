@@ -536,13 +536,17 @@ export default function App() {
 
               const discoveredPaths = await response.json();
               
-              const newPathEdges = discoveredPaths.map(p => {
+              const newPathEdges = discoveredPaths.map((p, idx) => {
                 const isDirect = p.length === 1;
                 const intermediateCount = p.length - 1;
-                const relType = p.rel_type || 'RELATES_TO';
+                const relType = p.rel_type || (p.edges?.[0]?.type) || 'RELATES_TO';
+                
+                // Extrahiere Properties (z.B. weight) für direkte Relationen
+                const properties = p.edges?.[0]?.properties || {};
+                const weight = parseFloat(properties.weight) || 1;
                 
                 return {
-                  id: `path-${p.source}-${p.target}`,
+                  id: isDirect ? `path-${p.source}-${relType}-${p.target}` : `path-v-${p.source}-${p.target}-${idx}`,
                   source: p.source,
                   target: p.target,
                   type: isDirect ? 'default' : 'pathEdge', 
@@ -553,10 +557,14 @@ export default function App() {
                     fullPathNodes: p.nodes || [], 
                     fullPathEdges: p.edges || [],
                     intermediateCount: intermediateCount,
-                    pathType: edgePathType
+                    pathType: edgePathType,
+                    weight: weight
                   },
                   label: isDirect ? relType.replace(/_/g, " ").toLowerCase() : "",
-                  style: getEdgeStyle(isDirect ? 'default' : 'PATH'),
+                  style: {
+                    ...(getEdgeStyle(isDirect ? 'default' : 'PATH')),
+                    strokeWidth: isDirect ? 1 : 3
+                  },
                   labelStyle: { fill: COLORS.nodeLabel, fontWeight: 600, fontSize: '10px', fontFamily: '"Open Sans", sans-serif', fontStyle: 'italic' },
                   labelBgStyle: { fill: COLORS.background, fillOpacity: 1 }, 
                   labelBgPadding: [4, 2], 
@@ -588,11 +596,11 @@ export default function App() {
                           }, [enableDonuts, isEdgeCreationMode, setNodes]);
                       
                           useEffect(() => {
-                            setEdges(eds => eds.map(edge => ({
+                            setPathEdges(eds => eds.map(edge => ({
                               ...edge,
-                              type: edgePathType
+                              type: edge.data?.type === 'PATH' ? 'pathEdge' : edgePathType
                             })));
-                          }, [edgePathType, setEdges]);
+                          }, [edgePathType]);
                       
                                 // Funktion zum manuellen Anpassen der Kamera an neue Knotenpositionen,
   // ignoriert CSS-Animationen für mehr Präzision.
@@ -819,6 +827,9 @@ export default function App() {
                         nodes: prev.nodes.filter(n => n.id !== neighborId),
                         edges: prev.edges.filter(e => e.id !== edge.id) 
                       } : null);
+
+                      // Pfade sofort aktualisieren, damit die gelöschte Verbindung verschwindet
+                      updatePaths(nodesRef.current);
                       
                     } catch (e) {
                       console.error("Edge delete error:", e);
@@ -937,6 +948,9 @@ export default function App() {
                         
                                 setPendingConnection(null);
                                 setIsEdgeCreationMode(false);
+                                
+                                // Pfade sofort aktualisieren, damit die neue Verbindung erscheint
+                                updatePaths(nodesRef.current);
                               } catch (e) { console.error("Edge creation failed:", e); }
                             }, [pendingConnection, setEdges, setNodes]);
                         
@@ -959,7 +973,7 @@ export default function App() {
 
   const onLayoutClick = useCallback((type) => {
     setActiveLayout(type);
-    const allRelevantEdges = [...edgesRef.current, ...pathEdgesRef.current];
+    const allRelevantEdges = pathEdgesRef.current;
     const layouted = applyLayout(nodes, allRelevantEdges, type, layoutSpacing);
     setNodes(layouted);
     // Kamera zieht früher nach (300ms)
@@ -968,7 +982,7 @@ export default function App() {
 
   // Trigger re-layout when spacing changes
   useEffect(() => {
-    const allRelevantEdges = [...edgesRef.current, ...pathEdgesRef.current];
+    const allRelevantEdges = pathEdgesRef.current;
     const layouted = applyLayout(nodesRef.current, allRelevantEdges, activeLayout, layoutSpacing);
     setNodes(layouted);
   }, [layoutSpacing, activeLayout, applyLayout, setNodes]);
@@ -990,7 +1004,7 @@ export default function App() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nodes: nodesRef.current.map(n => ({ id: n.id, data: n.data })),
-          edges: edgesRef.current.map(e => ({ source: e.source, target: e.target })),
+          edges: pathEdgesRef.current.map(e => ({ source: e.source, target: e.target })),
           algorithm
         })
       });
@@ -1069,9 +1083,9 @@ export default function App() {
   }, []);
 
   const collectLeaves = useCallback((nodeId) => {
-    const currentEdges = edgesRef.current;
+    const currentEdges = pathEdgesRef.current;
     
-    // Finde alle Nachbarn auf der Stage
+    // Finde alle Nachbarn auf der Stage (über pathEdges)
     const neighborEdges = currentEdges.filter(e => e.source === nodeId || e.target === nodeId);
     const neighborIds = neighborEdges.map(e => e.source === nodeId ? e.target : e.source);
     
@@ -1093,7 +1107,7 @@ export default function App() {
 
   const expandNode = useCallback(async (nodeId, filterCategory = null, event = null) => {
     const currentNodes = nodesRef.current;
-    const currentEdges = edgesRef.current;
+    const currentEdges = pathEdgesRef.current;
 
     // Wenn keine Kategorie übergeben wurde (direkter Klick auf Knoten), 
     // machen wir nichts mehr, da onNodeClick das jetzt handhabt.
@@ -1173,7 +1187,7 @@ export default function App() {
                   setNodes(nds => deduplicate([...nds, newNode]));
                   setEdges(eds => deduplicate([...eds, newEdge]));
                   setTimeout(() => {
-                    const allRelevantEdges = [...edgesRef.current, ...pathEdgesRef.current];
+                    const allRelevantEdges = pathEdgesRef.current;
                     setNodes(nds => applyLayout(nds, allRelevantEdges, activeLayoutRef.current, layoutSpacing));
                     setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
                   }, 50);
@@ -1222,7 +1236,7 @@ export default function App() {
         
         // Layout triggern
         setTimeout(() => {
-          const allRelevantEdges = [...edgesRef.current, ...pathEdgesRef.current];
+          const allRelevantEdges = pathEdgesRef.current;
           setNodes(nds => applyLayout(nds, allRelevantEdges, activeLayoutRef.current, layoutSpacing));
           setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
         }, 50);
@@ -1390,17 +1404,12 @@ export default function App() {
               // wenn Nachbarn bereits auf der Stage sind.
               let newDonut = n.data.donut || [];
               if (newDonut.length > 0) {
-                // Finde alle Nachbarn dieses Knotens, die aktuell auf der Stage sind (real oder virtuell)
-                const realNeighbors = edges
-                  .filter(e => e.source === n.id || e.target === n.id)
-                  .map(e => e.source === n.id ? e.target : e.source);
-                
-                // Auch Direktverbindungen vom Pathfinder berücksichtigen
-                const virtualNeighbors = pathEdges
+                // Finde alle Nachbarn dieses Knotens, die aktuell auf der Stage sind (über pathEdges)
+                const pathNeighbors = pathEdges
                   .filter(e => (e.source === n.id || e.target === n.id) && e.data?.type === 'DIRECT_RELATION')
                   .map(e => e.source === n.id ? e.target : e.source);
 
-                const uniqueNeighborsOnStage = new Set([...realNeighbors, ...virtualNeighbors]);
+                const uniqueNeighborsOnStage = new Set(pathNeighbors);
                 const neighborsOnStage = nodes.filter(node => uniqueNeighborsOnStage.has(node.id));
       
                 // Zähle Nachbarn pro Kategorie auf der Stage
@@ -1440,56 +1449,43 @@ export default function App() {
             });
           }, [nodes, edges, pathEdges, hiddenTypes, highlightedTypes]);
         const visibleEdges = useMemo(() => {
-    const nodeIds = new Set(visibleNodes.map(n => n.id));
-    const hasHighlight = highlightedTypes.size > 0;
-    
-    // 1. Reale Kanten filtern
-    const activeRealEdges = edges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target));
-    
-    // 2. Pfade filtern
-    const filteredPathEdges = pathEdges.filter(pe => {
-      const { source, target } = pe;
-      const pathIds = pe.data?.fullPathIds || [];
-      const length = pe.data?.length || 0;
+        const nodeIds = new Set(visibleNodes.map(n => n.id));
+        const hasHighlight = highlightedTypes.size > 0;
 
-      if (!nodeIds.has(source) || !nodeIds.has(target)) return false;
-      
-      const alreadyHasDirectEdge = activeRealEdges.some(re => 
-        (re.source === source && re.target === target) || 
-        (re.source === target && re.target === source)
-      );
-      if (alreadyHasDirectEdge) return false;
+        // Wir nutzen NUR noch pathEdges (die jetzt auch direkte Relationen enthalten)
+        const filteredPathEdges = pathEdges.filter(pe => {
+        const { source, target } = pe;
+        const length = pe.data?.length || 0;
 
-      if (length === 1) {
+        if (!nodeIds.has(source) || !nodeIds.has(target)) return false;
+
+        if (length === 1) {
         return true;
-      } else {
+        } else {
         const fullPathNodes = pe.data?.fullPathNodes || [];
         const pathIds = fullPathNodes.map(n => n.id);
         const intermediateIds = pathIds.filter(id => id !== source && id !== target);
+        // Wenn alle Zwischenknoten bereits auf der Stage sind, verbergen wir den virtuellen Pfad
         const allIntermediatesOnStage = intermediateIds.length > 0 && intermediateIds.every(id => nodeIds.has(id));
-        
+
         return !allIntermediatesOnStage;
-      }
-    });
+        }
+        });
 
-    const allEdges = [...activeRealEdges, ...filteredPathEdges];
-    
-    return allEdges.map(edge => {
-      const sourceNode = nodes.find(n => n.id === edge.source); 
-      const targetNode = nodes.find(n => n.id === edge.target);
-      const isPath = edge.data?.type === 'PATH';
-      const isHighlighted = hasHighlight ? (highlightedTypes.has(sourceNode?.data.type) || highlightedTypes.has(targetNode?.data.type)) : true;
-      
-      const highlightOpacity = isPath ? 1.0 : (hasHighlight ? (isHighlighted ? 0.8 : 0.1) : 1.0);
-      
-      // For custom path edges, we update the pathType in data so it reacts to settings
-      const updatedData = isPath ? { ...edge.data, pathType: edgePathType } : edge.data;
+        return filteredPathEdges.map(edge => {
+        const sourceNode = nodes.find(n => n.id === edge.source); 
+        const targetNode = nodes.find(n => n.id === edge.target);
+        const isPath = edge.data?.type === 'PATH';
+        const isHighlighted = hasHighlight ? (highlightedTypes.has(sourceNode?.data.type) || highlightedTypes.has(targetNode?.data.type)) : true;
 
-      return { 
+        const highlightOpacity = isPath ? 1.0 : (hasHighlight ? (isHighlighted ? 0.8 : 0.1) : 1.0);
+        const updatedData = isPath ? { ...edge.data, pathType: edgePathType } : edge.data;
+
+        return { 
         ...edge, 
         type: isPath ? 'pathEdge' : edgePathType, 
         data: updatedData,
-        label: isPath ? "" : (zoomLevel > 0.6 ? (edge.label || edge.data?.type?.replace("_", " ").toLowerCase()) : ""), 
+        label: isPath ? "" : (zoomLevel > 0.6 ? (edge.label || edge.data?.dbType?.replace("_", " ").toLowerCase()) : ""), 
         className: isPath ? 'path-edge' : '',
         zIndex: isPath ? -2 : -1, 
         labelStyle: { fill: COLORS.nodeLabel, fontWeight: 600, fontSize: '10px', fontFamily: '"Open Sans", sans-serif', fontStyle: 'italic' },
@@ -1498,14 +1494,13 @@ export default function App() {
         labelBgBorderRadius: 4,
         style: { 
           ...edge.style, 
-          stroke: isPath ? COLORS.secondary : COLORS.primary, // DeepPink for paths, Blue for relations
-          opacity: edge.data?.isNew ? 0 : highlightOpacity, 
-          transition: edge.data?.isNew ? 'none' : 'opacity 1.0s ease-in-out, stroke 0.3s ease' 
-        } 
-      };
-    });
-  }, [edges, pathEdges, visibleNodes, zoomLevel, highlightedTypes, nodes, edgePathType]);
-
+          stroke: isPath ? COLORS.secondary : COLORS.primary,
+          opacity: highlightOpacity,
+          transition: 'opacity 0.3s ease'
+        }
+        };
+        });
+        }, [nodes, pathEdges, visibleNodes, hiddenTypes, highlightedTypes, edgePathType, zoomLevel]);
   const onLoadSnapshot = useCallback((snapshot) => {
     if (!snapshot) return;
     

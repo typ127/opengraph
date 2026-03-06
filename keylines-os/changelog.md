@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.45.0] - 2026-03-06
+
+### Fixed
+- **Backend Pathfinder (Cypher Syntax)**: Resolved critical query errors by aligning with Memgraph-specific Cypher standards.
+    - Replaced `shortestPath` with native `BFS` syntax for multi-hop pathfinding (lengths 2-10).
+    - Replaced unsupported `length()` function with `size(relationships(p))` for accurate distance calculation.
+- **Visual Uniformity**: Eliminated inconsistent relationship line widths by enforcing a strict global style.
+    - Set all standard blue relations to a precise **1px** stroke width.
+    - Removed dynamic `weight` scaling on the stage to achieve a cleaner, more technical minimalist aesthetic.
+
+## [1.44.0] - 2026-03-06
+
+### Changed
+- **Unified Path Visualization**: Removed the distinction between "Real Edges" and "Path Edges" on the stage. The system now uses the pathfinder as the single source of truth for all relationships.
+    - **Architecture Simplification**: The stage now exclusively renders `pathEdges`.
+    - **Full Detail for Direct Links**: Backend `/find-paths` was updated to return all direct relationships between stage nodes, including their types and properties (like `weight`).
+    - **Visual Consistency**: Direct relationships (length 1) are rendered as standard solid edges, while virtual paths (length > 1) remain distinct with glyphs.
+- **Dynamic Style Sync**: Node donuts, pruning logic (`collectLeaves`), and cluster collapsing (`Shift+Click`) now all reference the pathfinder's state, ensuring a perfectly consistent exploration experience.
+- **Responsive Updates**: Manual edge creation and deletion now trigger an immediate pathfinder refresh to ensure the UI remains in sync with the database.
+
 ## [1.43.0] - 2026-03-06
 
 ### Added
