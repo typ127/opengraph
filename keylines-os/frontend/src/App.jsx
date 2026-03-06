@@ -10,6 +10,7 @@ import ReactFlow, {
   addEdge,
   MarkerType,
   BaseEdge,
+  EdgeLabelRenderer,
   getBezierPath,
   getStraightPath,
   getSmoothStepPath,
@@ -106,6 +107,7 @@ import {
     style = {},
     markerEnd,
     data,
+    label,
   }) => {
     let edgePath = '';
     let labelX, labelY;
@@ -124,6 +126,27 @@ import {
     return (
       <>
         <BaseEdge path={edgePath} markerEnd={markerEnd} style={style} />
+        {label && (
+          <EdgeLabelRenderer>
+            <div
+              style={{
+                position: 'absolute',
+                transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+                fontSize: 10,
+                fontWeight: 600,
+                pointerEvents: 'none',
+                color: COLORS.nodeLabel,
+                background: COLORS.background,
+                padding: '2px 4px',
+                borderRadius: 4,
+                opacity: 0.8
+              }}
+              className="nodrag nopan"
+            >
+              {label}
+            </div>
+          </EdgeLabelRenderer>
+        )}
         {intermediateCount > 0 && (
           <g transform={`translate(${labelX}, ${labelY})`} style={{ pointerEvents: 'none' }}>
             <circle
@@ -482,24 +505,27 @@ export default function App() {
               const newPathEdges = discoveredPaths.map(p => {
                 const isDirect = p.length === 1;
                 const intermediateCount = p.length - 1;
+                const relType = p.rel_type || 'RELATES_TO';
                 
                 return {
                   id: `path-${p.source}-${p.target}`,
                   source: p.source,
                   target: p.target,
-                  type: 'pathEdge', 
+                  type: isDirect ? 'default' : 'pathEdge', 
                   data: { 
                     type: isDirect ? 'DIRECT_RELATION' : 'PATH',
+                    dbType: relType,
                     length: p.length,
-                    fullPathNodes: p.nodes || [], // Speichert jetzt volle Objekte [{id, label, type, icon}, ...]
+                    fullPathNodes: p.nodes || [], 
                     intermediateCount: intermediateCount,
                     pathType: edgePathType
                   },
+                  label: isDirect ? relType.replace(/_/g, " ").toLowerCase() : "",
                   style: getEdgeStyle(isDirect ? 'default' : 'PATH'),
                   animated: false,
                   selectable: true,
                   focusable: true,
-                  zIndex: isDirect ? -2 : -1
+                  zIndex: isDirect ? -1 : -2
                 };
               });
 
@@ -1225,12 +1251,17 @@ export default function App() {
               // wenn Nachbarn bereits auf der Stage sind.
               let newDonut = n.data.donut || [];
               if (newDonut.length > 0) {
-                // Finde alle Nachbarn dieses Knotens, die aktuell auf der Stage sind
-                const stageNeighbors = edges
+                // Finde alle Nachbarn dieses Knotens, die aktuell auf der Stage sind (real oder virtuell)
+                const realNeighbors = edges
                   .filter(e => e.source === n.id || e.target === n.id)
                   .map(e => e.source === n.id ? e.target : e.source);
                 
-                const uniqueNeighborsOnStage = new Set(stageNeighbors);
+                // Auch Direktverbindungen vom Pathfinder berücksichtigen
+                const virtualNeighbors = pathEdges
+                  .filter(e => (e.source === n.id || e.target === n.id) && e.data?.type === 'DIRECT_RELATION')
+                  .map(e => e.source === n.id ? e.target : e.source);
+
+                const uniqueNeighborsOnStage = new Set([...realNeighbors, ...virtualNeighbors]);
                 const neighborsOnStage = nodes.filter(node => uniqueNeighborsOnStage.has(node.id));
       
                 // Zähle Nachbarn pro Kategorie auf der Stage
@@ -1268,7 +1299,7 @@ export default function App() {
                 style: { ...n.style, opacity: hasHighlight ? (highlightedTypes.has(n.data.type) ? 1 : 0.2) : 1, transition: 'opacity 0.3s ease' }
               };
             });
-          }, [nodes, edges, hiddenTypes, highlightedTypes]);
+          }, [nodes, edges, pathEdges, hiddenTypes, highlightedTypes]);
         const visibleEdges = useMemo(() => {
     const nodeIds = new Set(visibleNodes.map(n => n.id));
     const hasHighlight = highlightedTypes.size > 0;
@@ -1307,23 +1338,25 @@ export default function App() {
     return allEdges.map(edge => {
       const sourceNode = nodes.find(n => n.id === edge.source); 
       const targetNode = nodes.find(n => n.id === edge.target);
-      const isPath = edge.data?.type === 'PATH' || edge.data?.type === 'DIRECT_RELATION';
+      const isPath = edge.data?.type === 'PATH';
+      const isDirectRelation = edge.data?.type === 'DIRECT_RELATION';
       const isHighlighted = hasHighlight ? (highlightedTypes.has(sourceNode?.data.type) || highlightedTypes.has(targetNode?.data.type)) : true;
       
-      const highlightOpacity = isPath ? 1.0 : (hasHighlight ? (isHighlighted ? 0.8 : 0.1) : 1.0);
+      const highlightOpacity = (isPath || isDirectRelation) ? 1.0 : (hasHighlight ? (isHighlighted ? 0.8 : 0.1) : 1.0);
       
       // For custom path edges, we update the pathType in data so it reacts to settings
-      const updatedData = isPath ? { ...edge.data, pathType: edgePathType } : edge.data;
+      const updatedData = (isPath || isDirectRelation) ? { ...edge.data, pathType: edgePathType } : edge.data;
 
       return { 
         ...edge, 
-        type: isPath ? 'pathEdge' : edgePathType, 
+        type: (isPath || isDirectRelation) ? 'pathEdge' : edgePathType, 
         data: updatedData,
-        label: isPath ? "" : (zoomLevel > 0.6 ? (edge.data?.type?.replace("_", " ").toLowerCase()) : ""), 
+        label: isPath ? "" : (zoomLevel > 0.6 ? (edge.label || edge.data?.type?.replace("_", " ").toLowerCase()) : ""), 
         className: isPath ? 'path-edge' : '',
         zIndex: isPath ? -2 : -1, 
         style: { 
           ...edge.style, 
+          stroke: isPath ? COLORS.secondary : COLORS.primary, // Pink for paths, Blue for relations
           opacity: edge.data?.isNew ? 0 : highlightOpacity, 
           transition: edge.data?.isNew ? 'none' : 'opacity 1.0s ease-in-out, stroke 0.3s ease' 
         } 

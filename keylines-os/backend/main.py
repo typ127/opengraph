@@ -420,12 +420,22 @@ async def find_paths(request: FindPathsRequest):
 
             # Länge berechnen: Anzahl Knoten minus 1
             calc_length = len(path_nodes_info) - 1 if path_nodes_info else 0
+            
+            # Bei Länge 1 (Direktverbindung) suchen wir den Typ der Kante für das Frontend
+            rel_type = None
+            if calc_length == 1 and len(path_nodes_info) == 2:
+                s_id, t_id = path_nodes_info[0]["id"], path_nodes_info[1]["id"]
+                edge_query = f"MATCH (a {{id: '{s_id}'}})-[e]-(b {{id: '{t_id}'}}) RETURN type(e) as type LIMIT 1"
+                edge_res = list(memgraph.execute_and_fetch(edge_query))
+                if edge_res:
+                    rel_type = edge_res[0]["type"]
 
             paths.append({
                 "source": row["source"], 
                 "target": row["target"], 
                 "nodes": path_nodes_info,
-                "length": calc_length
+                "length": calc_length,
+                "rel_type": rel_type # Nur bei Länge 1 gefüllt
             })
         return paths
     except Exception as e:
