@@ -2246,7 +2246,7 @@ export default function App() {
                                                               secondary={
                                                                 <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                                                   {isOutgoing ? <Icons.ChevronRight sx={{ fontSize: '0.9rem', color: COLORS.primary }} /> : <Icons.ChevronLeft sx={{ fontSize: '0.9rem', color: COLORS.secondary }} />}
-                                                                  <Typography component="span" variant="caption" sx={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', textTransform: 'capitalize' }}>
+                                                                  <Typography component="span" variant="caption" sx={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', textTransform: 'capitalize', fontStyle: 'italic' }}>
                                                                     {relationLabel}
                                                                   </Typography>
                                                                 </Box>

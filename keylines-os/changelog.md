@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.41.9] - 2026-03-06
+
+### Changed
+- **UI Consistency**: Applied italic styling to relationship labels in the Neighbors and Group drawers, matching the aesthetic of the main graph canvas.
+
 ## [1.41.8] - 2026-03-06
 
 ### Fixed
