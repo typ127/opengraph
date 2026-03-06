@@ -419,7 +419,9 @@ export default function App() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [pathEdges, setPathEdges] = useState([]);
-  const [activeLayout, setActiveLayout] = useState('force');
+  const [activeLayout, setActiveLayout] = useState(() => {
+    return localStorage.getItem('kl_activeLayout') || 'force';
+  });
   const [activeAlgorithm, setActiveAlgorithm] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
       const [selectedEdge, setSelectedEdge] = useState(null);
@@ -432,6 +434,10 @@ export default function App() {
       const [hiddenTypes, setHiddenTypes] = useState(new Set());
       const [highlightedTypes, setHighlightedTypes] = useState(new Set());
       const [searchResults, setSearchResults] = useState([]);
+      const [searchHistory, setSearchHistory] = useState(() => {
+        const saved = localStorage.getItem('kl_searchHistory');
+        return saved ? JSON.parse(saved) : [];
+      });
       const [statusParts, setStatusParts] = useState([]);
       const [dbStatus, setDbStatus] = useState('checking'); // 'online', 'offline', 'checking'
 
@@ -509,7 +515,9 @@ export default function App() {
             localStorage.setItem('kl_layoutSpacing', layoutSpacing.toString());
             localStorage.setItem('kl_maxPathLength', maxPathLength.toString());
             localStorage.setItem('kl_snapshots', JSON.stringify(snapshots));
-          }, [enableDonuts, edgePathType, layoutSpacing, maxPathLength, snapshots]);
+            localStorage.setItem('kl_activeLayout', activeLayout);
+            localStorage.setItem('kl_searchHistory', JSON.stringify(searchHistory));
+          }, [enableDonuts, edgePathType, layoutSpacing, maxPathLength, snapshots, activeLayout, searchHistory]);
       
           useEffect(() => {
       
@@ -1283,6 +1291,13 @@ export default function App() {
 
   const onSelectSearchResult = async (nodeInfo) => {
     if (!nodeInfo) return;
+
+    // Add to history (max 7, unique)
+    setSearchHistory(prev => {
+      const filtered = prev.filter(item => item.id !== nodeInfo.id);
+      return [nodeInfo, ...filtered].slice(0, 7);
+    });
+
     let existing = nodesRef.current.find(n => n.id === nodeInfo.id);
     if (!existing) {
       const response = await fetch(`http://localhost:8000/expand/${nodeInfo.id}`);
@@ -1600,17 +1615,6 @@ export default function App() {
                                           {/* LEFT TOOLBAR (DRAWER TOGGLE) */}
       <Box sx={{ position: 'absolute', top: 16, left: 16, zIndex: 1200 }}>
         <Paper elevation={3} sx={{ px: 1, height: topBarHeight, display: 'flex', alignItems: 'center', bgcolor: 'rgba(30, 30, 30, 0.9)', borderRadius: 2, border: `1px solid ${COLORS.panelBorder}` }}>
-                      <Tooltip title="Toolbox">
-                        <IconButton 
-                          onClick={() => { setIsLeftDrawerOpen(!isLeftDrawerOpen); setIsSettingsOpen(false); setIsSnapshotsOpen(false); }} 
-                          onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Toggle Node Toolbox' }])}
-                          onMouseLeave={() => setStatusParts([])}
-                          color={isLeftDrawerOpen ? 'secondary' : 'primary'} size="small"
-                        >
-                          <MenuIcon />
-                        </IconButton>
-                      </Tooltip>
-                      <Divider orientation="vertical" flexItem sx={{ mx: 1, my: 1, borderColor: 'rgba(255,255,255,0.1)' }} />
                       <Tooltip title="Settings">
                         <IconButton 
                           onClick={() => { setIsSettingsOpen(!isSettingsOpen); setIsLeftDrawerOpen(false); setIsSnapshotsOpen(false); }} 
@@ -1632,6 +1636,17 @@ export default function App() {
                           <SnapshotIcon />
                         </IconButton>
                       </Tooltip>
+                      <Divider orientation="vertical" flexItem sx={{ mx: 1, my: 1, borderColor: 'rgba(255,255,255,0.1)' }} />
+                      <Tooltip title="Toolbox">
+                        <IconButton 
+                          onClick={() => { setIsLeftDrawerOpen(!isLeftDrawerOpen); setIsSettingsOpen(false); setIsSnapshotsOpen(false); }} 
+                          onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Toggle Node Toolbox' }])}
+                          onMouseLeave={() => setStatusParts([])}
+                          color={isLeftDrawerOpen ? 'secondary' : 'primary'} size="small"
+                        >
+                          <MenuIcon />
+                        </IconButton>
+                      </Tooltip>
           
         </Paper>
       </Box>
@@ -1642,16 +1657,17 @@ export default function App() {
           <Autocomplete 
             sx={{ width: 300, ml: 0.5 }} 
             size="small" 
-            options={searchResults} 
+            options={searchResults.length > 0 ? searchResults : searchHistory} 
             getOptionLabel={(o) => o.label || o.type || 'Unknown'} 
             onInputChange={(e, v) => handleSearch(v)} 
             onChange={(e, v) => onSelectSearchResult(v)} 
             onMouseEnter={() => setStatusParts([{ trigger: 'TYPE', action: 'Search For Entities' }, { trigger: 'ENTER', action: 'Add First Result' }])}
             onMouseLeave={() => setStatusParts([])}
             autoSelect 
-            renderInput={(params) => <TextField {...params} placeholder="Search Universe..." variant="outlined" InputProps={{ ...params.InputProps, startAdornment: (<InputAdornment position="start"><SearchIcon fontSize="small" color="action" /></InputAdornment>), }} />} 
+            renderInput={(params) => <TextField {...params} placeholder={searchHistory.length > 0 ? "Search or History..." : "Search Universe..."} variant="outlined" InputProps={{ ...params.InputProps, startAdornment: (<InputAdornment position="start"><SearchIcon fontSize="small" color="action" /></InputAdornment>), }} />} 
             renderOption={(props, o) => {
               const { key, ...otherProps } = props;
+              const isHistory = !searchResults.length && searchHistory.some(h => h.id === o.id);
               return (
                 <ListItem key={o.id || key} {...otherProps}>
                   <ListItemAvatar>
@@ -1659,7 +1675,15 @@ export default function App() {
                       {React.createElement(Icons[o.icon] || Icons.HelpOutline, { sx: { fontSize: 14 } })}
                     </Avatar>
                   </ListItemAvatar>
-                  <ListItemText primary={o.label || `[${o.type}]`} secondary={o.type} />
+                  <ListItemText 
+                    primary={o.label || `[${o.type}]`} 
+                    secondary={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="caption">{o.type}</Typography>
+                        {isHistory && <Typography variant="caption" sx={{ color: COLORS.secondary, fontSize: '0.6rem', border: `1px solid ${COLORS.secondary}`, px: 0.5, borderRadius: 0.5 }}>HISTORY</Typography>}
+                      </Box>
+                    } 
+                  />
                 </ListItem>
               );
             }} 
