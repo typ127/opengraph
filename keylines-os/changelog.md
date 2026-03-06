@@ -2,6 +2,56 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.49.0] - 2026-03-06
+
+### Neu
+- **Zentralisierte Layout-Architektur**: Die gesamte Layout-Logik wurde in die dedizierte Utility `layoutUtils.js` ausgelagert, um Redundanz zu vermeiden und die Wartbarkeit zu erhöhen.
+- **Force-Refresh Mechanismus**: Ein neuer `layoutTrigger` ermöglicht es, das aktuelle Layout (insbesondere das organische Force-Layout) durch erneutes Klicken auf den Button neu zu berechnen, um alternative Anordnungen zu generieren.
+- **Statische Hintergrund-Berechnung**: Implementierung einer tick-basierten Vorberechnung (300 Ticks) für das Force-Directed Layout. Dies eliminiert visuelles "Zappeln" während der Initialisierung.
+
+### Geändert
+- **Präzises Gravity-Scaling**: Der "Gravity (Tension)" Slider ist nun direkt mit den physikalischen Kräften des D3-Engines (`linkDistance`, `manyBody strength`) verknüpft. Höhere Werte führen zu einem deutlich dichteren, spannungsvolleren Graphen.
+- **Optimierte Toolbar**: Die Layout-Buttons wurden aktualisiert und bieten nun direkten Zugriff auf `Sequential (LR)`, `Organic (Force)`, `Circular` und `Concentric`.
+- **Erweitertes Concentric Layout**: Die Anordnung erfolgt nun strikt in drei Ringen basierend auf dem `importance`-Wert der Knoten (Top 5 Center, Next 25 Middle, Rest Outer).
+- **Kollisionsschutz**: Integration von `forceCollide` in alle physikalischen Layouts, um Überlappungen von Knoten strikt zu verhindern.
+
+### Fixed
+- **Scoping & Reference Errors**: Behebung kritischer `ReferenceError` (setNodes) und Syntax-Fehler (duplicate identifiers), die durch unsauberes Refactoring entstanden waren.
+- **Initialisierungs-Reihenfolge**: Sicherstellung, dass Hilfsfunktionen wie `fitToNodes` vor ihrer Verwendung in Callbacks definiert sind.
+
+## [1.48.0] - 2026-03-06
+
+### Neu
+- **Zentralisierte Layout-Architektur**: Auslagerung der gesamten Layout-Logik in eine dedizierte `layoutUtils.js`.
+- **Physik-basierte "Gravity" Steuerung**: Der Spacing-Slider wurde zu einem Gravity-Slider umfunktioniert. Er steuert nun direkt die `linkDistance` und Repulsionskräfte im Force-Layout für einen organischeren, dichteren oder luftigeren Graphen.
+- **Statisches Layout-Rendering**: Alle Layouts (insbesondere D3-Force) werden nun statisch im Hintergrund (300 Ticks) berechnet, bevor die Positionen an React Flow übergeben werden. Dies eliminiert das "Zappeln" und "Wobbeln" während der Berechnung.
+
+### Geändert
+- **Layout-Typen**:
+    - **Sequential (LR)**: Nutzt Dagre für eine saubere Links-nach-Rechts Ausrichtung.
+    - **Circular**: Mathematisch präzise Kreisform.
+    - **Concentric (Importance)**: Ordnet Knoten in 3 Ringen basierend auf ihrer `importance` an (Top 5 Center, 25 Middle, Rest Outer).
+- **Smooth Scaling**: Bei nicht-physikalischen Layouts skaliert der Slider den Graphen weiterhin linear vom Masseschwerpunkt aus, um die Struktur beizubehalten.
+
+## [1.47.0] - 2026-03-06
+
+### Geändert
+- **Zentrierte Layout-Engines**: Alle Layout-Algorithmen (Force, Circular, Dagre, Grid, Concentric) berechnen nun dynamisch den Masseschwerpunkt (`getLayoutCenter`) der sichtbaren Knoten. Dies verhindert das "Wegspringen" des Graphen beim Wechsel des Layout-Typs.
+- **Optimiertes Force-Layout**:
+    - Erhöhte Repulsion und Kollisionsradien für eine klarere Knotentrennung.
+    - Ersetzung von `forceCenter` durch individuelle `forceX` und `forceY` Kräfte. Dies zieht isolierte Knoten aktiv zum Zentrum des Graphen, statt sie weit entfernt zu platzieren.
+- **Smarte Knoten-Platzierung**:
+    - Neue Knoten (aus dem Drawer oder der Suche) werden nun intelligent platziert: entweder in der Nähe ihres Ursprungsknotens oder im aktuellen Sichtfeld (`Viewport`) des Nutzers.
+    - Fallback-Logik: Ist die Stage leer, wird der neue Knoten exakt in der Mitte des Bildschirms platziert.
+- **Präzises Layout-Spacing**: Das Anpassen des Spacing-Sliders skaliert nun den Graphen linear vom Masseschwerpunkt aus, anstatt einen kompletten strukturellen Re-Layout-Zyklus zu triggern. Dies ermöglicht eine flüssige Größenänderung ohne strukturelle Sprünge.
+- **Fokussierte Layout-Berechnung**: Layout-Operationen berücksichtigen ab sofort nur noch aktuell sichtbare Knoten und Kanten. Versteckte Typen werden bei der Positionsberechnung ignoriert.
+
+### Fixed
+- **Edge Rendering Order (Z-Index)**:
+    - Pinke Pfade (virtuelle Verbindungen) werden nun konsistent **über** blauen direkten Beziehungen gerendert.
+    - Z-Index-Hierarchie: Knoten (oben) > Pfad-Labels (1000) > Pfad-Kanten (-1) > Direkte Kanten (-2).
+- **Bereinigung**: Entfernung der ungenutzten Hilfsfunktion `integrateNewData` zur Verschlankung der Codebasis.
+
 ## [1.46.0] - 2026-03-06
 
 ### Neu
