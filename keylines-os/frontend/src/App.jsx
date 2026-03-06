@@ -54,6 +54,7 @@ import {
   Slider
 } from '@mui/material';
 import { 
+  BarChart as HistogramIcon,
   AccountTree as TreeIcon, 
   BlurCircular as CircularIcon, 
   ElectricBolt as ForceIcon,
@@ -292,8 +293,8 @@ export default function App() {
       }, []);
   
       const [isLeftDrawerOpen, setIsLeftDrawerOpen] = useState(false);
-  
-          const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isHistogramOpen, setIsHistogramOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
           const [isSnapshotsOpen, setIsSnapshotsOpen] = useState(false);
           
           const [snapshots, setSnapshots] = useState(() => {
@@ -1493,7 +1494,7 @@ export default function App() {
         <Paper elevation={3} sx={{ px: 1, height: topBarHeight, display: 'flex', alignItems: 'center', bgcolor: 'rgba(30, 30, 30, 0.9)', borderRadius: 2, border: `1px solid ${COLORS.panelBorder}` }}>
                       <Tooltip title="Settings">
                         <IconButton 
-                          onClick={() => { setIsSettingsOpen(!isSettingsOpen); setIsLeftDrawerOpen(false); setIsSnapshotsOpen(false); }} 
+                          onClick={() => { setIsSettingsOpen(!isSettingsOpen); setIsLeftDrawerOpen(false); setIsSnapshotsOpen(false); setIsHistogramOpen(false); }} 
                           onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Toggle Visualization Settings' }])}
                           onMouseLeave={() => setStatusParts([])}
                           color={isSettingsOpen ? 'secondary' : 'primary'} size="small"
@@ -1502,9 +1503,20 @@ export default function App() {
                         </IconButton>
                       </Tooltip>
                       <Divider orientation="vertical" flexItem sx={{ mx: 1, my: 1, borderColor: 'rgba(255,255,255,0.1)' }} />
+                      <Tooltip title="Analytics">
+                        <IconButton 
+                          onClick={() => { setIsHistogramOpen(!isHistogramOpen); setIsLeftDrawerOpen(false); setIsSettingsOpen(false); setIsSnapshotsOpen(false); }} 
+                          onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Toggle Graph Analytics' }])}
+                          onMouseLeave={() => setStatusParts([])}
+                          color={isHistogramOpen ? 'secondary' : 'primary'} size="small"
+                        >
+                          <HistogramIcon />
+                        </IconButton>
+                      </Tooltip>
+                      <Divider orientation="vertical" flexItem sx={{ mx: 1, my: 1, borderColor: 'rgba(255,255,255,0.1)' }} />
                       <Tooltip title="Snapshots">
                         <IconButton 
-                          onClick={() => { setIsSnapshotsOpen(!isSnapshotsOpen); setIsLeftDrawerOpen(false); setIsSettingsOpen(false); }} 
+                          onClick={() => { setIsSnapshotsOpen(!isSnapshotsOpen); setIsLeftDrawerOpen(false); setIsSettingsOpen(false); setIsHistogramOpen(false); }} 
                           onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Toggle Snapshots Panel' }])}
                           onMouseLeave={() => setStatusParts([])}
                           color={isSnapshotsOpen ? 'secondary' : 'primary'} size="small"
@@ -1515,7 +1527,7 @@ export default function App() {
                       <Divider orientation="vertical" flexItem sx={{ mx: 1, my: 1, borderColor: 'rgba(255,255,255,0.1)' }} />
                       <Tooltip title="Toolbox">
                         <IconButton 
-                          onClick={() => { setIsLeftDrawerOpen(!isLeftDrawerOpen); setIsSettingsOpen(false); setIsSnapshotsOpen(false); }} 
+                          onClick={() => { setIsLeftDrawerOpen(!isLeftDrawerOpen); setIsSettingsOpen(false); setIsSnapshotsOpen(false); setIsHistogramOpen(false); }} 
                           onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Toggle Node Toolbox' }])}
                           onMouseLeave={() => setStatusParts([])}
                           color={isLeftDrawerOpen ? 'secondary' : 'primary'} size="small"
@@ -1566,7 +1578,7 @@ export default function App() {
           />
           <Tooltip title="Clear Canvas">
             <IconButton 
-              size="small" color="error" 
+              size="small" color="secondary" 
               onClick={() => { setNodes([]); setEdges([]); setSelectedNode(null); setPreviewData(null); }}
               onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Clear All Nodes From Canvas' }])}
               onMouseLeave={() => setStatusParts([])}
@@ -1601,61 +1613,6 @@ export default function App() {
         </Paper>
       </Box>
 
-      {/* HISTOGRAM (RIGHT) */}
-      <Box sx={{ position: 'absolute', top: 16, right: 16, zIndex: 1200 }}>
-        <Paper elevation={3} sx={{ p: 2, width: 220, bgcolor: 'rgba(30, 30, 30, 0.9)', borderRadius: 2, border: `1px solid ${COLORS.panelBorder}`, userSelect: 'none' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}><FilterIcon size="small" sx={{ mr: 1, color: 'text.secondary' }} /><Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>Entity Types</Typography></Box>
-          <FormGroup>
-            {stats.map(([type, count]) => {
-              const color = getHexColor(type);
-              const maxCount = Math.max(...stats.map(s => s[1]), 1);
-              const isHighlighted = highlightedTypes.has(type);
-              return (
-                <Box key={type} sx={{ mb: 1.5, p: 0.5, borderRadius: 1, bgcolor: isHighlighted ? 'rgba(0, 191, 255, 0.1)' : 'transparent' }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
-                      <Checkbox 
-                        size="small" 
-                        checked={!hiddenTypes.has(type)} 
-                        onChange={() => setHiddenTypes(prev => { const n = new Set(prev); if (n.has(type)) n.delete(type); else n.add(type); return n; })} 
-                        onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Toggle Visibility On Canvas' }])}
-                        onMouseLeave={() => setStatusParts([])}
-                        sx={{ color: color, '&.Mui-checked': { color: color }, p: 0.5 }} 
-                      />                      <Typography 
-                        variant="caption" 
-                        onClick={(e) => toggleHighlight(type, e.shiftKey)} 
-                        onMouseEnter={() => setStatusParts([
-                          { trigger: 'CLICK', action: 'Focus This Type' },
-                          { trigger: 'SHIFT+CLICK', action: 'Add To Focus' }
-                        ])}
-                        onMouseLeave={() => setStatusParts([])}
-                        sx={{ fontWeight: 600, fontSize: '0.7rem', cursor: 'pointer', ml: 0.5, flexGrow: 1 }}
-                      >
-                        {type.toUpperCase()}
-                      </Typography>
-                    </Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>{count}</Typography>
-                  </Box>
-                  <Box sx={{ height: 4, width: '100%', bgcolor: 'rgba(0, 191, 255, 0.05)', borderRadius: 1, overflow: 'hidden' }}><Box sx={{ height: '100%', width: `${(count/maxCount)*100}%`, bgcolor: color }} /></Box>
-                </Box>
-              );
-            })}
-          </FormGroup>
-          {highlightedTypes.size > 0 && (
-            <Button 
-              fullWidth 
-              variant="outlined" 
-              size="small" 
-              startIcon={<DrillDownIcon />} 
-              onClick={onDrillDown} 
-              onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Remove All Unfocused Nodes' }])}
-              onMouseLeave={() => setStatusParts([])}
-              sx={{ mt: 2, fontSize: '0.65rem' }}
-            >
-              Drill Down
-            </Button>
-          )}        </Paper>
-      </Box>
 
       <Drawer 
         anchor="left" open={isLeftDrawerOpen} onClose={() => setIsLeftDrawerOpen(false)} variant="temporary" 
@@ -1729,6 +1686,123 @@ export default function App() {
                       <Box sx={{ flexGrow: 1 }} />
           
           <Typography variant="caption" sx={{ textAlign: 'center', color: 'rgba(255,255,255,0.2)' }}>KeyLines OS Editor Mode v0.1</Typography>
+        </Box>
+      </Drawer>
+
+      <Drawer 
+        anchor="left" open={isHistogramOpen} onClose={() => setIsHistogramOpen(false)} variant="temporary" 
+        sx={{ width: isHistogramOpen ? 320 : 0, flexShrink: 0, '& .MuiDrawer-paper': { width: 320, borderRight: `2px solid ${COLORS.panelBorder}`, bgcolor: COLORS.paper, boxShadow: 5, overflow: 'hidden' } }}
+      >
+        <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#fff' }}>Analytics</Typography>
+            <IconButton onClick={() => setIsHistogramOpen(false)} sx={{ color: 'rgba(255,255,255,0.5)' }}><ChevronLeftIcon /></IconButton>
+          </Box>
+          <Divider sx={{ mb: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
+
+          <Box sx={{ flexGrow: 1, overflowY: 'auto', pr: 1, '&::-webkit-scrollbar': { width: '4px' }, '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(255,255,255,0.1)', borderRadius: '4px' } }}>
+            {/* STAGE METRICS */}
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 1, display: 'block', letterSpacing: 1 }}>STAGE SUMMARY</Typography>
+            <List dense sx={{ mb: 2 }}>
+              <ListItem sx={{ px: 0 }}>
+                <ListItemIcon><Icons.AutoGraph sx={{ color: COLORS.primary, fontSize: 20 }} /></ListItemIcon>
+                <ListItemText primary="Active Nodes" secondary={nodes.length} primaryTypographyProps={{ variant: 'body2' }} secondaryTypographyProps={{ style: { color: 'rgba(255,255,255,0.5)', fontWeight: 'bold' } }} />
+              </ListItem>
+              <ListItem sx={{ px: 0 }}>
+                <ListItemIcon><Icons.Timeline sx={{ color: COLORS.secondary, fontSize: 20 }} /></ListItemIcon>
+                <ListItemText primary="Total Relations" secondary={pathEdges.length} primaryTypographyProps={{ variant: 'body2' }} secondaryTypographyProps={{ style: { color: 'rgba(255,255,255,0.5)', fontWeight: 'bold' } }} />
+              </ListItem>
+              <ListItem sx={{ px: 0 }}>
+                <ListItemIcon><Icons.ZoomIn sx={{ color: 'rgba(255,255,255,0.5)', fontSize: 20 }} /></ListItemIcon>
+                <ListItemText primary="Zoom Level" secondary={zoomLevel.toFixed(2) + "x"} primaryTypographyProps={{ variant: 'body2' }} secondaryTypographyProps={{ style: { color: 'rgba(255,255,255,0.5)', fontWeight: 'bold' } }} />
+              </ListItem>
+            </List>
+
+            <Divider sx={{ mb: 2, borderColor: 'rgba(255,255,255,0.05)' }} />
+
+            {/* ACTIVE CONFIGURATION */}
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 1, display: 'block', letterSpacing: 1 }}>SYSTEM CONFIG</Typography>
+            <List dense sx={{ mb: 2 }}>
+              <ListItem sx={{ px: 0 }}>
+                <ListItemIcon><Icons.Layers sx={{ color: 'rgba(255,255,255,0.5)', fontSize: 20 }} /></ListItemIcon>
+                <ListItemText primary="Active Layout" secondary={activeLayout.toUpperCase()} primaryTypographyProps={{ variant: 'body2' }} secondaryTypographyProps={{ style: { color: COLORS.primary, fontWeight: 'bold' } }} />
+              </ListItem>
+              <ListItem sx={{ px: 0 }}>
+                <ListItemIcon><Icons.SettingsInputComponent sx={{ color: 'rgba(255,255,255,0.5)', fontSize: 20 }} /></ListItemIcon>
+                <ListItemText primary="Gravity (Tension)" secondary={layoutSpacing.toFixed(1)} primaryTypographyProps={{ variant: 'body2' }} secondaryTypographyProps={{ style: { color: COLORS.secondary, fontWeight: 'bold' } }} />
+              </ListItem>
+              <ListItem sx={{ px: 0 }}>
+                <ListItemIcon><Icons.Route sx={{ color: 'rgba(255,255,255,0.5)', fontSize: 20 }} /></ListItemIcon>
+                <ListItemText primary="Search Depth" secondary={maxPathLength + " Hops"} primaryTypographyProps={{ variant: 'body2' }} secondaryTypographyProps={{ style: { color: '#fff', fontWeight: 'bold' } }} />
+              </ListItem>
+            </List>
+
+            <Divider sx={{ mb: 2, borderColor: 'rgba(255,255,255,0.05)' }} />
+
+            {/* ENTITY DISTRIBUTION */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', letterSpacing: 1 }}>TYPE DISTRIBUTION</Typography>
+              <Tooltip title="Clear Highlights">
+                <IconButton size="small" onClick={() => setHighlightedTypes(new Set())} sx={{ p: 0, color: 'rgba(255,255,255,0.3)' }}><Icons.ClearAll sx={{ fontSize: 16 }} /></IconButton>
+              </Tooltip>
+            </Box>
+            
+            <List dense>
+              {stats.map(([type, count]) => {
+                const color = getHexColor(type);
+                const maxCount = Math.max(...stats.map(s => s[1]), 1);
+                const isHighlighted = highlightedTypes.has(type);
+                const dbTotal = dbCounts[type.toLowerCase()] || 0;
+                
+                return (
+                  <ListItem key={type} sx={{ px: 0, flexDirection: 'column', alignItems: 'stretch', mb: 1 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: color }} />
+                        <Typography 
+                          variant="caption" 
+                          onClick={(e) => toggleHighlight(type, e.shiftKey)}
+                          sx={{ 
+                            fontWeight: isHighlighted ? 900 : 600, 
+                            fontSize: '0.75rem', 
+                            cursor: 'pointer', 
+                            color: isHighlighted ? '#fff' : 'rgba(255,255,255,0.7)',
+                            '&:hover': { color: '#fff' }
+                          }}
+                        >
+                          {type.toUpperCase()}
+                        </Typography>
+                      </Box>
+                      <Typography variant="caption" sx={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>
+                        <span style={{ color: '#fff', fontWeight: 'bold' }}>{count}</span> / {dbTotal}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ height: 4, width: '100%', bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 1, overflow: 'hidden' }}>
+                      <Box sx={{ height: '100%', width: `${(count/maxCount)*100}%`, bgcolor: color, borderRadius: 1 }} />
+                    </Box>
+                  </ListItem>
+                );
+              })}
+            </List>
+          </Box>
+
+          {highlightedTypes.size > 0 && (
+            <Box sx={{ pt: 2, flexShrink: 0 }}>
+              <Divider sx={{ mb: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
+              <Button 
+                fullWidth 
+                variant="outlined" 
+                color="primary" 
+                startIcon={<DrillDownIcon />} 
+                onClick={onDrillDown} 
+                onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Remove All Unfocused Nodes' }])}
+                onMouseLeave={() => setStatusParts([])}
+                sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 'bold', borderColor: 'rgba(0, 191, 255, 0.3)' }}
+              >
+                Isolate Focused Types
+              </Button>
+            </Box>
+          )}
         </Box>
       </Drawer>
 

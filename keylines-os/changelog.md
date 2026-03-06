@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.50.0] - 2026-03-06
+
+### Neu
+- **Zentralisiertes Analytics-Drawer**: Einführung eines dedizierten Analytics-Panels auf der linken Seite.
+    - **Visualisierung**: Das "Entity Types" Histogramm wurde von der rechten Seite in diesen neuen Drawer verschoben.
+    - **Metriken**: Echtzeit-Anzeige von Stage-Statistiken (Knotenanzahl, Beziehungen, Zoom-Level) und System-Konfigurationen (Layout, Gravity, Suchtiefe).
+    - **Datenbank-Abgleich**: Direkter Vergleich der auf der Stage befindlichen Knoten mit den Gesamtzahlen in der Datenbank.
+- **Analytics-Button**: Neues Icon (BarChart) in der linken Toolbar zum Umschalten des Analytics-Panels.
+
+### Geändert
+- **UI-Konsistenz**: Der Analytics-Drawer wurde komplett überarbeitet, um das visuelle Design der Node- und Pfad-Drawer zu übernehmen (Listen, Icons, einheitliche Header).
+- **Interaktions-Modell**: Panel-Management für die linke Seite implementiert (Settings, Analytics, Snapshots und Toolbox schließen sich nun gegenseitig aus).
+- **Farbliche Anpassung**: Der "Clear Canvas" Button wurde von Rot (`error`) auf Blau (`secondary`) umgestellt, um besser in das restliche UI-Farbschema zu passen.
+- **Naming**: Umbenennung interner Layout-Parameter ("Spacing" zu "Gravity") in allen UI-Komponenten zur besseren Verständlichkeit.
+
 ## [1.49.0] - 2026-03-06
 
 ### Neu
