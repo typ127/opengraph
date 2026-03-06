@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.51.0] - 2026-03-06
+
+### Neu
+- **Intelligente Knoten-Platzierung**: Überarbeitung der `getSmartPosition`-Logik zur Vermeidung von zufälligem Spawning.
+    - **Nachbarschafts-Analyse**: Neue Knoten prüfen nun vor der Platzierung auf bestehende Beziehungen zu allen bereits auf der Stage befindlichen Entities.
+    - **Zentrierte Anordnung**: Falls Verbindungen existieren, wird der neue Knoten automatisch im Masseschwerpunkt (Durchschnittsposition) all seiner sichtbaren Nachbarn platziert.
+    - **Radialer Versatz**: Integration eines leichten radialen Offsets, um Überlappungen zu verhindern und eine klare Struktur zu wahren.
+- **Systemweite Integration**: Die verbesserte Platzierungslogik wurde konsistent in die Suche (`onSelectSearchResult`) und die manuelle Expansion (`addSingleNode`) integriert.
+
 ## [1.50.0] - 2026-03-06
 
 ### Neu

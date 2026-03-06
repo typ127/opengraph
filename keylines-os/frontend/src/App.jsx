@@ -834,19 +834,45 @@ export default function App() {
             }
           }, [isEditingNode, isEditingEdge, cancelEditing, closeSidebar]);
 
-  const getSmartPosition = useCallback((sourceNode = null) => {
-    const visibleNodesOnStage = nodesRef.current.filter(n => !hiddenTypes.has(n.data.type));
-    
+  const getSmartPosition = useCallback((sourceNode = null, targetNodeId = null) => {
+    const currentNodes = nodesRef.current;
+    const currentEdges = pathEdgesRef.current;
+    const visibleNodesOnStage = currentNodes.filter(n => !hiddenTypes.has(n.data.type));
+
+    // 1. Check for RELATIONS to nodes already on stage
+    if (targetNodeId) {
+      // Find all neighbors of the new node that are ALREADY on the stage
+      const stageNeighbors = currentEdges
+        .filter(e => e.source === targetNodeId || e.target === targetNodeId)
+        .map(e => e.source === targetNodeId ? e.target : e.source)
+        .map(id => currentNodes.find(n => n.id === id))
+        .filter(Boolean);
+
+      if (stageNeighbors.length > 0) {
+        // Position at the average center of all existing neighbors
+        const avgX = stageNeighbors.reduce((acc, n) => acc + n.position.x, 0) / stageNeighbors.length;
+        const avgY = stageNeighbors.reduce((acc, n) => acc + n.position.y, 0) / stageNeighbors.length;
+
+        // Add a slight radial offset so it doesn't overlap perfectly with any single neighbor
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 180; 
+        return {
+          x: avgX + Math.cos(angle) * radius,
+          y: avgY + Math.sin(angle) * radius
+        };
+      }
+    }
+
+    // 2. Place near source if provided (fallback for expansion)
     if (sourceNode) {
-      // Place near source with random offset to prevent stacking
       return {
         x: sourceNode.position.x + (Math.random() - 0.5) * 200,
         y: sourceNode.position.y + (Math.random() - 0.5) * 200,
       };
     }
 
+    // 3. Find center of gravity of visible graph (fallback for new entities)
     if (visibleNodesOnStage.length > 0) {
-      // Find center of gravity of visible graph and add near it
       const center = getLayoutCenter(visibleNodesOnStage);
       return {
         x: center.x + (Math.random() - 0.5) * 400,
@@ -854,15 +880,16 @@ export default function App() {
       };
     }
 
-    // Fallback: Place in current viewport center
+    // 4. Fallback: Place in current viewport center
     const { x, y, zoom } = getViewport();
-    return { 
-      x: -x / zoom + (window.innerWidth / 2) / zoom, 
-      y: -y / zoom + (window.innerHeight / 2) / zoom 
+    return {
+      x: -x / zoom + (window.innerWidth / 2) / zoom,
+      y: -y / zoom + (window.innerHeight / 2) / zoom
     };
   }, [hiddenTypes, getViewport]);
 
   const onAnalyze = useCallback(async (algorithm) => {
+
     if (algorithm === activeAlgorithm) {
       setActiveAlgorithm(null);
       // Revert to importance
@@ -1029,17 +1056,18 @@ export default function App() {
               
                 const addSingleNode = useCallback((sourceId, targetNode, edgeData = null) => {
                   const currentNodes = nodesRef.current;
-                  const currentEdges = edgesRef.current;
                   if (currentNodes.find(n => n.id === targetNode.id)) return;
                   const sourceNode = currentNodes.find(n => n.id === sourceId);
                   const importance = targetNode.data.importance ?? 0.5;
                   const initialScore = activeAlgorithm === null ? importance : (targetNode.data.score ?? importance);
 
-                  // Improved placement using the smart position logic
+                  // Pass targetNode.id to getSmartPosition to check for OTHER existing connections on stage
+                  const smartPos = getSmartPosition(sourceNode, targetNode.id);
+
                   const newNode = { 
                     ...targetNode, 
                     type: 'keylines', 
-                    position: getSmartPosition(sourceNode), 
+                    position: smartPos, 
                     data: { 
                       ...targetNode.data, 
                       importance,
@@ -1193,10 +1221,13 @@ export default function App() {
                   const importance = fullNode.data.importance ?? 0.5;
                   const initialScore = activeAlgorithm === null ? importance : (fullNode.data.score ?? importance);
 
+                  // Calculate optimal position based on potential neighbors on stage
+                  const smartPos = getSmartPosition(null, fullNode.id);
+
                   const newNode = { 
                     ...fullNode, 
                     type: 'keylines', 
-                    position: getSmartPosition(), 
+                    position: smartPos, 
                     data: { 
                       ...fullNode.data, 
                       importance,
