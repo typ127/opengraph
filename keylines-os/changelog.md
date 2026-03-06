@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.42.0] - 2026-03-06
+
+### Added
+- **Node Importance System**: Added a persistent `importance` value for each node that controls its base visual scale.
+- **Importance Slider**: New UI control in the Node Drawer's edit mode to manually adjust an entity's importance (0.1 to 1.0).
+
+### Changed
+- **Algorithm Toggling**: Social algorithms are now deselected by default. Clicking an active algorithm button now deselects it.
+- **Dynamic Scaling**: Node sizes now automatically revert to their individual `importance` value when no social algorithm is active.
+- **Unified Initialization**: All node creation paths (Drop, Search, Expand) now correctly initialize importance and score.
+
 ## [1.41.9] - 2026-03-06
 
 ### Changed

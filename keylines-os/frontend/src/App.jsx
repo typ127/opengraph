@@ -369,6 +369,9 @@ const getConcentricLayout = (nodes, spacingFactor = 1.0) => {
     const nodesMap = new Map(currentNodes.map(n => [n.id, n]));
     const edgesMap = new Map(currentEdges.map(e => [e.id, e]));
     newData.nodes.forEach(newNode => {
+      const importance = newNode.data.importance ?? 0.5;
+      const initialScore = activeAlgorithm === null ? importance : (newNode.data.score ?? importance);
+
       if (nodesMap.has(newNode.id)) {
         const existing = nodesMap.get(newNode.id);
         nodesMap.set(newNode.id, { 
@@ -376,6 +379,8 @@ const getConcentricLayout = (nodes, spacingFactor = 1.0) => {
           data: { 
             ...existing.data, 
             ...newNode.data, 
+            importance,
+            score: initialScore,
             showDonuts: enableDonuts,
             onSegmentClick: (cat, e) => expandNodeFn(newNode.id, cat, e) 
           } 
@@ -387,6 +392,8 @@ const getConcentricLayout = (nodes, spacingFactor = 1.0) => {
           position: { ...sourcePos }, 
           data: { 
             ...newNode.data, 
+            importance,
+            score: initialScore,
             showDonuts: enableDonuts,
             onSegmentClick: (cat, e) => expandNodeFn(newNode.id, cat, e) 
           } 
@@ -412,7 +419,7 @@ export default function App() {
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [pathEdges, setPathEdges] = useState([]);
   const [activeLayout, setActiveLayout] = useState('force');
-  const [activeAlgorithm, setActiveAlgorithm] = useState('degree');
+  const [activeAlgorithm, setActiveAlgorithm] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
       const [selectedEdge, setSelectedEdge] = useState(null);
       const [selectedNodeNeighbors, setSelectedNodeNeighbors] = useState([]);
@@ -601,14 +608,28 @@ export default function App() {
     setNodes((nds) =>
       nds.map((node) => {
         if (node.id === nodeId) {
-          return { ...node, data: { ...node.data, ...newData } };
+          const updatedData = { ...node.data, ...newData };
+          // Wenn importance geändert wird und kein Algorithmus aktiv ist, score mitziehen
+          if (activeAlgorithm === null && newData.hasOwnProperty('importance')) {
+            updatedData.score = parseFloat(newData.importance) || 0;
+          }
+          return { ...node, data: updatedData };
         }
         return node;
       })
     );
     // Auch den lokalen State des selektierten Knotens aktualisieren
-    setSelectedNode(prev => prev && prev.id === nodeId ? { ...prev, data: { ...prev.data, ...newData } } : prev);
-  }, [setNodes]);
+    setSelectedNode(prev => {
+      if (prev && prev.id === nodeId) {
+        const updatedData = { ...prev.data, ...newData };
+        if (activeAlgorithm === null && newData.hasOwnProperty('importance')) {
+          updatedData.score = parseFloat(newData.importance) || 0;
+        }
+        return { ...prev, data: updatedData };
+      }
+      return prev;
+    });
+  }, [setNodes, activeAlgorithm]);
 
       const persistNode = useCallback(async (node) => {
         if (!node) return;
@@ -951,14 +972,24 @@ export default function App() {
   }, [layoutSpacing, activeLayout, applyLayout, setNodes]);
 
   const onAnalyze = useCallback(async (algorithm) => {
+    if (algorithm === activeAlgorithm) {
+      setActiveAlgorithm(null);
+      // Revert to importance
+      setNodes(nds => nds.map(node => ({
+        ...node,
+        data: { ...node.data, score: node.data.importance ?? 0.5 }
+      })));
+      return;
+    }
+
     setActiveAlgorithm(algorithm);
     try {
       const response = await fetch('http://localhost:8000/analyze', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          nodes: nodesRef.current.map(n => ({ id: n.id, data: n.data })), 
+        body: JSON.stringify({
+          nodes: nodesRef.current.map(n => ({ id: n.id, data: n.data })),
           edges: edgesRef.current.map(e => ({ source: e.source, target: e.target })),
-          algorithm 
+          algorithm
         })
       });
       const data = await response.json();
@@ -968,8 +999,7 @@ export default function App() {
         return node;
       }));
     } catch (e) { console.error('Analyze error:', e); }
-  }, [setNodes]);
-
+  }, [activeAlgorithm, setNodes]);
   const onExport = useCallback(() => {
     const reactFlowElement = document.querySelector('.react-flow');
     if (!reactFlowElement) return;
@@ -1111,12 +1141,17 @@ export default function App() {
                   const currentEdges = edgesRef.current;
                   if (currentNodes.find(n => n.id === targetNode.id)) return;
                   const sourceNode = currentNodes.find(n => n.id === sourceId);
+                  const importance = targetNode.data.importance ?? 0.5;
+                  const initialScore = activeAlgorithm === null ? importance : (targetNode.data.score ?? importance);
+
                   const newNode = { 
                     ...targetNode, 
                     type: 'keylines', 
                     position: { ...(sourceNode?.position || {x:400,y:400}) }, 
                     data: { 
                       ...targetNode.data, 
+                      importance,
+                      score: initialScore,
                       showDonuts: enableDonuts,
                       onSegmentClick: (cat, e) => expandNode(targetNode.id, cat, e) 
                     } 
@@ -1165,15 +1200,21 @@ export default function App() {
 
         // Positioniere neue Knoten im Zentrum oder zufällig, bevor das Layout greift
         const centerPos = { x: 400, y: 400 };
-        const preparedNodes = nodesToAdd.map((n, i) => ({
-          ...n,
-          position: { x: centerPos.x + (i % 5) * 50, y: centerPos.y + Math.floor(i / 5) * 50 },
-          data: { 
-            ...n.data, 
-            showDonuts: enableDonuts,
-            onSegmentClick: (cat, e) => expandNode(n.id, cat, e) 
-          }
-        }));
+        const preparedNodes = nodesToAdd.map((n, i) => {
+          const importance = n.data.importance ?? 0.5;
+          const initialScore = activeAlgorithm === null ? importance : (n.data.score ?? importance);
+          return {
+            ...n,
+            position: { x: centerPos.x + (i % 5) * 50, y: centerPos.y + Math.floor(i / 5) * 50 },
+            data: { 
+              ...n.data, 
+              importance,
+              score: initialScore,
+              showDonuts: enableDonuts,
+              onSegmentClick: (cat, e) => expandNode(n.id, cat, e) 
+            }
+          };
+        });
 
         setNodes(nds => deduplicate([...nds, ...preparedNodes]));
         
@@ -1233,12 +1274,17 @@ export default function App() {
           newPos = { x: maxX + 200, y: rightmostNode.position.y };
         }
 
+                  const importance = fullNode.data.importance ?? 0.5;
+                  const initialScore = activeAlgorithm === null ? importance : (fullNode.data.score ?? importance);
+
                   const newNode = { 
                     ...fullNode, 
                     type: 'keylines', 
                     position: newPos, 
                     data: { 
                       ...fullNode.data, 
+                      importance,
+                      score: initialScore,
                       showDonuts: enableDonuts,
                       onSegmentClick: (cat, e) => expandNode(fullNode.id, cat, e) 
                     } 
@@ -1322,6 +1368,7 @@ export default function App() {
               type, 
               icon: iconMap[type] || 'HelpOutline', 
               description: '', 
+              importance: 0.5,
               score: 0.5, 
               isDraft: true,
               showDonuts: enableDonuts,
@@ -1926,9 +1973,27 @@ export default function App() {
                     if (e.key === 'Escape') cancelEditing();
                   }}
                   sx={{ mb: 3 }}
-                />
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 1, display: 'block' }}>CHOOSE ICON</Typography>
-                                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 3 }}>
+                  />
+
+                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 1, display: 'block' }}>IMPORTANCE (NODE SIZE)</Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3, px: 1 }}>
+                  <Slider
+                    size="small"
+                    value={selectedNode.data.importance ?? 0.5}
+                    min={0.1}
+                    max={1}
+                    step={0.05}
+                    onChange={(e, val) => updateNodeData(selectedNode.id, { importance: val })}
+                    sx={{ color: COLORS.primary }}
+                    onMouseEnter={() => setStatusParts([{ trigger: 'SLIDE', action: 'Set Base Importance / Visual Scale' }])}
+                    onMouseLeave={() => setStatusParts([])}
+                  />
+                  <Typography variant="body2" sx={{ minWidth: 32, textAlign: 'right', color: 'rgba(255,255,255,0.7)', fontWeight: 'bold' }}>
+                    {Math.round((selectedNode.data.importance ?? 0.5) * 100)}%
+                  </Typography>
+                  </Box>
+
+                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 1, display: 'block' }}>CHOOSE ICON</Typography>                                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 3 }}>
                                     {['Person', 'Android', 'Public', 'Science', 'AutoStories', 'Psychology', 'Hub', 'Star'].map(iconName => (
                                       <IconButton 
                                         key={iconName} size="small" 
