@@ -93,6 +93,7 @@ import {
   } from '@mui/icons-material';  import * as Icons from '@mui/icons-material';
   import { categoryMap, typeColors, getHexColor } from './constants';
   import { COLORS, EDGE_TYPES, NODE_CATEGORIES } from './theme';
+  import { calculateLayout, getLayoutCenter } from './layoutUtils';
   
   const nodeTypes = {
     keylines: KeyLinesNode,
@@ -237,169 +238,6 @@ const getDescendants = (nodeId, edges, visited = new Set()) => {
   return descendants;
 };
 
-// --- LAYOUT ENGINES ---
-const getLayoutCenter = (nodes) => {
-  if (!nodes || nodes.length === 0) return { x: 400, y: 400 };
-  const avgX = nodes.reduce((sum, n) => sum + n.position.x, 0) / nodes.length;
-  const avgY = nodes.reduce((sum, n) => sum + n.position.y, 0) / nodes.length;
-  return { x: avgX, y: avgY };
-};
-
-const getLayoutedElements = (nodes, edges, spacingFactor = 1.0, direction = 'TB') => {
-  if (nodes.length === 0) return [];
-  const dagreGraph = new dagre.graphlib.Graph();
-  dagreGraph.setDefaultEdgeLabel(() => ({}));
-  
-  // Scale internal node dimensions to help dagre calculate better gaps
-  const nodeWidth = 160 * spacingFactor;
-  const nodeHeight = 100 * spacingFactor;
-  
-  dagreGraph.setGraph({ 
-    rankdir: direction, 
-    nodesep: 100 * spacingFactor, 
-    ranksep: 150 * spacingFactor,
-    marginx: 50,
-    marginy: 50
-  });
-  
-  const selectedIds = new Set(nodes.filter(n => n.selected).map(n => n.id));
-  const nodeMap = new Map(nodes.map(n => [n.id, n]));
-  
-  // 1. Add nodes to dagre
-  nodes.forEach((node) => {
-    dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
-  });
-
-  // 2. Add edges to dagre (only if both nodes exist)
-  const addedEdges = new Set();
-  edges.forEach((edge) => {
-    if (nodeMap.has(edge.source) && nodeMap.has(edge.target)) {
-      const edgeKey = `${edge.source}->${edge.target}`;
-      if (addedEdges.has(edgeKey)) return;
-      addedEdges.add(edgeKey);
-
-      if (selectedIds.has(edge.target) && !selectedIds.has(edge.source)) {
-        dagreGraph.setEdge(edge.target, edge.source);
-      } else {
-        dagreGraph.setEdge(edge.source, edge.target);
-      }
-    }
-  });
-
-  dagre.layout(dagreGraph);
-
-  // 3. Apply Dagre's calculated positions
-  const center = getLayoutCenter(nodes);
-  const layoutedNodes = nodes.map((node) => {
-    const pos = dagreGraph.node(node.id);
-    return { 
-      ...node, 
-      position: { 
-        x: pos ? pos.x - nodeWidth / 2 : node.position.x, 
-        y: pos ? pos.y - nodeHeight / 2 : node.position.y 
-      }
-    };
-  });
-  
-  // Shift everything so the center of the new layout matches the previous center of gravity
-  const newCenter = getLayoutCenter(layoutedNodes);
-  const offsetX = center.x - newCenter.x;
-  const offsetY = center.y - newCenter.y;
-  
-  return layoutedNodes.map(n => ({
-    ...n,
-    position: { x: n.position.x + offsetX, y: n.position.y + offsetY }
-  }));
-};
-
-const getCircularLayout = (nodes, spacingFactor = 1.0) => {
-  if (nodes.length === 0) return [];
-  const center = getLayoutCenter(nodes);
-  const radius = Math.max(300 * spacingFactor, nodes.length * 60 * spacingFactor);
-  return nodes.map((node, index) => {
-    const angle = (index / nodes.length) * 2 * Math.PI;
-    return { ...node, position: { x: center.x + radius * Math.cos(angle), y: center.y + radius * Math.sin(angle) } };
-  });
-};
-
-const getForceLayout = (nodes, edges, spacingFactor = 1.0) => {
-  if (nodes.length === 0) return [];
-  const center = getLayoutCenter(nodes);
-  const simNodes = nodes.map(n => ({ id: n.id, x: n.position.x, y: n.position.y }));
-  const nodeIds = new Set(simNodes.map(n => n.id));
-  const simLinks = edges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target)).map(e => ({ source: e.source, target: e.target }));
-  
-  // Enhanced force parameters:
-  // - Increased repulsion for clarity
-  // - Limited distance of repulsion to avoid scattering far-away nodes
-  // - Stronger link strength
-  // - Centering at current center of gravity
-  const repulsion = (nodes.length > 20 ? -3500 : -1800) * spacingFactor;
-  
-  const simulation = d3Force.forceSimulation(simNodes)
-    .force('link', d3Force.forceLink(simLinks).id(d => d.id).distance(350 * spacingFactor).strength(1))
-    .force('charge', d3Force.forceManyBody().strength(repulsion).distanceMax(1200 * spacingFactor))
-    .force('x', d3Force.forceX(center.x).strength(0.1))
-    .force('y', d3Force.forceY(center.y).strength(0.1))
-    .force('collide', d3Force.forceCollide().radius(140 * spacingFactor))
-    .stop();
-    
-  for (let i = 0; i < 350; ++i) simulation.tick();
-  
-  return nodes.map(node => {
-    const sn = simNodes.find(s => s.id === node.id);
-    return { ...node, position: { x: sn ? sn.x : node.position.x, y: sn ? sn.y : node.position.y } };
-  });
-};
-
-const getGridLayout = (nodes, spacingFactor = 1.0) => {
-  if (nodes.length === 0) return [];
-  const center = getLayoutCenter(nodes);
-  const count = nodes.length;
-  const cols = Math.ceil(Math.sqrt(count));
-  const spacing = 400 * spacingFactor;
-  
-  const gridNodes = nodes.map((node, index) => {
-    const row = Math.floor(index / cols);
-    const col = index % cols;
-    return { ...node, position: { x: col * spacing, y: row * spacing } };
-  });
-  
-  const gridCenter = getLayoutCenter(gridNodes);
-  const offsetX = center.x - gridCenter.x;
-  const offsetY = center.y - gridCenter.y;
-  
-  return gridNodes.map(n => ({
-    ...n,
-    position: { x: n.position.x + offsetX, y: n.position.y + offsetY }
-  }));
-};
-
-const getConcentricLayout = (nodes, spacingFactor = 1.0) => {
-  if (nodes.length === 0) return [];
-  const center = getLayoutCenter(nodes);
-  const sortedNodes = [...nodes].sort((a, b) => (b.data?.score || 0) - (a.data?.score || 0));
-  const layoutedNodes = [];
-  const ringCapacities = [1, 5, 12, 20, 30];
-  let nodeIndex = 0;
-  ringCapacities.forEach((capacity, ringIndex) => {
-    const radius = ringIndex * 400 * spacingFactor;
-    const countInRing = Math.min(capacity, sortedNodes.length - nodeIndex);
-    for (let i = 0; i < countInRing; i++) {
-      const node = sortedNodes[nodeIndex++];
-      const angle = (i / countInRing) * 2 * Math.PI;
-      layoutedNodes.push({ ...node, position: { x: center.x + radius * Math.cos(angle), y: center.y + radius * Math.sin(angle) } });
-    }
-  });
-  const outerRadius = ringCapacities.length * 400 * spacingFactor;
-  const remainingCount = sortedNodes.length - nodeIndex;
-  for (let i = 0; i < remainingCount; i++) {
-    const node = sortedNodes[nodeIndex++];
-    const angle = (i / remainingCount) * 2 * Math.PI;
-    layoutedNodes.push({ ...node, position: { x: center.x + outerRadius * Math.cos(angle), y: center.y + outerRadius * Math.sin(angle) } });
-  }
-  return layoutedNodes;
-};
 export default function App() {
   const { fitView, setCenter, screenToFlowPosition, getViewport } = useReactFlow();
   
@@ -410,38 +248,39 @@ export default function App() {
     return localStorage.getItem('kl_activeLayout') || 'force';
   });
   const [activeAlgorithm, setActiveAlgorithm] = useState(null);
+  const [layoutTrigger, setLayoutTrigger] = useState(0);
   const [selectedNode, setSelectedNode] = useState(null);
-      const [selectedEdge, setSelectedEdge] = useState(null);
-      const [selectedNodeNeighbors, setSelectedNodeNeighbors] = useState([]);
-      const [selectedNodeEdges, setSelectedNodeEdges] = useState([]);
-      const [previewData, setPreviewData] = useState(null);
-  
-      const [zoomLevel, setZoomLevel] = useState(1);
-      const [dbCounts, setDbCounts] = useState({});
-      const [hiddenTypes, setHiddenTypes] = useState(new Set());
-      const [highlightedTypes, setHighlightedTypes] = useState(new Set());
-      const [searchResults, setSearchResults] = useState([]);
-      const [searchHistory, setSearchHistory] = useState(() => {
-        const saved = localStorage.getItem('kl_searchHistory');
-        return saved ? JSON.parse(saved) : [];
-      });
-      const [statusParts, setStatusParts] = useState([]);
-      const [dbStatus, setDbStatus] = useState('checking'); // 'online', 'offline', 'checking'
+  const [selectedEdge, setSelectedEdge] = useState(null);
+  const [selectedNodeNeighbors, setSelectedNodeNeighbors] = useState([]);
+  const [selectedNodeEdges, setSelectedNodeEdges] = useState([]);
+  const [previewData, setPreviewData] = useState(null);
 
-      useEffect(() => {
-        const checkHealth = async () => {
-          try {
-            const res = await fetch('http://localhost:8000/health');
-            const data = await res.json();
-            setDbStatus(data.status === 'online' ? 'online' : 'offline');
-          } catch (e) {
-            setDbStatus('offline');
-          }
-        };
-        checkHealth();
-        const interval = setInterval(checkHealth, 10000);
-        return () => clearInterval(interval);
-      }, []);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [dbCounts, setDbCounts] = useState({});
+  const [hiddenTypes, setHiddenTypes] = useState(new Set());
+  const [highlightedTypes, setHighlightedTypes] = useState(new Set());
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchHistory, setSearchHistory] = useState(() => {
+    const saved = localStorage.getItem('kl_searchHistory');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [statusParts, setStatusParts] = useState([]);
+  const [dbStatus, setDbStatus] = useState('checking'); // 'online', 'offline', 'checking'
+
+  useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        const res = await fetch('http://localhost:8000/health');
+        const data = await res.json();
+        setDbStatus(data.status === 'online' ? 'online' : 'offline');
+      } catch (e) {
+        setDbStatus('offline');
+      }
+    };
+    checkHealth();
+    const interval = setInterval(checkHealth, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
       useEffect(() => {        const fetchCounts = async () => {
           try {
@@ -505,14 +344,53 @@ export default function App() {
             localStorage.setItem('kl_activeLayout', activeLayout);
             localStorage.setItem('kl_searchHistory', JSON.stringify(searchHistory));
           }, [enableDonuts, edgePathType, layoutSpacing, maxPathLength, snapshots, activeLayout, searchHistory]);
-      
-          useEffect(() => {
-      
-            setEdges(eds => eds.map(edge => ({
-              ...edge,
-              style: getEdgeStyle(edge.data?.type || 'default')
-            })));
-          }, [setEdges]);
+
+  // Funktion zum manuellen Anpassen der Kamera an neue Knotenpositionen,
+  // ignoriert CSS-Animationen für mehr Präzision.
+  const fitToNodes = useCallback((nds) => {
+    if (nds.length === 0) return;
+    fitView({ 
+      duration: 800, 
+      padding: 0.2, 
+      nodes: nds 
+    });
+  }, [fitView]);
+
+  const runLayout = useCallback((type, gravity = layoutSpacing) => {
+    const visibleNodesOnStage = nodesRef.current.filter(n => !hiddenTypes.has(n.data.type));
+    const visibleIds = new Set(visibleNodesOnStage.map(n => n.id));
+    const visibleEdgesOnStage = pathEdgesRef.current.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
+    
+    const layoutedVisible = calculateLayout(visibleNodesOnStage, visibleEdgesOnStage, type, gravity);
+    const layoutedMap = new Map(layoutedVisible.map(n => [n.id, n.position]));
+    
+    setNodes(nds => nds.map(n => {
+      if (layoutedMap.has(n.id)) {
+        return { ...n, position: layoutedMap.get(n.id) };
+      }
+      return n;
+    }));
+    
+    return layoutedVisible;
+  }, [setNodes, hiddenTypes, layoutSpacing]);
+
+  const onLayoutClick = useCallback((type) => {
+    setActiveLayout(type);
+    setLayoutTrigger(prev => prev + 1);
+  }, []);
+
+  // Handle structural layout changes (button click)
+  useEffect(() => {
+    const layoutedVisible = runLayout(activeLayout);
+    // Smoothly trigger fitView with a slight delay for transition
+    if (layoutedVisible && layoutedVisible.length > 0) {
+      setTimeout(() => {
+        fitToNodes(layoutedVisible);
+      }, 300);
+    }
+  }, [activeLayout, layoutTrigger, runLayout, fitToNodes]);
+
+  const prevSpacingRef = useRef(layoutSpacing);
 
           // --- PATH FINDING LOGIC ---
           const updatePaths = useCallback(async (currentNodes) => {
@@ -605,17 +483,6 @@ export default function App() {
                             })));
                           }, [edgePathType]);
                       
-                                // Funktion zum manuellen Anpassen der Kamera an neue Knotenpositionen,
-  // ignoriert CSS-Animationen für mehr Präzision.
-  const fitToNodes = useCallback((nds) => {
-    if (nds.length === 0) return;
-    const rect = getNodesBounds(nds);
-    fitView({ 
-      duration: 800, 
-      padding: 0.2, 
-      nodes: nds 
-    });
-  }, [fitView]);
 
   const updateNodeData = useCallback((nodeId, newData) => {
     setNodes((nds) =>
@@ -965,14 +832,6 @@ export default function App() {
               closeSidebar();
             }
           }, [isEditingNode, isEditingEdge, cancelEditing, closeSidebar]);
-        const applyLayout = useCallback((nds, eds, type, spacingFactor = 1.0) => {
-    if (type === 'hierarchical') return getLayoutedElements(nds, eds, spacingFactor);
-    if (type === 'circular') return getCircularLayout(nds, spacingFactor);
-    if (type === 'force') return getForceLayout(nds, eds, spacingFactor);
-    if (type === 'grid') return getGridLayout(nds, spacingFactor);
-    if (type === 'concentric') return getConcentricLayout(nds, spacingFactor);
-    return nds;
-  }, []);
 
   const getSmartPosition = useCallback((sourceNode = null) => {
     const visibleNodesOnStage = nodesRef.current.filter(n => !hiddenTypes.has(n.data.type));
@@ -1001,60 +860,6 @@ export default function App() {
       y: -y / zoom + (window.innerHeight / 2) / zoom 
     };
   }, [hiddenTypes, getViewport]);
-
-  const runLayout = useCallback((type, spacing = layoutSpacing) => {
-    const visibleNodesOnStage = nodesRef.current.filter(n => !hiddenTypes.has(n.data.type));
-    const visibleIds = new Set(visibleNodesOnStage.map(n => n.id));
-    const visibleEdgesOnStage = pathEdgesRef.current.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
-    
-    const layoutedVisible = applyLayout(visibleNodesOnStage, visibleEdgesOnStage, type, spacing);
-    const layoutedMap = new Map(layoutedVisible.map(n => [n.id, n.position]));
-    
-    setNodes(nds => nds.map(n => {
-      if (layoutedMap.has(n.id)) {
-        return { ...n, position: layoutedMap.get(n.id) };
-      }
-      return n;
-    }));
-    
-    return layoutedVisible;
-  }, [applyLayout, setNodes, hiddenTypes, layoutSpacing]);
-
-  const prevSpacingRef = useRef(layoutSpacing);
-
-  const onLayoutClick = useCallback((type) => {
-    setActiveLayout(type);
-    const layoutedVisible = runLayout(type);
-    setTimeout(() => fitToNodes(layoutedVisible), 300);
-  }, [runLayout, fitToNodes]);
-
-  // Handle structural layout changes (button click)
-  useEffect(() => {
-    runLayout(activeLayout);
-  }, [activeLayout, runLayout]);
-
-  // Handle smooth scaling when spacing slider changes (no structural re-layout)
-  useEffect(() => {
-    if (prevSpacingRef.current !== layoutSpacing && nodes.length > 0) {
-      const ratio = layoutSpacing / prevSpacingRef.current;
-      const visibleNodesOnStage = nodes.filter(n => !hiddenTypes.has(n.data.type));
-      const center = getLayoutCenter(visibleNodesOnStage);
-      
-      setNodes(nds => nds.map(node => {
-        // We only scale visible nodes to keep the "stage" clean
-        if (hiddenTypes.has(node.data.type)) return node;
-        
-        return {
-          ...node,
-          position: {
-            x: center.x + (node.position.x - center.x) * ratio,
-            y: center.y + (node.position.y - center.y) * ratio
-          }
-        };
-      }));
-    }
-    prevSpacingRef.current = layoutSpacing;
-  }, [layoutSpacing, hiddenTypes, setNodes]);
 
   const onAnalyze = useCallback(async (algorithm) => {
     if (algorithm === activeAlgorithm) {
@@ -1263,7 +1068,7 @@ export default function App() {
                     const visibleIds = new Set(visibleOnStage.map(n => n.id));
                     const visibleEdges = pathEdgesRef.current.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
                     
-                    const layoutedVisible = applyLayout(visibleOnStage, visibleEdges, activeLayoutRef.current, layoutSpacing);
+                    const layoutedVisible = calculateLayout(visibleOnStage, visibleEdges, activeLayoutRef.current, layoutSpacing);
                     const layoutedMap = new Map(layoutedVisible.map(n => [n.id, n.position]));
 
                     setNodes(nds => nds.map(n => {
@@ -1275,7 +1080,7 @@ export default function App() {
                     
                     setTimeout(() => fitToNodes(layoutedVisible), 300);
                   }, 50);
-                }, [expandNode, applyLayout, fitToNodes, setNodes, setEdges, enableDonuts, layoutSpacing, getSmartPosition, hiddenTypes]);
+                }, [expandNode, fitToNodes, setNodes, setEdges, enableDonuts, layoutSpacing, getSmartPosition, hiddenTypes]);
 
                   const addAllNodesOfType = useCallback(async (category) => {
       console.log(`FETCHING ALL ${category.toUpperCase()} NODES...`);
@@ -1324,7 +1129,7 @@ export default function App() {
           const visibleIds = new Set(visibleOnStage.map(n => n.id));
           const visibleEdges = pathEdgesRef.current.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
           
-          const layoutedVisible = applyLayout(visibleOnStage, visibleEdges, activeLayoutRef.current, layoutSpacing);
+          const layoutedVisible = calculateLayout(visibleOnStage, visibleEdges, activeLayoutRef.current, layoutSpacing);
           const layoutedMap = new Map(layoutedVisible.map(n => [n.id, n.position]));
 
           setNodes(nds => nds.map(n => {
@@ -1339,7 +1144,7 @@ export default function App() {
       } catch (e) {
         console.error("Batch load error:", e);
       }
-    }, [enableDonuts, expandNode, applyLayout, fitToNodes, setNodes, getSmartPosition, layoutSpacing, hiddenTypes]);
+    }, [enableDonuts, expandNode, fitToNodes, setNodes, getSmartPosition, layoutSpacing, hiddenTypes]);
 
     const onDrillDown = useCallback(() => {
     if (highlightedTypes.size === 0) return;
@@ -1771,10 +1576,9 @@ export default function App() {
           </Tooltip>
           <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
           <ButtonGroup variant="text" size="small">
-            <Tooltip title="Hierarchical"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Hierarchical Tree Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('hierarchical')} color={activeLayout === 'hierarchical' ? 'secondary' : 'primary'}><TreeIcon /></IconButton></Tooltip>
+            <Tooltip title="Sequential (LR)"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Sequential Left-to-Right Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('sequential')} color={activeLayout === 'sequential' ? 'secondary' : 'primary'}><TreeIcon /></IconButton></Tooltip>
+            <Tooltip title="Organic (Force)"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Force-Directed Organic Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('force')} color={activeLayout === 'force' ? 'secondary' : 'primary'}><ForceIcon /></IconButton></Tooltip>
             <Tooltip title="Circular"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Circular Hub Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('circular')} color={activeLayout === 'circular' ? 'secondary' : 'primary'}><CircularIcon /></IconButton></Tooltip>
-            <Tooltip title="Force"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Force-Directed Organic Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('force')} color={activeLayout === 'force' ? 'secondary' : 'primary'}><ForceIcon /></IconButton></Tooltip>
-            <Tooltip title="Grid"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Structured Grid Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('grid')} color={activeLayout === 'grid' ? 'secondary' : 'primary'}><GridIcon /></IconButton></Tooltip>
             <Tooltip title="Concentric"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Importance-Based Concentric Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('concentric')} color={activeLayout === 'concentric' ? 'secondary' : 'primary'}><ConcentricIcon /></IconButton></Tooltip>
           </ButtonGroup>
           <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
@@ -2529,16 +2333,17 @@ export default function App() {
               <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', ml: 4, mb: 2, display: 'block' }}>Display neighbor distribution rings around nodes</Typography>
             </FormGroup>
             
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 1, letterSpacing: 1 }}>LAYOUT SPACING</Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 1, letterSpacing: 1 }}>GRAVITY (TENSION)</Typography>
             <Box sx={{ px: 2, mt: 1 }}>
-              <Slider 
-                value={layoutSpacing} 
+              <Slider
+                value={layoutSpacing}
                 min={0.5} max={2.5} step={0.1}
                 onChange={(e, v) => setLayoutSpacing(v)}
                 color="secondary"
                 valueLabelDisplay="auto"
               />
-              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', display: 'block', mt: 1 }}>Adjust the distance and repulsion between nodes</Typography>
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', display: 'block', mt: 1 }}>Adjust the tension and spacing between nodes</Typography>
+
               </Box>
 
               <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 1, mt: 3, display: 'block', letterSpacing: 1 }}>PATH SEARCH DEPTH (MAX HOPS)</Typography>
