@@ -3,7 +3,7 @@ import { createTheme } from '@mui/material/styles';
 // --- CENTRAL THEME COLORS ---
 export const COLORS = {
   primary: '#00BFFF',    // DeepSkyBlue
-  secondary: '#FF69B4',  // HotPink
+  secondary: '#FF1493',  // DeepPink
   background: '#121212', // Dark Grey
   paper: '#1e1e1e',      // Slightly lighter grey for panels
   text: '#ffffff',

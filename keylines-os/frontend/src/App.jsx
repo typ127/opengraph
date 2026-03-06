@@ -86,9 +86,10 @@ import {
   Science as ScienceIcon,
   MenuBook as BookIcon,
   AddLink as LinkIcon,
-    MenuOpen as MenuIcon
-  } from '@mui/icons-material';
-  import * as Icons from '@mui/icons-material';
+  MenuOpen as MenuIcon,
+  CameraAlt as SnapshotIcon,
+  DeleteOutline as DeleteOutlineIcon
+  } from '@mui/icons-material';  import * as Icons from '@mui/icons-material';
   import { categoryMap, typeColors, getHexColor } from './constants';
   import { COLORS, EDGE_TYPES, NODE_CATEGORIES } from './theme';
   
@@ -435,6 +436,12 @@ export default function App() {
       const [isLeftDrawerOpen, setIsLeftDrawerOpen] = useState(false);
   
           const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+          const [isSnapshotsOpen, setIsSnapshotsOpen] = useState(false);
+          
+          const [snapshots, setSnapshots] = useState(() => {
+            const saved = localStorage.getItem('kl_snapshots');
+            return saved !== null ? JSON.parse(saved) : [];
+          });
           
           // Settings mit LocalStorage Initialisierung
           const [enableDonuts, setEnableDonuts] = useState(() => {
@@ -470,7 +477,8 @@ export default function App() {
             localStorage.setItem('kl_enableDonuts', JSON.stringify(enableDonuts));
             localStorage.setItem('kl_edgePathType', edgePathType);
             localStorage.setItem('kl_layoutSpacing', layoutSpacing.toString());
-          }, [enableDonuts, edgePathType, layoutSpacing]);
+            localStorage.setItem('kl_snapshots', JSON.stringify(snapshots));
+          }, [enableDonuts, edgePathType, layoutSpacing, snapshots]);
       
           useEffect(() => {
       
@@ -946,6 +954,75 @@ export default function App() {
     .finally(() => { if (controls) controls.style.display = 'flex'; });
   }, []);
 
+  const onSaveSnapshot = useCallback(() => {
+    const reactFlowElement = document.querySelector('.react-flow');
+    if (!reactFlowElement) return;
+
+    // Temporarily hide UI elements for clean thumbnail
+    const controls = document.querySelector('.react-flow__controls');
+    const attribution = document.querySelector('.react-flow__attribution');
+    if (controls) controls.style.display = 'none';
+    if (attribution) attribution.style.display = 'none';
+
+    // Capture the full viewport first
+    toPng(reactFlowElement, { 
+      backgroundColor: COLORS.background, 
+      filter: (node) => !(node?.classList?.contains('react-flow__panel')), 
+      cacheBust: true,
+    })
+    .then((dataUrl) => {
+      // Resize the captured image to a small thumbnail using a canvas
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const width = 320;
+        const height = (img.height / img.width) * width;
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        const thumbnail = canvas.toDataURL('image/jpeg', 0.7); // Smaller JPEG for localStorage
+        
+        const newSnapshot = {
+          id: `snap-${Date.now()}`,
+          timestamp: new Date().toLocaleString(),
+          nodes: JSON.parse(JSON.stringify(nodesRef.current)),
+          edges: JSON.parse(JSON.stringify(edgesRef.current)),
+          thumbnail: thumbnail
+        };
+        
+        setSnapshots(prev => {
+          const next = [newSnapshot, ...prev];
+          // Simple limit to prevent localStorage overflow
+          if (next.length > 20) return next.slice(0, 20);
+          return next;
+        });
+      };
+      img.src = dataUrl;
+    })
+    .catch((err) => {
+      console.error('Snapshot failed:', err);
+    })
+    .finally(() => { 
+      if (controls) controls.style.display = 'flex'; 
+      if (attribution) attribution.style.display = 'flex';
+    });
+  }, []);
+
+  const onLoadSnapshot = useCallback((snapshot) => {
+    if (!snapshot) return;
+    setNodes(snapshot.nodes);
+    setEdges(snapshot.edges);
+    // Give it a moment to render then fit view
+    setTimeout(() => fitToNodes(snapshot.nodes), 100);
+    setIsSnapshotsOpen(false);
+  }, [setNodes, setEdges, fitToNodes]);
+
+  const onDeleteSnapshot = useCallback((id) => {
+    setSnapshots(prev => prev.filter(s => s.id !== id));
+  }, []);
+
   const collectLeaves = useCallback((nodeId) => {
     const currentEdges = edgesRef.current;
     
@@ -1356,7 +1433,7 @@ export default function App() {
         zIndex: isPath ? -2 : -1, 
         style: { 
           ...edge.style, 
-          stroke: isPath ? COLORS.secondary : COLORS.primary, // Pink for paths, Blue for relations
+          stroke: isPath ? COLORS.secondary : COLORS.primary, // DeepPink for paths, Blue for relations
           opacity: edge.data?.isNew ? 0 : highlightOpacity, 
           transition: edge.data?.isNew ? 'none' : 'opacity 1.0s ease-in-out, stroke 0.3s ease' 
         } 
@@ -1433,7 +1510,7 @@ export default function App() {
         <Paper elevation={3} sx={{ px: 1, height: topBarHeight, display: 'flex', alignItems: 'center', bgcolor: 'rgba(30, 30, 30, 0.9)', borderRadius: 2, border: `1px solid ${COLORS.panelBorder}` }}>
                       <Tooltip title="Toolbox">
                         <IconButton 
-                          onClick={() => { setIsLeftDrawerOpen(!isLeftDrawerOpen); setIsSettingsOpen(false); }} 
+                          onClick={() => { setIsLeftDrawerOpen(!isLeftDrawerOpen); setIsSettingsOpen(false); setIsSnapshotsOpen(false); }} 
                           onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Toggle Node Toolbox' }])}
                           onMouseLeave={() => setStatusParts([])}
                           color={isLeftDrawerOpen ? 'secondary' : 'primary'} size="small"
@@ -1444,12 +1521,23 @@ export default function App() {
                       <Divider orientation="vertical" flexItem sx={{ mx: 1, my: 1, borderColor: 'rgba(255,255,255,0.1)' }} />
                       <Tooltip title="Settings">
                         <IconButton 
-                          onClick={() => { setIsSettingsOpen(!isSettingsOpen); setIsLeftDrawerOpen(false); }} 
+                          onClick={() => { setIsSettingsOpen(!isSettingsOpen); setIsLeftDrawerOpen(false); setIsSnapshotsOpen(false); }} 
                           onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Toggle Visualization Settings' }])}
                           onMouseLeave={() => setStatusParts([])}
                           color={isSettingsOpen ? 'secondary' : 'primary'} size="small"
                         >
                           <SettingsIcon />
+                        </IconButton>
+                      </Tooltip>
+                      <Divider orientation="vertical" flexItem sx={{ mx: 1, my: 1, borderColor: 'rgba(255,255,255,0.1)' }} />
+                      <Tooltip title="Snapshots">
+                        <IconButton 
+                          onClick={() => { setIsSnapshotsOpen(!isSnapshotsOpen); setIsLeftDrawerOpen(false); setIsSettingsOpen(false); }} 
+                          onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Toggle Snapshots Panel' }])}
+                          onMouseLeave={() => setStatusParts([])}
+                          color={isSnapshotsOpen ? 'secondary' : 'primary'} size="small"
+                        >
+                          <SnapshotIcon />
                         </IconButton>
                       </Tooltip>
           
@@ -1579,7 +1667,7 @@ export default function App() {
       </Box>
 
       <Drawer 
-        anchor="left" open={isLeftDrawerOpen} variant="persistent" 
+        anchor="left" open={isLeftDrawerOpen} onClose={() => setIsLeftDrawerOpen(false)} variant="temporary" 
         sx={{ width: isLeftDrawerOpen ? 280 : 0, flexShrink: 0, '& .MuiDrawer-paper': { width: 280, borderRight: `2px solid ${COLORS.panelBorder}`, bgcolor: COLORS.paper, boxShadow: 5, overflow: 'hidden' } }}
       >
         <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -2188,7 +2276,7 @@ export default function App() {
                 </Drawer>
 
         <Drawer 
-          anchor="left" open={isSettingsOpen} variant="persistent" 
+          anchor="left" open={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} variant="temporary" 
           sx={{ width: isSettingsOpen ? 280 : 0, flexShrink: 0, '& .MuiDrawer-paper': { width: 280, borderRight: `2px solid ${COLORS.panelBorder}`, bgcolor: COLORS.paper, boxShadow: 5, overflow: 'hidden' } }}
         >
           <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -2243,6 +2331,90 @@ export default function App() {
               </Select>
             </FormControl>
             <Box sx={{ flexGrow: 1 }} />
+          </Box>
+        </Drawer>
+
+        <Drawer 
+          anchor="left" open={isSnapshotsOpen} onClose={() => setIsSnapshotsOpen(false)} variant="temporary" 
+          sx={{ width: isSnapshotsOpen ? 320 : 0, flexShrink: 0, '& .MuiDrawer-paper': { width: 320, borderRight: `2px solid ${COLORS.panelBorder}`, bgcolor: COLORS.paper, boxShadow: 5, overflow: 'hidden' } }}
+        >
+          <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', color: COLORS.secondary, letterSpacing: 1 }}>SNAPSHOTS</Typography>
+              <IconButton onClick={() => setIsSnapshotsOpen(false)} sx={{ color: 'rgba(255,255,255,0.5)' }}><ChevronLeftIcon /></IconButton>
+            </Box>
+
+            <Button 
+              variant="contained" 
+              color="secondary" 
+              fullWidth 
+              startIcon={<SnapshotIcon />} 
+              onClick={onSaveSnapshot}
+              onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Capture Current Stage State' }])}
+              onMouseLeave={() => setStatusParts([])}
+              sx={{ mb: 4, borderRadius: 2, textTransform: 'none', fontWeight: 'bold' }}
+            >
+              Create Snapshot
+            </Button>
+
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 2, letterSpacing: 1 }}>AVAILABLE HISTORY ({snapshots.length})</Typography>
+            
+            <Box sx={{ flexGrow: 1, overflowY: 'auto', pr: 1, '&::-webkit-scrollbar': { width: '4px' }, '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(255,255,255,0.1)', borderRadius: '4px' } }}>
+              {snapshots.length === 0 ? (
+                <Box sx={{ textAlign: 'center', mt: 4, opacity: 0.3 }}>
+                  <SnapshotIcon sx={{ fontSize: 48, mb: 1 }} />
+                  <Typography variant="body2">No snapshots yet</Typography>
+                </Box>
+              ) : (
+                <List>
+                  {snapshots.map((snap) => (
+                    <ListItem 
+                      key={snap.id} 
+                      disablePadding 
+                      sx={{ 
+                        mb: 2, 
+                        flexDirection: 'column', 
+                        alignItems: 'stretch',
+                        bgcolor: 'rgba(255,255,255,0.03)',
+                        border: '1px solid rgba(255,255,255,0.05)',
+                        borderRadius: 2,
+                        overflow: 'hidden',
+                        transition: 'all 0.2s ease',
+                        '&:hover': { bgcolor: 'rgba(255,255,255,0.07)', borderColor: 'rgba(255,255,255,0.1)' }
+                      }}
+                    >
+                      <Box 
+                        onClick={() => onLoadSnapshot(snap)}
+                        sx={{ cursor: 'pointer', position: 'relative', width: '100%', pt: '60%', bgcolor: '#000' }}
+                      >
+                        <img 
+                          src={snap.thumbnail} 
+                          alt={snap.timestamp} 
+                          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} 
+                        />
+                      </Box>
+                      <Box sx={{ p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Box onClick={() => onLoadSnapshot(snap)} sx={{ cursor: 'pointer', flexGrow: 1 }}>
+                          <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block' }}>{snap.timestamp}</Typography>
+                          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}>
+                            {snap.nodes.length} nodes, {snap.edges.length} edges
+                          </Typography>
+                        </Box>
+                        <IconButton 
+                          size="small" 
+                          onClick={(e) => { e.stopPropagation(); onDeleteSnapshot(snap.id); }}
+                          onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Delete Snapshot Permanently' }])}
+                          onMouseLeave={() => setStatusParts([])}
+                          sx={{ color: 'rgba(255,255,255,0.2)', '&:hover': { color: 'error.main' } }}
+                        >
+                          <DeleteOutlineIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    </ListItem>
+                  ))}
+                </List>
+              )}
+            </Box>
           </Box>
         </Drawer>
               </Box>

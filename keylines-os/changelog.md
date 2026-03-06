@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.37.1] - 2026-03-06
+
+### Fixed
+- **Snapshot Thumbnails**: Resolved an issue where thumbnails appeared as empty backgrounds. The capture logic now captures the full viewport and resizes it proportionally via canvas to ensure all visible nodes and edges are included.
+- **LocalStorage Protection**: Added a cap of 20 snapshots and switched to JPEG compression (0.7 quality) for thumbnails to prevent `localStorage` overflow.
+
+## [1.37.0] - 2026-03-06
+
+### Added
+- **Snapshots System**: Introduced a powerful state-management panel on the left toolbar.
+    - **Visual History**: Capture the exact state of the stage (all nodes, edges, and positions) with a single click.
+    - **Interactive Thumbnails**: Each snapshot includes a high-fidelity image preview generated in real-time.
+    - **One-Click Restore**: Replace the current stage with a saved state instantly.
+    - **Persistence**: Snapshots are automatically saved to `localStorage`, ensuring history remains available across browser sessions.
+    - **Management Tools**: Ability to delete specific snapshots from the history.
+
+## [1.36.0] - 2026-03-06
+
+### Changed
+- **Drawer Interaction Optimization**: Converted the Settings and Toolbox drawers from `persistent` to `temporary` variants. Both drawers now feature `onClose` handlers, allowing them to be dismissed instantly by clicking outside or on the background backdrop, significantly improving UI ergonomics and focus management.
+
+## [1.35.0] - 2026-03-06
+
+### Changed
+- **Branding Refinement**: Updated the system's secondary accent color from `HotPink` (#FF69B4) to `DeepPink` (#FF1493) for a more vibrant and professional appearance. This change ensures maximum compatibility with Material UI (MUI) color calculations. This affects paths, drawer headers, and active state indicators.
+
 ## [1.34.0] - 2026-03-06
 
 ### Changed
