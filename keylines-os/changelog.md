@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.53.0] - 2026-03-06
+
+### Neu
+- **Live & Warm Force Simulation**: 
+    - Einführung des `useLiveForceLayout` Hooks für eine persistente D3-Simulation.
+    - Der Force-Layout berechnet sich nun nicht mehr statisch im Hintergrund, sondern reagiert **live und organisch** auf Parameteränderungen.
+    - Knoten "gleiten" sanft in ihr neues Gleichgewicht, anstatt hart zu springen.
+- **Erweitertes Graph Tuning Panel**:
+    - Neues, einklappbares Interface (oben rechts) zur Feinjustierung aller Layout-Parameter.
+    - **Organic (Force)**: Getrennte Regler für Link-Distanz, Blue-Strength (Direct), Pink-Strength (Path), Repulsion, Gravity, Friction und Collision.
+    - **Sequential**: Einstellbarer Node- und Rank-Spacing.
+    - **Circular**: Dynamische Radius-Anpassung.
+    - **Concentric**: Regler für Ring-Spacing und Knoten pro Ring.
+    - **General Visuals**: Echtzeit-Skalierung der Knoten (Node Scale), globale Rotation des Graphen und Anpassung der Edge-Krümmung (Bezier Curvature).
+- **Manual Shuffle**: Ein erneuter Klick auf das Force-Layout-Icon (wenn bereits aktiv) randomisiert alle Positionen und "reheated" die Simulation für eine frische Perspektive.
+
+### Geändert
+- **Stabilitäts-Fixes**: 
+    - Behebung von `NaN` Fehlern bei der Koordinatenberechnung.
+    - Trennung der State-History (Split Refs) zur Vermeidung von Konflikten bei gleichzeitigen Skalierungs- und Rotationsänderungen.
+    - Stabilisierung der Zentrierungskräfte zur Vermeidung von ungewolltem "Drift" oder permanenter Rotation.
+- **Persistenz**: Alle Tuning-Parameter werden nun zuverlässig im `localStorage` gespeichert und beim Neuladen wiederhergestellt.
+
 ## [1.52.0] - 2026-03-06
 
 ### Geändert

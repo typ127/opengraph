@@ -95,6 +95,7 @@ import {
   import { categoryMap, typeColors, getHexColor } from './constants';
   import { COLORS, EDGE_TYPES, NODE_CATEGORIES } from './theme';
   import { calculateLayout, getLayoutCenter } from './layoutUtils';
+  import { useLiveForceLayout } from './useLiveForceLayout';
   
   const nodeTypes = {
     keylines: KeyLinesNode,
@@ -318,8 +319,40 @@ export default function App() {
             const saved = localStorage.getItem('kl_maxPathLength');
             return saved !== null ? parseInt(saved) : 10;
           });
-      
+
+          const [layoutOptions, setLayoutOptions] = useState(() => {
+            const defaults = {
+              linkDistance: 250,
+              repulsion: -1800,
+              linkStrengthBlue: 1.2,
+              linkStrengthPink: 0.3,
+              gravityX: 0.03,
+              gravityY: 0.03,
+              friction: 0.5,
+              collisionRadius: 90,
+              nodeSpacing: 120,
+              rankSpacing: 180,
+              ringSpacing: 250,
+              nodesPerRing: 8,
+              radius: 500,
+              nodeSizeFactor: 0,
+              rotation: 0,
+              edgeCurvature: 0.5
+            };
+            const saved = localStorage.getItem('kl_layoutOptions');
+            if (saved !== null) {
+              return { ...defaults, ...JSON.parse(saved) };
+            }
+            return defaults;
+          });
+
+          const [isLayoutSettingsOpen, setIsLayoutSettingsOpen] = useState(false);
+
+          // ACTIVATE LIVE FORCE LAYOUT
+          useLiveForceLayout(nodes, edges, setNodes, layoutOptions, activeLayout === 'force', layoutTrigger);
+
           const [pendingConnection, setPendingConnection] = useState(null);
+
                         const [isEdgeCreationMode, setIsEdgeCreationMode] = useState(false);
                   
                       const [isEditingNode, setIsEditingNode] = useState(false);
@@ -344,39 +377,115 @@ export default function App() {
             localStorage.setItem('kl_snapshots', JSON.stringify(snapshots));
             localStorage.setItem('kl_activeLayout', activeLayout);
             localStorage.setItem('kl_searchHistory', JSON.stringify(searchHistory));
-          }, [enableDonuts, edgePathType, layoutSpacing, maxPathLength, snapshots, activeLayout, searchHistory]);
+            localStorage.setItem('kl_layoutOptions', JSON.stringify(layoutOptions));
+          }, [enableDonuts, edgePathType, layoutSpacing, maxPathLength, snapshots, activeLayout, searchHistory, layoutOptions]);
 
-  // Funktion zum manuellen Anpassen der Kamera an neue Knotenpositionen,
-  // ignoriert CSS-Animationen für mehr Präzision.
-  const fitToNodes = useCallback((nds) => {
-    if (nds.length === 0) return;
-    fitView({ 
-      duration: 800, 
-      padding: 0.2, 
-      nodes: nds 
-    });
-  }, [fitView]);
+          // Funktion zum manuellen Anpassen der Kamera an neue Knotenpositionen,
+          // ignoriert CSS-Animationen für mehr Präzision.
+          const fitToNodes = useCallback((nds) => {
+          if (nds.length === 0) return;
+          fitView({
+          duration: 800,
+          padding: 0.2,
+          nodes: nds
+          });
+          }, [fitView]);
 
-  const runLayout = useCallback((type, gravity = layoutSpacing, rootNodeId = null) => {
-    const visibleNodesOnStage = nodesRef.current.filter(n => !hiddenTypes.has(n.data.type));
-    const visibleIds = new Set(visibleNodesOnStage.map(n => n.id));
-    const allRelevantEdges = [...edgesRef.current, ...pathEdgesRef.current];
-    const visibleEdgesOnStage = allRelevantEdges.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
-    
-    const layoutedVisible = calculateLayout(visibleNodesOnStage, visibleEdgesOnStage, type, gravity, rootNodeId);
-    const layoutedMap = new Map(layoutedVisible.map(n => [n.id, n.position]));
-    
-    setNodes(nds => nds.map(n => {
-      if (layoutedMap.has(n.id)) {
-        return { ...n, position: layoutedMap.get(n.id) };
-      }
-      return n;
-    }));
-    
-    return layoutedVisible;
-  }, [setNodes, hiddenTypes, layoutSpacing]);
+          const runLayout = useCallback((type, gravityValue = layoutSpacing, rootNodeId = null) => {
+            // SKIP STATIC CALCULATION FOR LIVE FORCE
+            if (type === 'force') return [];
 
-  const onLayoutClick = useCallback((type) => {
+            const visibleNodesOnStage = nodesRef.current.filter(n => !hiddenTypes.has(n.data.type));
+
+            const visibleIds = new Set(visibleNodesOnStage.map(n => n.id));
+            const allRelevantEdges = [...edgesRef.current, ...pathEdgesRef.current];
+            const visibleEdgesOnStage = allRelevantEdges.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
+
+            let layoutedVisible = calculateLayout(visibleNodesOnStage, visibleEdgesOnStage, type, layoutOptions, rootNodeId);
+
+            // APPLY ROTATION (if any)
+            if (layoutOptions.rotation !== 0 && layoutedVisible.length > 0) {
+              const center = getLayoutCenter(layoutedVisible);
+              const rad = (layoutOptions.rotation * Math.PI) / 180;
+              const cos = Math.cos(rad);
+              const sin = Math.sin(rad);
+
+              layoutedVisible = layoutedVisible.map(n => {
+                const dx = n.position.x - center.x;
+                const dy = n.position.y - center.y;
+                return {
+                  ...n,
+                  position: {
+                    x: center.x + (dx * cos - dy * sin),
+                    y: center.y + (dx * sin + dy * cos)
+                  }
+                };
+              });
+            }
+
+            const layoutedMap = new Map(layoutedVisible.map(n => [n.id, n.position]));
+
+            setNodes(nds => nds.map(n => {
+              if (layoutedMap.has(n.id)) {
+                return { ...n, position: layoutedMap.get(n.id) };
+              }
+              return n;
+            }));
+
+            return layoutedVisible;
+          }, [setNodes, hiddenTypes, layoutOptions]);
+
+          // Real-time Visual Tweaks (Rotation & Node Size)
+          useEffect(() => {
+            const prevRotation = prevLayoutOptionsRef.current.rotation || 0;
+            const prevSize = prevLayoutOptionsRef.current.nodeSizeFactor || 0;
+
+            if (prevRotation !== layoutOptions.rotation) {
+              const currentNodes = nodesRef.current;
+              if (currentNodes.length > 0) {
+                const center = getLayoutCenter(currentNodes);
+                const diffDeg = layoutOptions.rotation - prevRotation;
+                const rad = (diffDeg * Math.PI) / 180;
+                const cos = Math.cos(rad);
+                const sin = Math.sin(rad);
+
+                setNodes(nds => nds.map(n => {
+                  const dx = n.position.x - center.x;
+                  const dy = n.position.y - center.y;
+                  return {
+                    ...n,
+                    position: {
+                      x: center.x + (dx * cos - dy * sin),
+                      y: center.y + (dx * sin + dy * cos)
+                    }
+                  };
+                }));
+              }
+            }
+
+            if (prevSize !== layoutOptions.nodeSizeFactor) {
+               setNodes(nds => nds.map(n => ({
+                 ...n,
+                 data: { ...n.data, sizeFactor: layoutOptions.nodeSizeFactor }
+               })));
+            }
+
+            prevLayoutOptionsRef.current = { ...layoutOptions };
+          }, [layoutOptions.rotation, layoutOptions.nodeSizeFactor, setNodes]);
+            // Real-time Edge Curvature & Path Type Updates
+            useEffect(() => {
+            const updateEdges = (eds) => eds.map(edge => ({
+              ...edge,
+              type: edge.data?.type === 'PATH' ? 'pathEdge' : edgePathType,
+              data: { ...edge.data, curvature: layoutOptions.edgeCurvature }
+            }));
+
+            setEdges(updateEdges);
+            setPathEdges(updateEdges);
+            }, [edgePathType, layoutOptions.edgeCurvature, setEdges, setPathEdges]);
+
+            const onLayoutClick = useCallback((type) => {
+
     setActiveLayout(type);
     setLayoutTrigger(prev => prev + 1);
   }, []);
@@ -392,12 +501,19 @@ export default function App() {
     }
   }, [activeLayout, layoutTrigger, runLayout, fitToNodes]);
 
-  const prevSpacingRef = useRef(layoutSpacing);
+  const prevLayoutSpacingRef = useRef(layoutSpacing);
+  const prevLayoutOptionsRef = useRef(layoutOptions);
 
   // Handle graph scaling when gravity changes (Universal Linear Scaling)
   useEffect(() => {
-    if (prevSpacingRef.current !== layoutSpacing) {
-      const scaleFactor = layoutSpacing / prevSpacingRef.current;
+    if (prevLayoutSpacingRef.current !== layoutSpacing) {
+      if (activeLayout === 'force') {
+        // Live Force simulation handles this via its own internal hook
+        prevLayoutSpacingRef.current = layoutSpacing;
+        return;
+      }
+      
+      const scaleFactor = layoutSpacing / prevLayoutSpacingRef.current;
       const currentNodes = nodesRef.current;
       
       if (currentNodes.length > 0) {
@@ -411,9 +527,9 @@ export default function App() {
           }
         })));
       }
-      prevSpacingRef.current = layoutSpacing;
+      prevLayoutSpacingRef.current = layoutSpacing;
     }
-  }, [layoutSpacing, setNodes]);
+  }, [layoutSpacing, activeLayout, setNodes]);
 
           // --- PATH FINDING LOGIC ---
           const updatePaths = useCallback(async (currentNodes) => {
@@ -1097,7 +1213,7 @@ export default function App() {
                     const allRelevantEdges = [...edgesRef.current, ...pathEdgesRef.current];
                     const visibleEdges = allRelevantEdges.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
                     
-                    const layoutedVisible = calculateLayout(visibleOnStage, visibleEdges, activeLayoutRef.current, layoutSpacing);
+                    const layoutedVisible = calculateLayout(visibleOnStage, visibleEdges, activeLayoutRef.current, layoutOptions);
                     const layoutedMap = new Map(layoutedVisible.map(n => [n.id, n.position]));
 
                     setNodes(nds => nds.map(n => {
@@ -1161,14 +1277,14 @@ export default function App() {
           const allRelevantEdges = [...edgesRef.current, ...pathEdgesRef.current];
           const visibleEdges = allRelevantEdges.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
           
-          const layoutedVisible = calculateLayout(visibleOnStage, visibleEdges, activeLayoutRef.current, layoutSpacing);
+          const layoutedVisible = calculateLayout(visibleOnStage, visibleEdges, activeLayoutRef.current, layoutOptions);
           const layoutedMap = new Map(layoutedVisible.map(n => [n.id, n.position]));
 
           setNodes(nds => nds.map(n => {
             if (layoutedMap.has(n.id)) {
-              return { ...n, position: layoutedMap.get(n.id) };
+              return { ...n, position: layoutedMap.get(n.id), data: { ...n.data, sizeFactor: layoutOptions.nodeSizeFactor } };
             }
-            return n;
+            return { ...n, data: { ...n.data, sizeFactor: layoutOptions.nodeSizeFactor } };
           }));
           
           setTimeout(() => fitToNodes(layoutedVisible), 300);
@@ -1249,14 +1365,14 @@ export default function App() {
           const allRelevantEdges = [...edgesRef.current, ...pathEdgesRef.current];
           const visibleEdges = allRelevantEdges.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
           
-          const layoutedVisible = calculateLayout(visibleOnStage, visibleEdges, activeLayoutRef.current, layoutSpacing);
+          const layoutedVisible = calculateLayout(visibleOnStage, visibleEdges, activeLayoutRef.current, layoutOptions);
           const layoutedMap = new Map(layoutedVisible.map(n => [n.id, n.position]));
 
           setNodes(nds => nds.map(n => {
             if (layoutedMap.has(n.id)) {
-              return { ...n, position: layoutedMap.get(n.id) };
+              return { ...n, position: layoutedMap.get(n.id), data: { ...n.data, sizeFactor: layoutOptions.nodeSizeFactor } };
             }
-            return n;
+            return { ...n, data: { ...n.data, sizeFactor: layoutOptions.nodeSizeFactor } };
           }));
           
           setTimeout(() => fitToNodes(layoutedVisible), 300);
@@ -1895,6 +2011,185 @@ export default function App() {
                               <Background color="#333" variant="dots" gap={20} size={1} />
           <Controls showInteractive={false} />
         </ReactFlow>
+
+        {/* LAYOUT CONFIGURATION PANEL (Top Right) */}
+        {!isLayoutSettingsOpen ? (
+          <IconButton 
+            onClick={() => setIsLayoutSettingsOpen(true)}
+            sx={{ 
+              position: 'absolute', top: 20, right: 20, zIndex: 1000,
+              bgcolor: 'rgba(18,18,18,0.9)', color: COLORS.secondary,
+              border: '1px solid rgba(255,255,255,0.1)',
+              backdropFilter: 'blur(10px)',
+              '&:hover': { bgcolor: 'rgba(30,30,30,1)' }
+            }}
+          >
+            <Icons.Tune />
+          </IconButton>
+        ) : (
+          <Paper sx={{ 
+            position: 'absolute', top: 20, right: 20, zIndex: 1000, 
+            width: 260, p: 2, 
+            background: 'rgba(18,18,18,0.9)', 
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            maxHeight: '80vh', overflowY: 'auto',
+            display: 'flex', flexDirection: 'column', gap: 2,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.4)'
+          }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="caption" sx={{ color: COLORS.secondary, fontWeight: 'bold', letterSpacing: 1 }}>GRAPH TUNING</Typography>
+              <IconButton size="small" onClick={() => setIsLayoutSettingsOpen(false)} sx={{ color: 'rgba(255,255,255,0.3)' }}>
+                <CloseIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+            </Box>
+
+            <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
+
+            {/* General Visuals */}
+            <Box>
+              <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.70rem', fontWeight: 'bold', mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Icons.Visibility sx={{ fontSize: 14, color: COLORS.primary }} /> GENERAL VISUALS
+              </Typography>
+
+              <Box sx={{ mb: 1 }}>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>NODE SCALE: {layoutOptions.nodeSizeFactor.toFixed(1)}</Typography>
+                <Slider size="small" value={layoutOptions.nodeSizeFactor} min={-1} max={1} step={0.1} 
+                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, nodeSizeFactor: v }))} color="primary" />
+              </Box>
+
+              <Box sx={{ mb: 1 }}>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>ROTATION: {layoutOptions.rotation}°</Typography>
+                <Slider size="small" value={layoutOptions.rotation} min={0} max={360} step={5} 
+                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, rotation: v }))} color="primary" />
+              </Box>
+
+              <Box>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>EDGE CURVATURE: {layoutOptions.edgeCurvature.toFixed(2)}</Typography>
+                <Slider size="small" value={layoutOptions.edgeCurvature} min={0} max={1} step={0.05} 
+                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, edgeCurvature: v }))} color="primary" />
+              </Box>
+            </Box>
+
+            <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
+
+            {/* Force Settings */}
+
+            <Box>
+              <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.70rem', fontWeight: 'bold', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <ForceIcon sx={{ fontSize: 14, color: COLORS.secondary }} /> ORGANIC (FORCE)
+              </Typography>
+              
+              <Box sx={{ mb: 1 }}>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>LINK DISTANCE: {layoutOptions.linkDistance}</Typography>
+                <Slider size="small" value={layoutOptions.linkDistance} min={50} max={600} step={10} 
+                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, linkDistance: v }))} color="secondary" />
+              </Box>
+
+              <Box sx={{ mb: 1 }}>
+                <Typography variant="caption" sx={{ color: COLORS.primary, fontSize: '9px', display: 'block', mb: 0.5, fontWeight: 'bold' }}>BLUE STRENGTH (DIRECT): {layoutOptions.linkStrengthBlue.toFixed(1)}</Typography>
+                <Slider size="small" value={layoutOptions.linkStrengthBlue} min={0} max={2.0} step={0.1} 
+                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, linkStrengthBlue: v }))} color="primary" />
+              </Box>
+
+              <Box sx={{ mb: 1 }}>
+                <Typography variant="caption" sx={{ color: COLORS.secondary, fontSize: '9px', display: 'block', mb: 0.5, fontWeight: 'bold' }}>PINK STRENGTH (PATH): {layoutOptions.linkStrengthPink.toFixed(1)}</Typography>
+                <Slider size="small" value={layoutOptions.linkStrengthPink} min={0} max={2.0} step={0.1} 
+                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, linkStrengthPink: v }))} color="secondary" />
+              </Box>
+
+              <Box sx={{ mb: 1 }}>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>REPULSION: {layoutOptions.repulsion}</Typography>
+                <Slider size="small" value={layoutOptions.repulsion} min={-5000} max={-100} step={100} 
+                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, repulsion: v }))} color="secondary" />
+              </Box>
+
+              <Box sx={{ mb: 1 }}>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>GRAVITY: {layoutOptions.gravityX.toFixed(2)}</Typography>
+                <Slider size="small" value={layoutOptions.gravityX} min={0} max={0.5} step={0.01} 
+                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, gravityX: v, gravityY: v }))} color="secondary" />
+              </Box>
+
+              <Box sx={{ mb: 1 }}>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>FRICTION: {layoutOptions.friction.toFixed(2)}</Typography>
+                <Slider size="small" value={layoutOptions.friction} min={0.1} max={0.9} step={0.05} 
+                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, friction: v }))} color="secondary" />
+              </Box>
+
+              <Box>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>COLLISION: {layoutOptions.collisionRadius}</Typography>
+                <Slider size="small" value={layoutOptions.collisionRadius} min={20} max={200} step={5} 
+                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, collisionRadius: v }))} color="secondary" />
+              </Box>
+            </Box>
+
+            <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
+
+            {/* Sequential Settings */}
+            <Box>
+              <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.70rem', fontWeight: 'bold', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <TreeIcon sx={{ fontSize: 14, color: COLORS.primary }} /> SEQUENTIAL
+              </Typography>
+              
+              <Box sx={{ mb: 1 }}>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>NODE SPACING: {layoutOptions.nodeSpacing}</Typography>
+                <Slider size="small" value={layoutOptions.nodeSpacing} min={20} max={300} step={10} 
+                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, nodeSpacing: v }))} color="secondary" />
+              </Box>
+
+              <Box>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>RANK SPACING: {layoutOptions.rankSpacing}</Typography>
+                <Slider size="small" value={layoutOptions.rankSpacing} min={50} max={400} step={10} 
+                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, rankSpacing: v }))} color="secondary" />
+              </Box>
+            </Box>
+
+            <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
+
+            {/* Circular Settings */}
+            <Box>
+              <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.70rem', fontWeight: 'bold', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <CircularIcon sx={{ fontSize: 14, color: COLORS.secondary }} /> CIRCULAR
+              </Typography>
+              
+              <Box>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>RADIUS: {layoutOptions.radius}</Typography>
+                <Slider size="small" value={layoutOptions.radius} min={100} max={2000} step={50} 
+                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, radius: v }))} color="secondary" />
+              </Box>
+            </Box>
+
+            <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
+
+            {/* Concentric Settings */}
+            <Box>
+              <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.70rem', fontWeight: 'bold', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <ConcentricIcon sx={{ fontSize: 14, color: '#fff' }} /> CONCENTRIC
+              </Typography>
+              
+              <Box sx={{ mb: 1 }}>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>RING SPACING: {layoutOptions.ringSpacing}</Typography>
+                <Slider size="small" value={layoutOptions.ringSpacing} min={50} max={500} step={10} 
+                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, ringSpacing: v }))} color="secondary" />
+              </Box>
+
+              <Box>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>NODES PER RING: {layoutOptions.nodesPerRing}</Typography>
+                <Slider size="small" value={layoutOptions.nodesPerRing} min={2} max={20} step={1} 
+                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, nodesPerRing: v }))} color="secondary" />
+              </Box>
+            </Box>
+            
+            <Button size="small" variant="contained" fullWidth sx={{ 
+              mt: 1, py: 1, fontSize: '0.65rem', fontWeight: 'bold',
+              bgcolor: COLORS.secondary, '&:hover': { bgcolor: COLORS.secondary },
+              boxShadow: '0 4px 12px ' + COLORS.secondary + '44'
+            }} 
+              onClick={() => runLayout(activeLayout)}>
+              RUN LAYOUT
+            </Button>
+          </Paper>
+        )}
       </Box>
 
       {/* STATUS BAR (BOTTOM) */}

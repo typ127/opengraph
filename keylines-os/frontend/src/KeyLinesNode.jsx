@@ -7,7 +7,7 @@ import { getHexColor } from './constants';
 import { COLORS } from './theme';
 
 const KeyLinesNode = ({ data }) => {
-  const { label, icon, donut = [], score = 1.0, showDonuts = true, isEdgeCreationMode = false } = data;
+  const { label, icon, donut = [], score = 1.0, showDonuts = true, isEdgeCreationMode = false, sizeFactor = 0 } = data;
   const IconComponent = Icons[icon] || Icons.HelpOutline;
 
   const size = 60;
@@ -15,8 +15,14 @@ const KeyLinesNode = ({ data }) => {
   const center = size / 2;
   const circumference = 2 * Math.PI * radius;
 
+  // Base scaling derived from score (e.g. PageRank)
   const baseScale = 0.75;
-  const scale = baseScale + (score * 0.85); // Range: 0.75 to 1.6
+  const individualScale = baseScale + (score * 0.85); // Range: 0.75 to 1.6
+  
+  // Global scale adjustment factor (from -1..1, mapped to 0.5x to 1.5x)
+  const globalScaleAdjustment = 1.0 + (sizeFactor * 0.5);
+  
+  const finalScale = individualScale * globalScaleAdjustment;
 
   let cumulativeOffset = 0;
   const myColor = getHexColor(data.type);
@@ -30,7 +36,7 @@ const KeyLinesNode = ({ data }) => {
       display: 'flex', 
       flexDirection: 'column', 
       alignItems: 'center',
-      transform: `scale(${scale})`,
+      transform: `scale(${finalScale})`,
       transition: 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
       zIndex: Math.round(score * 10), 
     }}>
