@@ -241,6 +241,27 @@ const getDescendants = (nodeId, edges, visited = new Set()) => {
   return descendants;
 };
 
+// --- Helper für relative Zeit (Intl) ---
+const formatRelativeTime = (dateInput) => {
+  if (!dateInput) return '';
+  const date = typeof dateInput === 'number' ? new Date(dateInput) : new Date(dateInput);
+  if (isNaN(date.getTime())) return dateInput; // Fallback für alte Strings
+  
+  const diff = Date.now() - date.getTime();
+  const seconds = Math.max(0, Math.floor(diff / 1000));
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+
+  if (days > 0) return rtf.format(-days, 'day');
+  if (hours > 0) return rtf.format(-hours, 'hour');
+  if (minutes > 0) return rtf.format(-minutes, 'minute');
+  if (seconds > 5) return rtf.format(-seconds, 'second');
+  return 'just now';
+};
+
 export default function App() {
   const { fitView, setCenter, screenToFlowPosition, getViewport } = useReactFlow();
   
@@ -1099,7 +1120,8 @@ export default function App() {
         
         const newSnapshot = {
           id: `snap-${Date.now()}`,
-          timestamp: new Date().toLocaleString(),
+          timestamp: new Date().toISOString(),
+          rawTimestamp: Date.now(),
           nodes: JSON.parse(JSON.stringify(nodesRef.current)),
           edges: JSON.parse(JSON.stringify(edgesRef.current)),
           thumbnail: thumbnail
@@ -2884,13 +2906,15 @@ export default function App() {
                       >
                         <img 
                           src={snap.thumbnail} 
-                          alt={snap.timestamp} 
+                          alt={formatRelativeTime(snap.rawTimestamp || snap.timestamp)} 
                           style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} 
                         />
                       </Box>
                       <Box sx={{ p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Box onClick={() => onLoadSnapshot(snap)} sx={{ cursor: 'pointer', flexGrow: 1 }}>
-                          <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block' }}>{snap.timestamp}</Typography>
+                          <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block' }}>
+                            {formatRelativeTime(snap.rawTimestamp || snap.timestamp)}
+                          </Typography>
                           <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}>
                             {snap.nodes.length} nodes, {snap.edges.length} edges
                           </Typography>

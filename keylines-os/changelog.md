@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.55.0] - 2026-03-07
+
+### Neu
+- **Relative Zeit für Snapshots**:
+    - Implementierung von `Intl.RelativeTimeFormat` für eine dynamische Zeitanzeige in der Snapshot-Historie (z.B. "3 minutes ago", "2 days ago").
+    - Automatische Aktualisierung der Labels basierend auf dem Alter des Snapshots.
+- **Präzises Zeit-Tracking**:
+    - Snapshots speichern nun einen `rawTimestamp` (Unix-Time) für exakte relative Berechnungen.
+    - Umstellung des primären Zeitstempels auf `ISO 8601` zur verbesserten Kompatibilität und Robustheit beim Parsen über verschiedene Browser hinweg.
+
+### Geändert
+- **Verbesserte Accessibility**: Snapshot-Vorschaubilder nutzen nun die relative Zeit als `alt`-Attribut für einen besseren Kontext.
+- **Optimierte Anzeige**: Kurze Zeitabstände (< 5 Sekunden) werden als "just now" angezeigt, um visuelles Rauschen durch schnell tickende Sekunden-Updates zu vermeiden.
+
 ## [1.54.0] - 2026-03-07
 
 ### Neu
