@@ -357,12 +357,13 @@ export default function App() {
     });
   }, [fitView]);
 
-  const runLayout = useCallback((type, gravity = layoutSpacing) => {
+  const runLayout = useCallback((type, gravity = layoutSpacing, rootNodeId = null) => {
     const visibleNodesOnStage = nodesRef.current.filter(n => !hiddenTypes.has(n.data.type));
     const visibleIds = new Set(visibleNodesOnStage.map(n => n.id));
-    const visibleEdgesOnStage = pathEdgesRef.current.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
+    const allRelevantEdges = [...edgesRef.current, ...pathEdgesRef.current];
+    const visibleEdgesOnStage = allRelevantEdges.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
     
-    const layoutedVisible = calculateLayout(visibleNodesOnStage, visibleEdgesOnStage, type, gravity);
+    const layoutedVisible = calculateLayout(visibleNodesOnStage, visibleEdgesOnStage, type, gravity, rootNodeId);
     const layoutedMap = new Map(layoutedVisible.map(n => [n.id, n.position]));
     
     setNodes(nds => nds.map(n => {
@@ -392,6 +393,27 @@ export default function App() {
   }, [activeLayout, layoutTrigger, runLayout, fitToNodes]);
 
   const prevSpacingRef = useRef(layoutSpacing);
+
+  // Handle graph scaling when gravity changes (Universal Linear Scaling)
+  useEffect(() => {
+    if (prevSpacingRef.current !== layoutSpacing) {
+      const scaleFactor = layoutSpacing / prevSpacingRef.current;
+      const currentNodes = nodesRef.current;
+      
+      if (currentNodes.length > 0) {
+        const center = getLayoutCenter(currentNodes);
+        
+        setNodes(nds => nds.map(node => ({
+          ...node,
+          position: {
+            x: center.x + (node.position.x - center.x) * scaleFactor,
+            y: center.y + (node.position.y - center.y) * scaleFactor
+          }
+        })));
+      }
+      prevSpacingRef.current = layoutSpacing;
+    }
+  }, [layoutSpacing, setNodes]);
 
           // --- PATH FINDING LOGIC ---
           const updatePaths = useCallback(async (currentNodes) => {
@@ -836,33 +858,31 @@ export default function App() {
 
   const getSmartPosition = useCallback((sourceNode = null, targetNodeId = null) => {
     const currentNodes = nodesRef.current;
-    const currentEdges = pathEdgesRef.current;
+    const currentEdges = edgesRef.current;
+    const currentPathEdges = pathEdgesRef.current;
     const visibleNodesOnStage = currentNodes.filter(n => !hiddenTypes.has(n.data.type));
 
-    // 1. Check for RELATIONS to nodes already on stage
+    // 1. Check for RELATIONS to nodes already on stage (Direct or Path)
     if (targetNodeId) {
-      // Find all neighbors of the new node that are ALREADY on the stage
-      const stageNeighbors = currentEdges
+      const allRelevantEdges = [...currentEdges, ...currentPathEdges];
+      const stageNeighbors = allRelevantEdges
         .filter(e => e.source === targetNodeId || e.target === targetNodeId)
         .map(e => e.source === targetNodeId ? e.target : e.source)
         .map(id => currentNodes.find(n => n.id === id))
         .filter(Boolean);
 
       if (stageNeighbors.length > 0) {
-        // Position at the average center of all existing neighbors
         const avgX = stageNeighbors.reduce((acc, n) => acc + n.position.x, 0) / stageNeighbors.length;
         const avgY = stageNeighbors.reduce((acc, n) => acc + n.position.y, 0) / stageNeighbors.length;
 
-        // Add a slight radial offset so it doesn't overlap perfectly with any single neighbor
         const angle = Math.random() * Math.PI * 2;
-        const radius = 180; 
+        const radius = 150; 
         return {
           x: avgX + Math.cos(angle) * radius,
           y: avgY + Math.sin(angle) * radius
         };
       }
     }
-
     // 2. Place near source if provided (fallback for expansion)
     if (sourceNode) {
       return {
@@ -984,29 +1004,6 @@ export default function App() {
     });
   }, []);
 
-  const collectLeaves = useCallback((nodeId) => {
-    const currentEdges = pathEdgesRef.current;
-    
-    // Finde alle Nachbarn auf der Stage (über pathEdges)
-    const neighborEdges = currentEdges.filter(e => e.source === nodeId || e.target === nodeId);
-    const neighborIds = neighborEdges.map(e => e.source === nodeId ? e.target : e.source);
-    
-    const leavesToRemove = new Set();
-    
-    neighborIds.forEach(nbId => {
-      // Ein Knoten ist ein Blatt auf der Stage, wenn er nur genau eine Verbindung hat (zu uns)
-      const nbEdges = currentEdges.filter(e => e.source === nbId || e.target === nbId);
-      if (nbEdges.length === 1) {
-        leavesToRemove.add(nbId);
-      }
-    });
-    
-    if (leavesToRemove.size > 0) {
-      setNodes(nds => nds.filter(n => !leavesToRemove.has(n.id)));
-      setEdges(eds => eds.filter(e => !leavesToRemove.has(e.source) && !leavesToRemove.has(e.target)));
-    }
-  }, [setNodes, setEdges]);
-
   const expandNode = useCallback(async (nodeId, filterCategory = null, event = null) => {
     const currentNodes = nodesRef.current;
     const currentEdges = pathEdgesRef.current;
@@ -1095,7 +1092,10 @@ export default function App() {
                   setTimeout(() => {
                     const visibleOnStage = nodesRef.current.filter(n => !hiddenTypes.has(n.data.type));
                     const visibleIds = new Set(visibleOnStage.map(n => n.id));
-                    const visibleEdges = pathEdgesRef.current.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
+                    
+                    // CRITICAL: Must include BOTH pathEdges and standard edges so the layout engine sees the links!
+                    const allRelevantEdges = [...edgesRef.current, ...pathEdgesRef.current];
+                    const visibleEdges = allRelevantEdges.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
                     
                     const layoutedVisible = calculateLayout(visibleOnStage, visibleEdges, activeLayoutRef.current, layoutSpacing);
                     const layoutedMap = new Map(layoutedVisible.map(n => [n.id, n.position]));
@@ -1156,7 +1156,10 @@ export default function App() {
         setTimeout(() => {
           const visibleOnStage = nodesRef.current.filter(n => !hiddenTypes.has(n.data.type));
           const visibleIds = new Set(visibleOnStage.map(n => n.id));
-          const visibleEdges = pathEdgesRef.current.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
+          
+          // CRITICAL: Include both standard and path edges for the layout engine
+          const allRelevantEdges = [...edgesRef.current, ...pathEdgesRef.current];
+          const visibleEdges = allRelevantEdges.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
           
           const layoutedVisible = calculateLayout(visibleOnStage, visibleEdges, activeLayoutRef.current, layoutSpacing);
           const layoutedMap = new Map(layoutedVisible.map(n => [n.id, n.position]));
@@ -1239,8 +1242,25 @@ export default function App() {
                 setNodes(nds => deduplicate([...nds, newNode]));
         existing = newNode;
         
-        // Kamera sanft auf den neuen Bereich ausrichten
-        setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 100);
+        // Trigger layout calculation for the new node to integrate it
+        setTimeout(() => {
+          const visibleOnStage = nodesRef.current.filter(n => !hiddenTypes.has(n.data.type));
+          const visibleIds = new Set(visibleOnStage.map(n => n.id));
+          const allRelevantEdges = [...edgesRef.current, ...pathEdgesRef.current];
+          const visibleEdges = allRelevantEdges.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
+          
+          const layoutedVisible = calculateLayout(visibleOnStage, visibleEdges, activeLayoutRef.current, layoutSpacing);
+          const layoutedMap = new Map(layoutedVisible.map(n => [n.id, n.position]));
+
+          setNodes(nds => nds.map(n => {
+            if (layoutedMap.has(n.id)) {
+              return { ...n, position: layoutedMap.get(n.id) };
+            }
+            return n;
+          }));
+          
+          setTimeout(() => fitToNodes(layoutedVisible), 300);
+        }, 50);
       }
     }
     if (existing) {
@@ -1843,7 +1863,12 @@ export default function App() {
           onNodeClick={(e, n) => {
             // Wenn auf ein Donut-Segment geklickt wurde, ignorieren wir den Node-Klick
             if (e.target.classList.contains('donut-segment')) return;
-            e.shiftKey ? collectLeaves(n.id) : openDetails(n);
+            if (e.shiftKey) {
+              const layouted = runLayout(activeLayoutRef.current, layoutSpacing, n.id);
+              if (layouted && layouted.length > 0) setTimeout(() => fitToNodes(layouted), 300);
+            } else {
+              openDetails(n);
+            }
           }}
           onEdgeClick={(e, edge) => openEdgeDetails(edge)}
           onConnect={onConnect}
@@ -1851,7 +1876,7 @@ export default function App() {
           onMove={(e, v) => setZoomLevel(v.zoom)} onDrop={onDrop} onDragOver={onDragOver}
           onNodeMouseEnter={(e, n) => setStatusParts([
             { trigger: 'CLICK', action: 'Show Details' },
-            { trigger: 'SHIFT+CLICK', action: 'Collect Leaves' },
+            { trigger: 'SHIFT+CLICK', action: 'Set as Root & Reorganize' },
             { trigger: 'DRAG', action: 'Reposition' }
           ])}
           onNodeMouseLeave={() => setStatusParts([])}

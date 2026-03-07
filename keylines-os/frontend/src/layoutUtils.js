@@ -12,21 +12,19 @@ export const getLayoutCenter = (nodes) => {
 };
 
 /**
- * 1. Sequential Layout (Left-to-Right)
+ * 1. Sequential Layout (Top-to-Bottom)
  * Uses Dagre for hierarchical positioning.
  */
-const getSequentialLayout = (nodes, edges, gravity) => {
+const getSequentialLayout = (nodes, edges, gravity, rootNodeId = null) => {
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
 
   const nodeWidth = 180;
   const nodeHeight = 80;
-
-  // Spacing scales inversely with gravity (higher gravity = tighter)
   const spacing = 150 / gravity;
 
   dagreGraph.setGraph({
-    rankdir: 'LR',
+    rankdir: 'TB',
     nodesep: spacing * 0.8,
     ranksep: spacing * 1.2,
     marginx: 50,
@@ -37,7 +35,43 @@ const getSequentialLayout = (nodes, edges, gravity) => {
     dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
   });
 
-  edges.forEach((edge) => {
+  // If we have a root node, we want all paths to FLOW AWAY from it.
+  // We'll perform a simple BFS/DFS to orient edges away from the root.
+  const adjustedEdges = [...edges];
+  if (rootNodeId) {
+    const visited = new Set([rootNodeId]);
+    const queue = [rootNodeId];
+    
+    // Create an adjacency list for UNORIENTED traversal
+    const adj = {};
+    edges.forEach(e => {
+      if (!adj[e.source]) adj[e.source] = [];
+      if (!adj[e.target]) adj[e.target] = [];
+      adj[e.source].push(e);
+      adj[e.target].push(e);
+    });
+
+    while (queue.length > 0) {
+      const u = queue.shift();
+      const neighbors = adj[u] || [];
+      
+      neighbors.forEach(edge => {
+        const v = edge.source === u ? edge.target : edge.source;
+        if (!visited.has(v)) {
+          visited.add(v);
+          queue.push(v);
+          
+          // Force edge to point from U to V for layout purposes
+          const edgeIdx = adjustedEdges.findIndex(e => e.id === edge.id);
+          if (edgeIdx > -1) {
+            adjustedEdges[edgeIdx] = { ...edge, source: u, target: v };
+          }
+        }
+      });
+    }
+  }
+
+  adjustedEdges.forEach((edge) => {
     dagreGraph.setEdge(edge.source, edge.target);
   });
 
@@ -55,7 +89,6 @@ const getSequentialLayout = (nodes, edges, gravity) => {
 /**
  * 2. Force-Directed Layout (Organic)
  * Static calculation using d3-force. 
- * Sensitivity: Higher gravity = lower link distance and lower repulsion.
  */
 const getForceLayout = (nodes, edges, gravity) => {
   const center = getLayoutCenter(nodes);
@@ -67,20 +100,25 @@ const getForceLayout = (nodes, edges, gravity) => {
     .filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target))
     .map((e) => ({ source: e.source, target: e.target }));
 
-  // GRAVITY SCALING: 
-  // Higher gravity (e.g., 2.0) -> smaller distance, weaker repulsion -> Tighter graph
-  // Lower gravity (e.g., 0.5) -> larger distance, stronger repulsion -> Loose graph
-  const linkDistance = 300 / gravity;
-  const repulsion = -2000 / gravity; 
+  // INCREASED DISTANCES for a "looser" feel.
+  // Note: Gravity is now handled by linear scaling in App.jsx,
+  // so these act as the stable baseline for the structural calculation.
+  const linkDistance = 250;
+  const repulsion = -1800; 
 
   const simulation = d3Force.forceSimulation(simNodes)
-    .force('link', d3Force.forceLink(simLinks).id((d) => d.id).distance(linkDistance).strength(1))
-    .force('charge', d3Force.forceManyBody().strength(repulsion).distanceMax(1500))
-    .force('center', d3Force.forceCenter(center.x, center.y))
-    .force('collide', d3Force.forceCollide().radius(120)) // Strictly prevent overlapping
+    // Pull nodes toward their neighbors
+    .force('link', d3Force.forceLink(simLinks).id((d) => d.id).distance(linkDistance).strength(1.2))
+    // Stronger repulsion with larger range
+    .force('charge', d3Force.forceManyBody().strength(repulsion).distanceMax(1200))
+    // Soft centering forces
+    .force('x', d3Force.forceX(center.x).strength(0.08))
+    .force('y', d3Force.forceY(center.y).strength(0.08))
+    // Prevent overlap
+    .force('collide', d3Force.forceCollide().radius(90)) 
     .stop();
 
-  // Perform 300 ticks in the background to avoid UI wobbling
+  // Perform 300 ticks in the background
   for (let i = 0; i < 300; ++i) simulation.tick();
 
   return nodes.map((node) => {
@@ -113,17 +151,29 @@ const getCircularLayout = (nodes, gravity) => {
  * 4. Concentric Layout (Tiered Importance)
  * Top 5 (Center) -> Next 25 (Middle) -> Rest (Outer)
  */
-const getConcentricLayout = (nodes, gravity) => {
+const getConcentricLayout = (nodes, gravity, rootNodeId = null) => {
   const center = getLayoutCenter(nodes);
-  // Sort by importance (highest first)
-  const sorted = [...nodes].sort((a, b) => (b.data?.importance || 0) - (a.data?.importance || 0));
   
+  // Sort by importance (highest first)
+  let sorted = [...nodes].sort((a, b) => (b.data?.importance || 0) - (a.data?.importance || 0));
+  
+  // If we have a root node, we FORCE it to be the first element (the absolute center)
+  if (rootNodeId) {
+    const rootIdx = sorted.findIndex(n => n.id === rootNodeId);
+    if (rootIdx > -1) {
+      const rootNode = sorted.splice(rootIdx, 1)[0];
+      sorted.unshift(rootNode);
+    }
+  }
+
   const result = [];
-  const ring1 = sorted.slice(0, 5);      
-  const ring2 = sorted.slice(5, 30);     
-  const ring3 = sorted.slice(30);        
+  const ring1 = sorted.slice(0, 1);      // Just the top 1 node in the center (often the root)
+  const ring2 = sorted.slice(1, 10);     // 9 nodes in ring 2
+  const ring3 = sorted.slice(10, 40);    // 30 nodes in ring 3
+  const ring4 = sorted.slice(40);        // rest in ring 4
 
   const placeInRing = (nodeList, baseRadius) => {
+    if (nodeList.length === 0) return;
     const radius = baseRadius / gravity;
     nodeList.forEach((node, i) => {
       const angle = (i / nodeList.length) * 2 * Math.PI;
@@ -137,9 +187,10 @@ const getConcentricLayout = (nodes, gravity) => {
     });
   };
 
-  placeInRing(ring1, ring1.length > 1 ? 150 : 0);
-  placeInRing(ring2, 500);
-  placeInRing(ring3, 1000);
+  placeInRing(ring1, 0); 
+  placeInRing(ring2, 250);
+  placeInRing(ring3, 600);
+  placeInRing(ring4, 1100);
 
   return result;
 };
@@ -147,7 +198,7 @@ const getConcentricLayout = (nodes, gravity) => {
 /**
  * Main Layout Engine Entry Point
  */
-export const calculateLayout = (nodes, edges, type, gravityValue) => {
+export const calculateLayout = (nodes, edges, type, gravityValue, rootNodeId = null) => {
   if (!nodes || nodes.length === 0) return [];
 
   // Normalize gravityValue (ensure it's a positive number, default to 1.0)
@@ -156,7 +207,7 @@ export const calculateLayout = (nodes, edges, type, gravityValue) => {
   let layoutedNodes = [];
   switch (type) {
     case 'sequential':
-      layoutedNodes = getSequentialLayout(nodes, edges, gravity);
+      layoutedNodes = getSequentialLayout(nodes, edges, gravity, rootNodeId);
       break;
     case 'force':
       layoutedNodes = getForceLayout(nodes, edges, gravity);
@@ -165,7 +216,7 @@ export const calculateLayout = (nodes, edges, type, gravityValue) => {
       layoutedNodes = getCircularLayout(nodes, gravity);
       break;
     case 'concentric':
-      layoutedNodes = getConcentricLayout(nodes, gravity);
+      layoutedNodes = getConcentricLayout(nodes, gravity, rootNodeId);
       break;
     default:
       return nodes;

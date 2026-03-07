@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.52.0] - 2026-03-06
+
+### Geändert
+- **Layout-Reorganisation**: 
+    - Das `Sequential` Layout wurde von Left-to-Right auf **Top-to-Bottom** (`TB`) umgestellt, um tiefere Hierarchien besser darzustellen.
+    - Implementierung einer **"Set as Root"** Funktion: Ein `Shift + Click` auf einen Knoten zentriert nun das aktive Layout um diesen spezifischen Knoten.
+    - Im `Sequential` Layout erzwingt `Shift + Click` nun eine Neuausrichtung aller Kanten (mittels BFS), sodass sie "vom Root-Knoten weg" fließen. Der gewählte Knoten erscheint somit immer an der Spitze der Hierarchie.
+- **Universal Gravity Scaling**: Der "Gravity (Tension)" Slider skaliert nun *alle* Layout-Typen (inklusive Force und Sequential) strikt linear vom Masseschwerpunkt aus. Dies verhindert strukturelles Chaos und "Jumping" bei der Anpassung der Graph-Dichte.
+- **Luftiges Force-Layout**: Die Basis-Parameter des statischen `Organic (Force)` Layouts wurden drastisch "gelockert" (`linkDistance`: 250, `repulsion`: -1800), um dem Graphen standardmäßig mehr Raum zu geben und Überlappungen bei komplexen Clustern zu vermeiden.
+- **Entfernt**: Die veraltete `collectLeaves` Funktion (ehemals auf `Shift + Click`) wurde entfernt, um Platz für das mächtigere "Set as Root" Interaktionsmodell zu schaffen.
+
 ## [1.51.0] - 2026-03-06
 
 ### Neu
