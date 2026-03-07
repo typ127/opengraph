@@ -96,6 +96,7 @@ import {
   import { COLORS, EDGE_TYPES, NODE_CATEGORIES } from './theme';
   import { calculateLayout, getLayoutCenter } from './layoutUtils';
   import { useLiveForceLayout } from './useLiveForceLayout';
+  import { useClusteredForceLayout } from './useClusteredForceLayout';
   
   const nodeTypes = {
     keylines: KeyLinesNode,
@@ -337,7 +338,8 @@ export default function App() {
               radius: 500,
               nodeSizeFactor: 0,
               rotation: 0,
-              edgeCurvature: 0.5
+              edgeCurvature: 0.5,
+              clusterGravity: 0.1
             };
             const saved = localStorage.getItem('kl_layoutOptions');
             if (saved !== null) {
@@ -350,6 +352,7 @@ export default function App() {
 
           // ACTIVATE LIVE FORCE LAYOUT
           useLiveForceLayout(nodes, edges, setNodes, layoutOptions, activeLayout === 'force', layoutTrigger);
+          useClusteredForceLayout(nodes, edges, setNodes, layoutOptions, activeLayout === 'clustered', layoutTrigger);
 
           const [pendingConnection, setPendingConnection] = useState(null);
 
@@ -393,7 +396,7 @@ export default function App() {
 
           const runLayout = useCallback((type, gravityValue = layoutSpacing, rootNodeId = null) => {
             // SKIP STATIC CALCULATION FOR LIVE FORCE
-            if (type === 'force') return [];
+            if (type === 'force' || type === 'clustered') return [];
 
             const visibleNodesOnStage = nodesRef.current.filter(n => !hiddenTypes.has(n.data.type));
 
@@ -1757,6 +1760,7 @@ export default function App() {
           <ButtonGroup variant="text" size="small">
             <Tooltip title="Sequential (LR)"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Sequential Left-to-Right Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('sequential')} color={activeLayout === 'sequential' ? 'secondary' : 'primary'}><TreeIcon /></IconButton></Tooltip>
             <Tooltip title="Organic (Force)"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Force-Directed Organic Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('force')} color={activeLayout === 'force' ? 'secondary' : 'primary'}><ForceIcon /></IconButton></Tooltip>
+            <Tooltip title="Clustered (Planet)"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Clustered Island Layout (by Planet)' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('clustered')} color={activeLayout === 'clustered' ? 'secondary' : 'primary'}><GroupIcon /></IconButton></Tooltip>
             <Tooltip title="Circular"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Circular Hub Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('circular')} color={activeLayout === 'circular' ? 'secondary' : 'primary'}><CircularIcon /></IconButton></Tooltip>
             <Tooltip title="Concentric"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Importance-Based Concentric Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('concentric')} color={activeLayout === 'concentric' ? 'secondary' : 'primary'}><ConcentricIcon /></IconButton></Tooltip>
           </ButtonGroup>
@@ -2109,6 +2113,14 @@ export default function App() {
                 <Slider size="small" value={layoutOptions.gravityX} min={0} max={0.5} step={0.01} 
                   onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, gravityX: v, gravityY: v }))} color="secondary" />
               </Box>
+
+              {activeLayout === 'clustered' && (
+                <Box sx={{ mb: 1 }}>
+                  <Typography variant="caption" sx={{ color: COLORS.secondary, fontSize: '9px', display: 'block', mb: 0.5, fontWeight: 'bold' }}>CLUSTER GRAVITY: {layoutOptions.clusterGravity.toFixed(2)}</Typography>
+                  <Slider size="small" value={layoutOptions.clusterGravity} min={0.01} max={0.8} step={0.01} 
+                    onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, clusterGravity: v }))} color="secondary" />
+                </Box>
+              )}
 
               <Box sx={{ mb: 1 }}>
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>FRICTION: {layoutOptions.friction.toFixed(2)}</Typography>

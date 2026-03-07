@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.54.0] - 2026-03-07
+
+### Neu
+- **Clustered Force Layout (Planet Islands)**:
+    - Einführung des `useClusteredForceLayout` Hooks zur automatischen Gruppierung von Knoten in visuelle "Inseln" basierend auf ihrem `planet`-Attribut.
+    - **Geometrische Cluster-Zentren**: Planeten-Zentren werden automatisch auf einem großzügigen Kreis angeordnet, um Überlappungen der Inseln zu vermeiden.
+    - **Cluster Gravity / Density**: Neuer dynamischer Slider in den Layout-Einstellungen, der die Zugkraft der Knoten zu ihren jeweiligen Cluster-Zentren steuert.
+    - **Live & Warm Transition**: Nahtloser Übergang zwischen organischem Force-Layout und Clustered-Modus durch sanfte D3-Animationen ohne harte Sprünge.
+- **UI-Erweiterungen**:
+    - Neuer Button in der zentralen Toolbar (Icon: `GroupIcon`) zum schnellen Umschalten auf das Clustered Layout.
+    - Kontextueller "Cluster Gravity" Slider im Graph Tuning Panel (wird nur eingeblendet, wenn das Clustered Layout aktiv ist).
+
+### Geändert
+- **Robuste Datenverarbeitung**: Knoten ohne explizites Planeten-Attribut werden automatisch einem "Unknown"-Cluster zugewiesen, um die Konsistenz des Layouts zu wahren.
+- **Optimiertes Reheating**: Die Simulation wird bei Parameteränderungen (wie Cluster Gravity) gezielt "aufgewärmt", um ein flüssiges Gleiten der Knoten zu ermöglichen.
+
 ## [1.53.0] - 2026-03-06
 
 ### Neu
