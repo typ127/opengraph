@@ -64,13 +64,21 @@ export const useLiveForceLayout = (nodes, edges, setNodes, options, isActive, la
     const newSimNodes = nodes.map(n => {
       const existing = currentSimNodes.find(sn => sn.id === n.id);
       
-      if (existing && !isManualTrigger) return existing;
+      if (existing && !isManualTrigger) {
+        // Update importance in simulation node
+        existing.importance = n.data?.importance || 0.5;
+        return existing;
+      }
       
       // If new node OR manual rearrange, give it random position or current pos
       const x = isManualTrigger ? (Math.random() - 0.5) * 800 + 400 : n.position.x;
       const y = isManualTrigger ? (Math.random() - 0.5) * 800 + 400 : n.position.y;
       
-      return { id: n.id, x, y, vx: 0, vy: 0 };
+      return { 
+        id: n.id, 
+        x, y, vx: 0, vy: 0, 
+        importance: n.data?.importance || 0.5 
+      };
     });
 
     sim.nodes(newSimNodes);
@@ -106,7 +114,7 @@ export const useLiveForceLayout = (nodes, edges, setNodes, options, isActive, la
     // Apply specific forces based on options
     if (!sim.force('charge')) sim.force('charge', d3Force.forceManyBody());
     sim.force('charge')
-       .strength(options.repulsion)
+       .strength(d => options.repulsion * (d.importance || 0.5) * 2)
        .distanceMax(1200);
 
     if (sim.force('link')) {

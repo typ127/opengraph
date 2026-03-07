@@ -90,7 +90,8 @@ import {
   MenuOpen as MenuIcon,
   CameraAlt as SnapshotIcon,
   DeleteOutline as DeleteOutlineIcon,
-  ArrowDownward as ArrowDownwardIcon
+  ArrowDownward as ArrowDownwardIcon,
+  ModelTraining as TrainingIcon
   } from '@mui/icons-material';  import * as Icons from '@mui/icons-material';
   import { categoryMap, typeColors, getHexColor } from './constants';
   import { COLORS, EDGE_TYPES, NODE_CATEGORIES } from './theme';
@@ -319,8 +320,18 @@ export default function App() {
   const [isHistogramOpen, setIsHistogramOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
           const [isSnapshotsOpen, setIsSnapshotsOpen] = useState(false);
-          
+          const [isTrainingOpen, setIsTrainingOpen] = useState(false);
+          const [analysisResult, setAnalysisResult] = useState(null);
+          const [trainingAI, setTrainingAI] = useState(() => {
+            const saved = localStorage.getItem('kl_training_ai');
+            return saved ? JSON.parse(saved) : null;
+          });
+          const [trainingUser, setTrainingUser] = useState(() => {
+            const saved = localStorage.getItem('kl_training_user');
+            return saved ? JSON.parse(saved) : null;
+          });
           const [snapshots, setSnapshots] = useState(() => {
+
             const saved = localStorage.getItem('kl_snapshots');
             return saved !== null ? JSON.parse(saved) : [];
           });
@@ -401,8 +412,11 @@ export default function App() {
             localStorage.setItem('kl_snapshots', JSON.stringify(snapshots));
             localStorage.setItem('kl_activeLayout', activeLayout);
             localStorage.setItem('kl_searchHistory', JSON.stringify(searchHistory));
-            localStorage.setItem('kl_layoutOptions', JSON.stringify(layoutOptions));
-          }, [enableDonuts, edgePathType, layoutSpacing, maxPathLength, snapshots, activeLayout, searchHistory, layoutOptions]);
+            localStorage.setItem('kl_snapshots', JSON.stringify(snapshots));
+            localStorage.setItem('kl_training_ai', JSON.stringify(trainingAI));
+            localStorage.setItem('kl_training_user', JSON.stringify(trainingUser));
+            }, [enableDonuts, edgePathType, layoutSpacing, maxPathLength, snapshots, trainingAI, trainingUser, activeLayout, searchHistory, layoutOptions]);
+
 
           // Funktion zum manuellen Anpassen der Kamera an neue Knotenpositionen,
           // ignoriert CSS-Animationen für mehr Präzision.
@@ -1617,12 +1631,118 @@ export default function App() {
     setSnapshots(prev => prev.filter(s => s.id !== id));
   }, []);
 
+  const onAnalyzeComparison = useCallback((aiData, userData) => {
+    if (!aiData || !userData) return;
+
+    const getMetrics = (data) => {
+      if (data.nodes.length === 0) return { spread: 1, avgLinkDist: 1, minDist: 50 };
+      const xs = data.nodes.map(n => n.position.x);
+      const ys = data.nodes.map(n => n.position.y);
+      const width = Math.max(...xs) - Math.min(...xs);
+      const height = Math.max(...ys) - Math.min(...ys);
+      const spread = (width + height) / 2 || 1;
+
+      let linkTotal = 0;
+      data.edges.forEach(e => {
+        const s = data.nodes.find(n => n.id === e.source);
+        const t = data.nodes.find(n => n.id === e.target);
+        if (s && t) {
+          linkTotal += Math.sqrt(Math.pow(s.position.x - t.position.x, 2) + Math.pow(s.position.y - t.position.y, 2));
+        }
+      });
+      const avgLinkDist = data.edges.length > 0 ? linkTotal / data.edges.length : 50;
+
+      let minDist = Infinity;
+      for (let i = 0; i < data.nodes.length; i++) {
+        for (let j = i + 1; j < data.nodes.length; j++) {
+          const d = Math.sqrt(Math.pow(data.nodes[i].position.x - data.nodes[j].position.x, 2) + Math.pow(data.nodes[i].position.y - data.nodes[j].position.y, 2));
+          if (d < minDist) minDist = d;
+        }
+      }
+
+      return { spread, avgLinkDist, minDist: minDist === Infinity ? 50 : minDist };
+    };
+
+    const ai = getMetrics(aiData);
+    const user = getMetrics(userData);
+
+    const repulsionFactor = user.spread / ai.spread;
+    const linkFactor = user.avgLinkDist / ai.avgLinkDist;
+    const suggestedCollision = Math.max(20, Math.min(200, Math.round(user.minDist / 2.2)));
+    
+    // Smooth factor updates so it doesn't jump too wildly in one go
+    const newRepulsion = Math.max(-5000, Math.min(-100, Math.round(layoutOptions.repulsion * repulsionFactor)));
+    const newLinkDist = Math.max(50, Math.min(600, Math.round(layoutOptions.linkDistance * linkFactor)));
+    // Inverse proportion for gravity: bigger spread -> lower gravity
+    const newGravity = Math.max(0.01, Math.min(0.5, layoutOptions.gravityX / (repulsionFactor > 0 ? repulsionFactor : 1)));
+
+    setAnalysisResult({
+      suggestedRepulsion: newRepulsion,
+      suggestedLinkDist: newLinkDist,
+      suggestedCollision: suggestedCollision,
+      suggestedGravity: newGravity.toFixed(2),
+      spreadRatio: repulsionFactor.toFixed(2),
+      linkRatio: linkFactor.toFixed(2),
+    });
+
+    setLayoutOptions(prev => ({
+      ...prev,
+      repulsion: newRepulsion,
+      linkDistance: newLinkDist,
+      collisionRadius: suggestedCollision,
+      gravityX: parseFloat(newGravity.toFixed(2)),
+      gravityY: parseFloat(newGravity.toFixed(2)),
+    }));
+    
+    setStatusParts([{ trigger: 'INFO', action: 'Auto-applied learned force parameters' }]);
+    setTimeout(() => setStatusParts([]), 3000);
+  }, [layoutOptions]);
+
+  const onLoadTestGraph = async () => {
+    try {
+      const res = await fetch('http://localhost:8000/random-subgraph');
+      const data = await res.json();
+      if (!data.nodes || data.nodes.length === 0) return;
+      
+      // Randomize positions a bit for a fresh simulation
+      const newNodes = data.nodes.map(n => ({
+        ...n, 
+        position: { x: Math.random() * 200 - 100, y: Math.random() * 200 - 100 }
+      }));
+      setNodes(newNodes);
+      setEdges(data.edges);
+      
+      // Since the UI renders pathEdges, we map the loaded edges to pathEdges format
+      const initialPathEdges = data.edges.map(e => ({
+        ...e,
+        type: 'default',
+        data: { ...e, type: 'DIRECT_RELATION' }
+      }));
+      setPathEdges(initialPathEdges);
+      
+      if (activeLayout !== 'force') setActiveLayout('force');
+      setLayoutTrigger(prev => prev + 1);
+
+      // Auto capture AI layout after short layout settle
+      setTimeout(() => {
+        setTrainingAI({
+          nodes: JSON.parse(JSON.stringify(nodesRef.current)),
+          edges: JSON.parse(JSON.stringify(edgesRef.current)),
+          rawTimestamp: Date.now()
+        });
+      }, 800);
+    } catch (err) {
+      console.error('Failed to load test graph:', err);
+    }
+  };
+
   const stats = useMemo(() => {
-    const counts = {}; nodes.forEach(n => { const type = n.data.type || 'Unknown'; counts[type] = (counts[type] || 0) + 1; });
+    const counts = {}; nodes.forEach(n => { const type = n?.data?.type || 'Unknown'; counts[type] = (counts[type] || 0) + 1; });
     return Object.entries(counts).sort((a, b) => b[1] - a[1]);
   }, [nodes]);
 
-      const sidebarColor = selectedNode ? getHexColor(selectedNode.data.type) : (selectedEdge?.data?.type === 'PATH' || pendingConnection) ? COLORS.secondary : selectedEdge ? COLORS.primary : previewData ? typeColors[previewData.category] : typeColors.other;
+  const sidebarColor = selectedNode ? getHexColor(selectedNode?.data?.type) : (selectedEdge?.data?.type === 'PATH' || pendingConnection) ? COLORS.secondary : selectedEdge ? COLORS.primary : previewData ? typeColors[previewData.category] : typeColors.other;
+
     const topBarHeight = 48; // Common height for the top toolbars
     const statusBarHeight = 30;
 
@@ -1686,7 +1806,7 @@ export default function App() {
         <Paper elevation={3} sx={{ px: 1, height: topBarHeight, display: 'flex', alignItems: 'center', bgcolor: 'rgba(30, 30, 30, 0.9)', borderRadius: 2, border: `1px solid ${COLORS.panelBorder}` }}>
                       <Tooltip title="Settings">
                         <IconButton 
-                          onClick={() => { setIsSettingsOpen(!isSettingsOpen); setIsLeftDrawerOpen(false); setIsSnapshotsOpen(false); setIsHistogramOpen(false); }} 
+                          onClick={() => { setIsSettingsOpen(!isSettingsOpen); setIsLeftDrawerOpen(false); setIsSnapshotsOpen(false); setIsHistogramOpen(false); setIsTrainingOpen(false); }} 
                           onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Toggle Visualization Settings' }])}
                           onMouseLeave={() => setStatusParts([])}
                           color={isSettingsOpen ? 'secondary' : 'primary'} size="small"
@@ -1697,7 +1817,7 @@ export default function App() {
                       <Divider orientation="vertical" flexItem sx={{ mx: 1, my: 1, borderColor: 'rgba(255,255,255,0.1)' }} />
                       <Tooltip title="Analytics">
                         <IconButton 
-                          onClick={() => { setIsHistogramOpen(!isHistogramOpen); setIsLeftDrawerOpen(false); setIsSettingsOpen(false); setIsSnapshotsOpen(false); }} 
+                          onClick={() => { setIsHistogramOpen(!isHistogramOpen); setIsLeftDrawerOpen(false); setIsSettingsOpen(false); setIsSnapshotsOpen(false); setIsTrainingOpen(false); }} 
                           onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Toggle Graph Analytics' }])}
                           onMouseLeave={() => setStatusParts([])}
                           color={isHistogramOpen ? 'secondary' : 'primary'} size="small"
@@ -1708,7 +1828,7 @@ export default function App() {
                       <Divider orientation="vertical" flexItem sx={{ mx: 1, my: 1, borderColor: 'rgba(255,255,255,0.1)' }} />
                       <Tooltip title="Snapshots">
                         <IconButton 
-                          onClick={() => { setIsSnapshotsOpen(!isSnapshotsOpen); setIsLeftDrawerOpen(false); setIsSettingsOpen(false); setIsHistogramOpen(false); }} 
+                          onClick={() => { setIsSnapshotsOpen(!isSnapshotsOpen); setIsLeftDrawerOpen(false); setIsSettingsOpen(false); setIsHistogramOpen(false); setIsTrainingOpen(false); }} 
                           onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Toggle Snapshots Panel' }])}
                           onMouseLeave={() => setStatusParts([])}
                           color={isSnapshotsOpen ? 'secondary' : 'primary'} size="small"
@@ -1717,9 +1837,20 @@ export default function App() {
                         </IconButton>
                       </Tooltip>
                       <Divider orientation="vertical" flexItem sx={{ mx: 1, my: 1, borderColor: 'rgba(255,255,255,0.1)' }} />
+                      <Tooltip title="Training AI">
+                        <IconButton 
+                          onClick={() => { setIsTrainingOpen(!isTrainingOpen); setIsLeftDrawerOpen(false); setIsSettingsOpen(false); setIsHistogramOpen(false); setIsSnapshotsOpen(false); }} 
+                          onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Toggle Training Environment' }])}
+                          onMouseLeave={() => setStatusParts([])}
+                          color={isTrainingOpen ? 'secondary' : 'primary'} size="small"
+                        >
+                          <TrainingIcon />
+                        </IconButton>
+                      </Tooltip>
+                      <Divider orientation="vertical" flexItem sx={{ mx: 1, my: 1, borderColor: 'rgba(255,255,255,0.1)' }} />
                       <Tooltip title="Toolbox">
                         <IconButton 
-                          onClick={() => { setIsLeftDrawerOpen(!isLeftDrawerOpen); setIsSettingsOpen(false); setIsSnapshotsOpen(false); setIsHistogramOpen(false); }} 
+                          onClick={() => { setIsLeftDrawerOpen(!isLeftDrawerOpen); setIsSettingsOpen(false); setIsSnapshotsOpen(false); setIsHistogramOpen(false); setIsTrainingOpen(false); }} 
                           onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Toggle Node Toolbox' }])}
                           onMouseLeave={() => setStatusParts([])}
                           color={isLeftDrawerOpen ? 'secondary' : 'primary'} size="small"
@@ -2933,6 +3064,176 @@ export default function App() {
                   ))}
                 </List>
               )}
+            </Box>
+          </Box>
+        </Drawer>
+
+        {/* TRAINING ENVIRONMENT DRAWER (AI TRAINING) */}
+        <Drawer 
+          anchor="left" open={isTrainingOpen} onClose={() => setIsTrainingOpen(false)} variant="temporary"
+          sx={{ width: isTrainingOpen ? 320 : 0, flexShrink: 0, '& .MuiDrawer-paper': { width: 320, borderRight: `2px solid ${COLORS.panelBorder}`, bgcolor: COLORS.paper, boxShadow: 5, overflow: 'hidden' } }}
+        >
+          <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', color: COLORS.secondary, letterSpacing: 1 }}>AI TRAINING</Typography>
+              <IconButton onClick={() => setIsTrainingOpen(false)} sx={{ color: 'rgba(255,255,255,0.5)' }}><ChevronLeftIcon /></IconButton>
+            </Box>
+
+            <Box sx={{ flexGrow: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4, pr: 1, '&::-webkit-scrollbar': { width: '4px' }, '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(255,255,255,0.1)', borderRadius: '4px' } }}>
+              
+              <Button 
+                variant="outlined" 
+                color="secondary" 
+                fullWidth 
+                startIcon={<AlgorithmIcon />}
+                onClick={onLoadTestGraph}
+                sx={{ borderRadius: 2, py: 1.5, fontWeight: 'bold' }}
+              >
+                Load Test Graph
+              </Button>
+
+              <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
+
+              {/* AI LAYOUT SLOT */}
+              <Box>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 1, display: 'block', letterSpacing: 1 }}>AUSGANGSMATERIAL (AI)</Typography>
+                
+                {trainingAI ? (
+                  <Box sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, border: `1px solid ${COLORS.secondary}44`, mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', display: 'block', mb: 0.5 }}>
+                      {trainingAI.nodes.length} nodes, {trainingAI.edges.length} edges
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block' }}>
+                      {formatRelativeTime(trainingAI.rawTimestamp)}
+                    </Typography>
+                  </Box>
+                ) : (
+                  <Box sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.01)', borderRadius: 2, border: `1px dashed rgba(255,255,255,0.2)`, mb: 1.5, textAlign: 'center' }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>No AI layout captured yet</Typography>
+                  </Box>
+                )}
+                
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button 
+                    variant="outlined" color="secondary" size="small" startIcon={<AddIcon />}
+                    sx={{ textTransform: 'none', borderRadius: 2, flexGrow: 1 }}
+                    onClick={() => {
+                      setTrainingAI({
+                        nodes: JSON.parse(JSON.stringify(nodesRef.current)),
+                        edges: JSON.parse(JSON.stringify(edgesRef.current)),
+                        rawTimestamp: Date.now()
+                      });
+                    }}
+                  >
+                    Update Ausgangsmaterial
+                  </Button>
+                  {trainingAI && (
+                    <IconButton 
+                      size="small" color="secondary" sx={{ border: `1px solid ${COLORS.secondary}44` }}
+                      onClick={() => {
+                        navigator.clipboard.writeText(JSON.stringify(trainingAI, null, 2));
+                        setStatusParts([{ trigger: 'INFO', action: 'AI Layout JSON copied to clipboard' }]);
+                        setTimeout(() => setStatusParts([]), 2000);
+                      }}
+                    >
+                      <Icons.ContentCopy fontSize="small" />
+                    </IconButton>
+                  )}
+                </Box>
+              </Box>
+
+              <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
+
+              {/* USER LAYOUT SLOT */}
+              <Box>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 1, display: 'block', letterSpacing: 1 }}>VERBESSERTES LAYOUT (USER)</Typography>
+                
+                {trainingUser ? (
+                  <Box sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, border: `1px solid ${COLORS.primary}44`, mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', display: 'block', mb: 0.5 }}>
+                      {trainingUser.nodes.length} nodes, {trainingUser.edges.length} edges
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block' }}>
+                      {formatRelativeTime(trainingUser.rawTimestamp)}
+                    </Typography>
+                  </Box>
+                ) : (
+                  <Box sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.01)', borderRadius: 2, border: `1px dashed rgba(255,255,255,0.2)`, mb: 1.5, textAlign: 'center' }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>No user layout captured yet</Typography>
+                  </Box>
+                )}
+
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button 
+                    variant="outlined" color="primary" size="small" startIcon={<AddIcon />}
+                    sx={{ textTransform: 'none', borderRadius: 2, flexGrow: 1 }}
+                    onClick={() => {
+                      const newUserData = {
+                        nodes: JSON.parse(JSON.stringify(nodesRef.current)),
+                        edges: JSON.parse(JSON.stringify(edgesRef.current)),
+                        rawTimestamp: Date.now()
+                      };
+                      setTrainingUser(newUserData);
+                      
+                      // Auto trigger analysis
+                      if (trainingAI) {
+                        onAnalyzeComparison(trainingAI, newUserData);
+                      }
+                    }}
+                  >
+                    Save Snapshot (Analyse)
+                  </Button>
+                  {trainingUser && (
+                    <IconButton 
+                      size="small" color="primary" sx={{ border: `1px solid ${COLORS.primary}44` }}
+                      onClick={() => {
+                        navigator.clipboard.writeText(JSON.stringify(trainingUser, null, 2));
+                        setStatusParts([{ trigger: 'INFO', action: 'User Layout JSON copied to clipboard' }]);
+                        setTimeout(() => setStatusParts([]), 2000);
+                      }}
+                    >
+                      <Icons.ContentCopy fontSize="small" />
+                    </IconButton>
+                  )}
+                </Box>
+              </Box>
+
+              <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
+
+              {/* ACTION: ANALYZE */}
+              <Box sx={{ mt: 'auto', pt: 2 }}>
+                {analysisResult ? (
+                  <Paper sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, border: `1px solid ${COLORS.panelBorder}` }}>
+                    <Typography variant="caption" sx={{ color: COLORS.secondary, fontWeight: 'bold', mb: 1, display: 'block', letterSpacing: 1 }}>ANALYSIS RESULTS</Typography>
+                    
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontStyle: 'italic', mb: 1 }}>Parameters Auto-Applied (Importance-Scaling Active)!</Typography>
+                      
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Typography variant="caption">Repulsion</Typography>
+                        <Typography variant="caption" sx={{ color: COLORS.secondary, fontWeight: 'bold' }}>{analysisResult.suggestedRepulsion}</Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Typography variant="caption">Link Distance</Typography>
+                        <Typography variant="caption" sx={{ color: COLORS.secondary, fontWeight: 'bold' }}>{analysisResult.suggestedLinkDist}</Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Typography variant="caption">Collision Radius</Typography>
+                        <Typography variant="caption" sx={{ color: COLORS.secondary, fontWeight: 'bold' }}>{analysisResult.suggestedCollision}</Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Typography variant="caption">Gravity</Typography>
+                        <Typography variant="caption" sx={{ color: COLORS.secondary, fontWeight: 'bold' }}>{analysisResult.suggestedGravity}</Typography>
+                      </Box>
+                    </Box>
+                  </Paper>
+                ) : (
+                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block', textAlign: 'center' }}>
+                    Save a User Snapshot to trigger analysis.
+                  </Typography>
+                )}
+              </Box>
+
             </Box>
           </Box>
         </Drawer>

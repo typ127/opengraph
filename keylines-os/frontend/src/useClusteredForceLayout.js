@@ -81,7 +81,10 @@ export const useClusteredForceLayout = (nodes, edges, setNodes, options, isActiv
 
     const newSimNodes = nodes.map(n => {
       const existing = currentSimNodes.find(sn => sn.id === n.id);
-      if (existing && !isManualTrigger) return existing;
+      if (existing && !isManualTrigger) {
+        existing.importance = n.data?.importance || 0.5;
+        return existing;
+      }
       
       // Starting positions
       const x = n.position.x || (Math.random() - 0.5) * 1000;
@@ -90,6 +93,7 @@ export const useClusteredForceLayout = (nodes, edges, setNodes, options, isActiv
       return { 
         id: n.id, 
         planet: n.data?.planet || 'Unknown',
+        importance: n.data?.importance || 0.5,
         x, y, vx: 0, vy: 0 
       };
     });
@@ -120,7 +124,9 @@ export const useClusteredForceLayout = (nodes, edges, setNodes, options, isActiv
 
     // Repulsion (Many-Body)
     if (!sim.force('charge')) sim.force('charge', d3Force.forceManyBody());
-    sim.force('charge').strength(options.repulsion || -1000).distanceMax(1000);
+    sim.force('charge')
+       .strength(d => (options.repulsion || -1000) * (d.importance || 0.5) * 2)
+       .distanceMax(1000);
 
     // Links
     if (sim.force('link')) {

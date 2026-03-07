@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.56.0] - 2026-03-07
+
+### Neu
+- **AI Training Environment (Interactive Learning)**:
+    - Einführung eines dedizierten Debug-Panels zur Kalibrierung der Layout-Physik durch menschliches Feedback.
+    - **Load Test Graph**: Lädt automatisch komplexe Subgraphen (2 Anker, bis zu 2 Hops, max 25 Knoten) zur Analyse von Clustern und Pfadlängen.
+    - **Layout Comparison (AI vs. User)**: Speicherung des automatischen Ausgangsmaterials und deines verbesserten Wunsch-Layouts in separaten Slots.
+    - **Echtzeit-Analyse & Auto-Apply**: Automatischer Vergleich der geometrischen Metriken (Spread, Link Distance, Collision) mit sofortiger Anwendung der optimierten Force-Parameter auf die Stage.
+- **Wichtigkeits-basierte Physik (Importance-Scaling)**:
+    - Überarbeitung der Force-Engines: Knoten mit hoher `importance` stoßen andere Knoten nun exponentiell stärker ab ("Planetary Gravity").
+    - Erzeugt automatisch mehr Freiraum um zentrale Knotenpunkte und verbessert die semantische Trennung.
+- **Copy JSON Support**: Neue Buttons zum schnellen Export der Layout-Daten für die KI-Analyse (inkl. automatischer Bereinigung von Bilddaten).
+
+### Geändert
+- **Backend-Stabilität**: Der `/random-subgraph` Endpoint wurde massiv gehärtet (ID-Mapping Fix, semantische Typ-Priorisierung, robustes Relationship-Handling).
+- **UI Clean-up**: Umstellung aller Drawer-Buttons auf `outlined` Stil für ein moderneres, weniger überladenes Interface.
+- **Frontend-Robustheit**: Implementierung von Sicherheitschecks (Optional Chaining) bei der Knotenverarbeitung zur Vermeidung von Abstürzen bei unvollständigen Daten.
+
 ## [1.55.0] - 2026-03-07
 
 ### Neu

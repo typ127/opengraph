@@ -543,3 +543,102 @@ async def delete_edge(edge: EdgeCreate):
     except Exception as e:
         print(f"Edge deletion error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/random-subgraph")
+def get_random_subgraph():
+    try:
+        # Strategy: Pick 1 random anchor node and get its 1-2 hop neighborhood
+        # Reduced limit to keep it manageable (approx 10-12 nodes)
+        query = """
+        MATCH (anchor)
+        WITH anchor, rand() as r ORDER BY r LIMIT 1
+        MATCH path = (anchor)-[*1..2]-(m)
+        WITH nodes(path) as ns, relationships(path) as rs
+        LIMIT 12
+        UNWIND ns as n
+        UNWIND rs as r
+        RETURN collect(distinct n) as nodes, collect(distinct r) as rels
+        """
+        results = list(memgraph.execute_and_fetch(query))
+        
+        if not results:
+            return {"nodes": [], "edges": []}
+            
+        record = results[0]
+        nodes_list = record.get("nodes", [])
+        edges_list = record.get("rels", [])
+        
+        nodes_data = []
+        seen_ids = set()
+        for n in nodes_list:
+            if not n: continue
+            props = n.properties if hasattr(n, "properties") else {}
+            p_id = props.get("id")
+            if not p_id or p_id in seen_ids:
+                continue
+            seen_ids.add(p_id)
+            
+            # Fetch neighbor types for donut calculation - prioritize .type property
+            neighbor_query = f"MATCH (n)-[]-(m) WHERE id(n) = {n.id} RETURN properties(m).type as p_type, labels(m) as labels"
+            n_results = list(memgraph.execute_and_fetch(neighbor_query))
+            
+            n_neighbor_types = []
+            for r in n_results:
+                t = r.get("p_type")
+                if not t and r.get("labels"):
+                    for l in r["labels"]:
+                        if l != "Entity":
+                            t = l
+                            break
+                    if not t: t = r["labels"][0]
+                if t: n_neighbor_types.append(t)
+
+            node_type = props.get("type")
+            if not node_type:
+                labels = list(n.labels) if hasattr(n, "labels") else []
+                for l in labels:
+                    if l != "Entity":
+                        node_type = l
+                        break
+                if not node_type and labels: node_type = labels[0]
+            
+            nodes_data.append({
+                "id": p_id,
+                "type": "keylines",
+                "data": {
+                    **props,
+                    "id": p_id,
+                    "label": props.get("label", props.get("name", p_id)),
+                    "type": node_type,
+                    "importance": props.get("importance", 0.5),
+                    "score": props.get("importance", 0.5),
+                    "donut": calculate_donut(n_neighbor_types)
+                }
+            })
+        
+        edges_data = []
+        for r in edges_list:
+            if r:
+                query_edge = f"MATCH (a)-[e]->(b) WHERE id(e) = {r.id} RETURN a.id as source_id, b.id as target_id"
+                edge_res = list(memgraph.execute_and_fetch(query_edge))
+                if edge_res:
+                    row = edge_res[0]
+                    source_id = row["source_id"]
+                    target_id = row["target_id"]
+                    rel_type = r.type if hasattr(r, "type") else "RELATES_TO"
+                    props = r.properties if hasattr(r, "properties") else {}
+                    edges_data.append({
+                        "id": f"e-{source_id}-{rel_type}-{target_id}",
+                        "source": source_id,
+                        "target": target_id,
+                        "label": rel_type.replace("_", " ").lower(),
+                        "type": rel_type,
+                        "data": {**props, "type": rel_type}
+                    })
+                
+        return {"nodes": nodes_data, "edges": edges_data}
+    except Exception as e:
+        print(f"Error fetching random subgraph: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
