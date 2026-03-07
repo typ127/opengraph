@@ -47,8 +47,9 @@ export const useClusteredForceLayout = (nodes, edges, setNodes, options, isActiv
     if (!simulationRef.current) {
       simulationRef.current = d3Force.forceSimulation()
         .alphaTarget(0)
-        .alphaMin(0.001)
-        .velocityDecay(options.friction || 0.4);
+        .alphaMin(0.05)
+        .alphaDecay(0.08)
+        .velocityDecay(0.55);
 
       simulationRef.current.on('tick', () => {
         const simNodes = simulationRef.current.nodes();

@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.58.0] - 2026-03-07
+
+### Neu
+- **Snapshot Import/Export**:
+    - Neue "Import Snapshot" Funktion in der Toolbar zum direkten Laden von JSON-Layouts.
+    - Dedizierte "Copy JSON" Buttons für jeden Snapshot in der Historie (bereinigt um redundante Bilddaten).
+- **High-Response Physik-Tuning**:
+    - Eliminierung von "Nachziehen" der Knoten durch Erhöhung von `alphaMin` (0.05) und `alphaDecay` (0.08).
+    - Entfernung von CSS-Transitions während der Live-Simulation für eine absolut lineare und unmittelbare Reaktion der Knoten.
+    - Beschleunigung der Kamera-Bewegungen (`fitView`) auf 600ms für einen flüssigeren Workflow.
+
+### Geändert
+- **Architektur-Fix**: Reorganisation der Funktions-Initialisierung (`onLoadSnapshot`, `expandNode`) zur Vermeidung von Reference-Errors beim Import.
+- **Workflow-Speed**: Verkürzung des Auto-Capture-Timeouts auf 800ms, passend zur neuen Physik-Geschwindigkeit.
+
+## [1.57.0] - 2026-03-07
+
+### Neu
+- **Default Parameter Export**:
+    - Neuer Button "Copy Options as Defaults" im Training-Panel zum Exportieren der aktuell optimierten Physik-Parameter (`repulsion`, `gravity`, etc.) als JSON.
+- **Optimierte Testdaten-Generierung**:
+    - Reduzierung der Komplexität von Zufallsgraphen auf max. 12 Knoten für präziseres manuelles Layout-Training.
+
+### Geändert
+- **Verbesserte Interaktivität**: Test-Knoten unterstützen nun vollumfänglich die Donut-Segment-Klicks (Expansion/Details).
+- **Edge-Rendering Fix**: Korrektur der Kanten-Initialisierung beim Laden von Testdaten (Mapping auf `pathEdges`), um sofortige Sichtbarkeit der Beziehungen zu gewährleisten.
+- **Präzises ID-Mapping**: Umstellung des Backend-Exports auf semantische `id`-Properties zur Vermeidung von Konflikten mit internen Datenbank-IDs.
+
 ## [1.56.0] - 2026-03-07
 
 ### Neu

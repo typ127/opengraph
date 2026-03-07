@@ -91,7 +91,8 @@ import {
   CameraAlt as SnapshotIcon,
   DeleteOutline as DeleteOutlineIcon,
   ArrowDownward as ArrowDownwardIcon,
-  ModelTraining as TrainingIcon
+  ModelTraining as TrainingIcon,
+  FileUpload as ImportIcon
   } from '@mui/icons-material';  import * as Icons from '@mui/icons-material';
   import { categoryMap, typeColors, getHexColor } from './constants';
   import { COLORS, EDGE_TYPES, NODE_CATEGORIES } from './theme';
@@ -423,7 +424,7 @@ export default function App() {
           const fitToNodes = useCallback((nds) => {
           if (nds.length === 0) return;
           fitView({
-          duration: 800,
+          duration: 600,
           padding: 0.2,
           nodes: nds
           });
@@ -1092,6 +1093,7 @@ export default function App() {
       }));
     } catch (e) { console.error('Analyze error:', e); }
   }, [activeAlgorithm, setNodes]);
+
   const onExport = useCallback(() => {
     const reactFlowElement = document.querySelector('.react-flow');
     if (!reactFlowElement) return;
@@ -1607,26 +1609,6 @@ export default function App() {
         };
         });
         }, [nodes, pathEdges, visibleNodes, hiddenTypes, highlightedTypes, edgePathType, zoomLevel]);
-  const onLoadSnapshot = useCallback((snapshot) => {
-    if (!snapshot) return;
-    
-    // JSON serialization strips functions, so we MUST re-attach the handlers
-    const restoredNodes = snapshot.nodes.map(n => ({
-      ...n,
-      data: {
-        ...n.data,
-        showDonuts: enableDonuts,
-        onSegmentClick: (cat, e) => expandNode(n.id, cat, e)
-      }
-    }));
-
-    setNodes(restoredNodes);
-    setEdges(snapshot.edges);
-    // Give it a moment to render then fit view
-    setTimeout(() => fitToNodes(restoredNodes), 100);
-    setIsSnapshotsOpen(false);
-  }, [setNodes, setEdges, fitToNodes, expandNode, enableDonuts]);
-
   const onDeleteSnapshot = useCallback((id) => {
     setSnapshots(prev => prev.filter(s => s.id !== id));
   }, []);
@@ -1707,7 +1689,12 @@ export default function App() {
       // Randomize positions a bit for a fresh simulation
       const newNodes = data.nodes.map(n => ({
         ...n, 
-        position: { x: Math.random() * 200 - 100, y: Math.random() * 200 - 100 }
+        position: { x: Math.random() * 200 - 100, y: Math.random() * 200 - 100 },
+        data: {
+          ...n.data,
+          showDonuts: enableDonuts,
+          onSegmentClick: (cat, e) => expandNode(n.id, cat, e)
+        }
       }));
       setNodes(newNodes);
       setEdges(data.edges);
@@ -1736,6 +1723,44 @@ export default function App() {
     }
   };
 
+  const onLoadSnapshot = useCallback((snapshot) => {
+    if (!snapshot) return;
+    
+    // JSON serialization strips functions, so we MUST re-attach the handlers
+    const restoredNodes = snapshot.nodes.map(n => ({
+      ...n,
+      data: {
+        ...n.data,
+        showDonuts: enableDonuts,
+        onSegmentClick: (cat, e) => expandNode(n.id, cat, e)
+      }
+    }));
+
+    setNodes(restoredNodes);
+    setEdges(snapshot.edges);
+    // Give it a moment to render then fit view
+    setTimeout(() => fitToNodes(restoredNodes), 100);
+    setIsSnapshotsOpen(false);
+  }, [setNodes, setEdges, fitToNodes, expandNode, enableDonuts]);
+
+  const onImportSnapshot = useCallback(() => {
+    const json = window.prompt("Paste Snapshot JSON here:");
+    if (!json) return;
+    try {
+      const snapshot = JSON.parse(json);
+      if (snapshot.nodes && snapshot.edges) {
+        onLoadSnapshot(snapshot);
+        setStatusParts([{ trigger: 'INFO', action: 'Snapshot imported successfully' }]);
+        setTimeout(() => setStatusParts([]), 2000);
+      } else {
+        alert("Invalid snapshot format: Missing nodes or edges.");
+      }
+    } catch (e) {
+      console.error("Import error:", e);
+      alert("Failed to parse JSON. Please make sure it's a valid snapshot object.");
+    }
+  }, [onLoadSnapshot]);
+
   const stats = useMemo(() => {
     const counts = {}; nodes.forEach(n => { const type = n?.data?.type || 'Unknown'; counts[type] = (counts[type] || 0) + 1; });
     return Object.entries(counts).sort((a, b) => b[1] - a[1]);
@@ -1750,7 +1775,7 @@ export default function App() {
     <Box sx={{ width: '100vw', height: '100vh', bgcolor: 'background.default', display: 'flex', flexDirection: 'column', fontFamily: '"Open Sans", sans-serif', overflow: 'hidden', position: 'relative' }}>
       <style>{`
         body { margin: 0; padding: 0; overflow: hidden; background: ${COLORS.background}; }
-        .react-flow__node { transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) !important; will-change: transform; }
+        .react-flow__node { transition: none !important; will-change: transform; }
         .react-flow__node.dragging { transition: none !important; }
         
         /* Edges and Labels should stick immediately to nodes during movement - NO TRANSITIONS */
@@ -1926,7 +1951,7 @@ export default function App() {
           </ButtonGroup>
           <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
           <Tooltip title="Export PNG">
-            <IconButton 
+            <IconButton
               onClick={onExport} color="primary"
               onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Export Current View As PNG' }])}
               onMouseLeave={() => setStatusParts([])}
@@ -1934,6 +1959,16 @@ export default function App() {
               <DownloadIcon />
             </IconButton>
           </Tooltip>
+          <Tooltip title="Import Snapshot">
+            <IconButton
+              onClick={onImportSnapshot} color="primary"
+              onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Import Snapshot from JSON' }])}
+              onMouseLeave={() => setStatusParts([])}
+            >
+              <ImportIcon />
+            </IconButton>
+          </Tooltip>
+
         </Paper>
       </Box>
 
@@ -3050,15 +3085,33 @@ export default function App() {
                             {snap.nodes.length} nodes, {snap.edges.length} edges
                           </Typography>
                         </Box>
-                        <IconButton 
-                          size="small" 
-                          onClick={(e) => { e.stopPropagation(); onDeleteSnapshot(snap.id); }}
-                          onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Delete Snapshot Permanently' }])}
-                          onMouseLeave={() => setStatusParts([])}
-                          sx={{ color: 'rgba(255,255,255,0.2)', '&:hover': { color: 'error.main' } }}
-                        >
-                          <DeleteOutlineIcon fontSize="small" />
-                        </IconButton>
+                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                          <IconButton 
+                            size="small" 
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              const { thumbnail, ...cleanData } = snap;
+                              navigator.clipboard.writeText(JSON.stringify(cleanData, null, 2));
+                              setStatusParts([{ trigger: 'INFO', action: 'Snapshot JSON copied to clipboard' }]);
+                              setTimeout(() => setStatusParts([]), 2000);
+                            }}
+                            onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Copy Snapshot JSON' }])}
+                            onMouseLeave={() => setStatusParts([])}
+                            sx={{ color: 'rgba(255,255,255,0.2)', '&:hover': { color: COLORS.primary } }}
+                          >
+                            <Icons.ContentCopy fontSize="small" />
+                          </IconButton>
+                          <IconButton 
+                            size="small" 
+                            onClick={(e) => { e.stopPropagation(); onDeleteSnapshot(snap.id); }}
+                            onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Delete Snapshot Permanently' }])}
+                            onMouseLeave={() => setStatusParts([])}
+                            sx={{ color: 'rgba(255,255,255,0.2)', '&:hover': { color: 'error.main' } }}
+                          >
+                            <DeleteOutlineIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
+
                       </Box>
                     </ListItem>
                   ))}
@@ -3232,6 +3285,24 @@ export default function App() {
                     Save a User Snapshot to trigger analysis.
                   </Typography>
                 )}
+              </Box>
+
+              <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
+
+              {/* CURRENT CONFIG EXPORT */}
+              <Box>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 1.5, display: 'block', letterSpacing: 1 }}>CURRENT LIVE CONFIG</Typography>
+                <Button 
+                  fullWidth variant="outlined" color="primary" size="small" startIcon={<Icons.Code />}
+                  sx={{ textTransform: 'none', borderRadius: 2 }}
+                  onClick={() => {
+                    navigator.clipboard.writeText(JSON.stringify(layoutOptions, null, 2));
+                    setStatusParts([{ trigger: 'INFO', action: 'Live Config JSON copied to clipboard' }]);
+                    setTimeout(() => setStatusParts([]), 2000);
+                  }}
+                >
+                  Copy Options as Defaults
+                </Button>
               </Box>
 
             </Box>

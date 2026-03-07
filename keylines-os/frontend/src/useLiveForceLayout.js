@@ -22,9 +22,10 @@ export const useLiveForceLayout = (nodes, edges, setNodes, options, isActive, la
 
     if (!simulationRef.current) {
       simulationRef.current = d3Force.forceSimulation()
-        .alphaTarget(0) // Let it settle to 0
-        .alphaMin(0.001) // Stop early when motion is tiny
-        .velocityDecay(options.friction || 0.5); // Dynamic friction
+        .alphaTarget(0)
+        .alphaMin(0.05) // Clean cut-off
+        .alphaDecay(0.08) // More time for movement
+        .velocityDecay(0.55); // Smoother travel
 
       // LIVE TICK UPDATES
       simulationRef.current.on('tick', () => {
