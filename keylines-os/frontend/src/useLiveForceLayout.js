@@ -115,7 +115,7 @@ export const useLiveForceLayout = (nodes, edges, setNodes, options, isActive, la
     // Apply specific forces based on options
     if (!sim.force('charge')) sim.force('charge', d3Force.forceManyBody());
     sim.force('charge')
-       .strength(d => options.repulsion * (d.importance || 0.5) * 2)
+       .strength(d => options.repulsion * (d.importance || 0.5) * (options.importanceWeight || 2.0))
        .distanceMax(1200);
 
     if (sim.force('link')) {
@@ -155,6 +155,7 @@ export const useLiveForceLayout = (nodes, edges, setNodes, options, isActive, la
     options.gravityX,
     options.gravityY,
     options.friction,
+    options.importanceWeight,
     isActive
   ]);
 

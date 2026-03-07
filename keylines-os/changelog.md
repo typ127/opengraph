@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.61.0] - 2026-03-07
+
+### Geändert
+- **Graph Tuning Cleanup**:
+    - Entfernung des redundanten "RUN LAYOUT" Buttons, da alle Parameteränderungen nun in Echtzeit auf die Stage wirken.
+    - Verschlankung der Force-Layout Einstellungen: Fokus auf Kern-Physik (Repulsion, Gravity, Collision, Friction).
+    - Konsistentes Farbschema im Tuning-Panel (Blau für globale Einstellungen, Pink für Layout-spezifische Werte).
+
+## [1.60.0] - 2026-03-07
+
+### Neu
+- **Reaktives Importance-Scaling**: Der neue "Importance Weight" Regler ist jetzt direkt mit der Force-Simulation gekoppelt und ermöglicht Echtzeit-Anpassungen der planetaren Abstoßungskräfte.
+
+### Behoben
+- **Config-Persistence**: Fehler behoben, bei dem die detaillierten Layout-Optionen (`kl_layoutOptions`) nicht im LocalStorage gespeichert wurden. Alle Physik-Einstellungen bleiben nun über Sitzungen hinweg erhalten.
+- **Hook-Reaktivität**: Die Layout-Hooks reagieren nun korrekt auf Änderungen des `importanceWeight` Parameters.
+
+## [1.59.0] - 2026-03-07
+
+### Neu
+- **Refactoring des Graph Tuning Panels**:
+    - **Globaler Viewport Bereich**: Zentrale Steuerung von Knoten-Skalierung, Rotation und Basis-Kantenlänge in einem hervorgehobenen blauen Bereich.
+    - **Kontextsensitive Einstellungen**: Dynamische Anzeige von Parametern basierend auf dem aktiven Layout (Force, Clustered, Sequential, etc.).
+    - **KI-Indikatoren**: Visuelle Kennzeichnung (Brain-Icon) für alle Parameter, die durch die KI-Analyse beeinflusst werden (z.B. Repulsion, Collision).
+    - **Importance Weight**: Neuer Regler zur globalen Steuerung, wie stark die Wichtigkeit eines Knotens seine Abstoßungskraft beeinflusst.
+    - **Config Portabilität**: Neue Buttons zum Kopieren und Einfügen der kompletten Layout-Konfiguration als JSON für einfaches Sharing und Backup.
+
+### Geändert
+- **Verbesserte UI-Struktur**: Reduzierung der visuellen Last im Tuning-Panel durch gruppierte Boxen und standardisierte Typografie.
+
 ## [1.58.0] - 2026-03-07
 
 ### Neu

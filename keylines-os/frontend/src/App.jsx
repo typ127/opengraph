@@ -372,7 +372,8 @@ export default function App() {
               nodeSizeFactor: 0,
               rotation: 0,
               edgeCurvature: 0.5,
-              clusterGravity: 0.1
+              clusterGravity: 0.1,
+              importanceWeight: 2.0
             };
             const saved = localStorage.getItem('kl_layoutOptions');
             if (saved !== null) {
@@ -416,7 +417,8 @@ export default function App() {
             localStorage.setItem('kl_snapshots', JSON.stringify(snapshots));
             localStorage.setItem('kl_training_ai', JSON.stringify(trainingAI));
             localStorage.setItem('kl_training_user', JSON.stringify(trainingUser));
-            }, [enableDonuts, edgePathType, layoutSpacing, maxPathLength, snapshots, trainingAI, trainingUser, activeLayout, searchHistory, layoutOptions]);
+            localStorage.setItem('kl_layoutOptions', JSON.stringify(layoutOptions));
+          }, [enableDonuts, edgePathType, layoutSpacing, maxPathLength, snapshots, trainingAI, trainingUser, activeLayout, searchHistory, layoutOptions]);
 
 
           // Funktion zum manuellen Anpassen der Kamera an neue Knotenpositionen,
@@ -2221,11 +2223,11 @@ export default function App() {
         ) : (
           <Paper sx={{ 
             position: 'absolute', top: 20, right: 20, zIndex: 1000, 
-            width: 260, p: 2, 
+            width: 310, p: 2, 
             background: 'rgba(18,18,18,0.9)', 
             backdropFilter: 'blur(10px)',
             border: '1px solid rgba(255,255,255,0.1)',
-            maxHeight: '80vh', overflowY: 'auto',
+            maxHeight: 'calc(80vh + 50px)', overflowY: 'auto',
             display: 'flex', flexDirection: 'column', gap: 2,
             boxShadow: '0 8px 32px rgba(0,0,0,0.4)'
           }}>
@@ -2238,156 +2240,179 @@ export default function App() {
 
             <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
 
-            {/* General Visuals */}
-            <Box>
-              <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.70rem', fontWeight: 'bold', mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Icons.Visibility sx={{ fontSize: 14, color: COLORS.primary }} /> GENERAL VISUALS
-              </Typography>
-
-              <Box sx={{ mb: 1 }}>
+            {/* Refactored Graph Tuning Content */}
+            <Box sx={{ bgcolor: 'rgba(0, 191, 255, 0.05)', p: 1.5, borderRadius: 2, border: `1px solid ${COLORS.primary}33` }}>
+              <Typography variant="body2" sx={{ color: COLORS.primary, fontSize: '0.65rem', fontWeight: 'bold', mb: 1.5, letterSpacing: 1 }}>GLOBAL VIEWPORT</Typography>
+              
+              <Box sx={{ mb: 1.5 }}>
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>NODE SCALE: {layoutOptions.nodeSizeFactor.toFixed(1)}</Typography>
-                <Slider size="small" value={layoutOptions.nodeSizeFactor} min={-1} max={1} step={0.1} 
+                <Slider size="small" value={layoutOptions.nodeSizeFactor} min={-1} max={1} step={0.1}
                   onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, nodeSizeFactor: v }))} color="primary" />
               </Box>
 
-              <Box sx={{ mb: 1 }}>
+              <Box sx={{ mb: 1.5 }}>
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>ROTATION: {layoutOptions.rotation}°</Typography>
-                <Slider size="small" value={layoutOptions.rotation} min={0} max={360} step={5} 
+                <Slider size="small" value={layoutOptions.rotation} min={0} max={360} step={5}
                   onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, rotation: v }))} color="primary" />
               </Box>
 
+              <Box sx={{ mb: 1.5 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>LINK DISTANCE: {layoutOptions.linkDistance}</Typography>
+                  <Tooltip title="AI Influenced"><Icons.Psychology sx={{ fontSize: 12, color: COLORS.secondary }} /></Tooltip>
+                </Box>
+                <Slider size="small" value={layoutOptions.linkDistance} min={50} max={600} step={10}
+                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, linkDistance: v }))} color="primary" />
+              </Box>
+
               <Box>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>EDGE CURVATURE: {layoutOptions.edgeCurvature.toFixed(2)}</Typography>
-                <Slider size="small" value={layoutOptions.edgeCurvature} min={0} max={1} step={0.05} 
-                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, edgeCurvature: v }))} color="primary" />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>IMPORTANCE WEIGHT: {layoutOptions.importanceWeight?.toFixed(1)}x</Typography>
+                  <Tooltip title="AI Influenced"><Icons.Psychology sx={{ fontSize: 12, color: COLORS.secondary }} /></Tooltip>
+                </Box>
+                <Slider size="small" value={layoutOptions.importanceWeight || 2.0} min={0} max={5.0} step={0.1}
+                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, importanceWeight: v }))} color="primary" />
               </Box>
             </Box>
 
             <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
 
-            {/* Force Settings */}
+            {/* Context Specific Settings */}
+            <Box sx={{ px: 0.5 }}>
+              {(activeLayout === 'force' || activeLayout === 'clustered') && (
+                <Box>
+                  <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.65rem', fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center', gap: 1, letterSpacing: 1 }}>
+                    <ForceIcon sx={{ fontSize: 14, color: COLORS.secondary }} /> {activeLayout.toUpperCase()} PHYSICS
+                  </Typography>
 
-            <Box>
-              <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.70rem', fontWeight: 'bold', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <ForceIcon sx={{ fontSize: 14, color: COLORS.secondary }} /> ORGANIC (FORCE)
-              </Typography>
-              
-              <Box sx={{ mb: 1 }}>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>LINK DISTANCE: {layoutOptions.linkDistance}</Typography>
-                <Slider size="small" value={layoutOptions.linkDistance} min={50} max={600} step={10} 
-                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, linkDistance: v }))} color="secondary" />
-              </Box>
+                  <Box sx={{ mb: 1.5 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>REPULSION: {layoutOptions.repulsion}</Typography>
+                      <Tooltip title="AI Influenced"><Icons.Psychology sx={{ fontSize: 12, color: COLORS.secondary }} /></Tooltip>
+                    </Box>
+                    <Slider size="small" value={layoutOptions.repulsion} min={-5000} max={-100} step={100}
+                      onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, repulsion: v }))} color="secondary" />
+                  </Box>
 
-              <Box sx={{ mb: 1 }}>
-                <Typography variant="caption" sx={{ color: COLORS.primary, fontSize: '9px', display: 'block', mb: 0.5, fontWeight: 'bold' }}>BLUE STRENGTH (DIRECT): {layoutOptions.linkStrengthBlue.toFixed(1)}</Typography>
-                <Slider size="small" value={layoutOptions.linkStrengthBlue} min={0} max={2.0} step={0.1} 
-                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, linkStrengthBlue: v }))} color="primary" />
-              </Box>
+                  <Box sx={{ mb: 1.5 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>GRAVITY: {layoutOptions.gravityX.toFixed(2)}</Typography>
+                      <Tooltip title="AI Influenced"><Icons.Psychology sx={{ fontSize: 12, color: COLORS.secondary }} /></Tooltip>
+                    </Box>
+                    <Slider size="small" value={layoutOptions.gravityX} min={0} max={0.5} step={0.01}
+                      onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, gravityX: v, gravityY: v }))} color="secondary" />
+                  </Box>
 
-              <Box sx={{ mb: 1 }}>
-                <Typography variant="caption" sx={{ color: COLORS.secondary, fontSize: '9px', display: 'block', mb: 0.5, fontWeight: 'bold' }}>PINK STRENGTH (PATH): {layoutOptions.linkStrengthPink.toFixed(1)}</Typography>
-                <Slider size="small" value={layoutOptions.linkStrengthPink} min={0} max={2.0} step={0.1} 
-                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, linkStrengthPink: v }))} color="secondary" />
-              </Box>
+                  <Box sx={{ mb: 1.5 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>COLLISION: {layoutOptions.collisionRadius}</Typography>
+                      <Tooltip title="AI Influenced"><Icons.Psychology sx={{ fontSize: 12, color: COLORS.secondary }} /></Tooltip>
+                    </Box>
+                    <Slider size="small" value={layoutOptions.collisionRadius} min={20} max={200} step={5}
+                      onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, collisionRadius: v }))} color="secondary" />
+                  </Box>
 
-              <Box sx={{ mb: 1 }}>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>REPULSION: {layoutOptions.repulsion}</Typography>
-                <Slider size="small" value={layoutOptions.repulsion} min={-5000} max={-100} step={100} 
-                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, repulsion: v }))} color="secondary" />
-              </Box>
+                  {activeLayout === 'clustered' && (
+                    <Box sx={{ mb: 1.5 }}>
+                      <Typography variant="caption" sx={{ color: COLORS.secondary, fontSize: '9px', display: 'block', mb: 0.5, fontWeight: 'bold' }}>CLUSTER GRAVITY: {layoutOptions.clusterGravity.toFixed(2)}</Typography>
+                      <Slider size="small" value={layoutOptions.clusterGravity} min={0.01} max={0.8} step={0.01}
+                        onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, clusterGravity: v }))} color="secondary" />
+                    </Box>
+                  )}
 
-              <Box sx={{ mb: 1 }}>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>GRAVITY: {layoutOptions.gravityX.toFixed(2)}</Typography>
-                <Slider size="small" value={layoutOptions.gravityX} min={0} max={0.5} step={0.01} 
-                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, gravityX: v, gravityY: v }))} color="secondary" />
-              </Box>
-
-              {activeLayout === 'clustered' && (
-                <Box sx={{ mb: 1 }}>
-                  <Typography variant="caption" sx={{ color: COLORS.secondary, fontSize: '9px', display: 'block', mb: 0.5, fontWeight: 'bold' }}>CLUSTER GRAVITY: {layoutOptions.clusterGravity.toFixed(2)}</Typography>
-                  <Slider size="small" value={layoutOptions.clusterGravity} min={0.01} max={0.8} step={0.01} 
-                    onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, clusterGravity: v }))} color="secondary" />
+                  <Box>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>FRICTION: {layoutOptions.friction.toFixed(2)}</Typography>
+                    <Slider size="small" value={layoutOptions.friction} min={0.1} max={0.9} step={0.05}
+                      onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, friction: v }))} color="secondary" />
+                  </Box>
                 </Box>
               )}
 
-              <Box sx={{ mb: 1 }}>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>FRICTION: {layoutOptions.friction.toFixed(2)}</Typography>
-                <Slider size="small" value={layoutOptions.friction} min={0.1} max={0.9} step={0.05} 
-                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, friction: v }))} color="secondary" />
-              </Box>
+              {activeLayout === 'sequential' && (
+                <Box>
+                  <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.65rem', fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center', gap: 1, letterSpacing: 1 }}>
+                    <TreeIcon sx={{ fontSize: 14, color: COLORS.primary }} /> SEQUENTIAL SETUP
+                  </Typography>
+                  <Box sx={{ mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>NODE SPACING: {layoutOptions.nodeSpacing}</Typography>
+                    <Slider size="small" value={layoutOptions.nodeSpacing} min={20} max={300} step={10}
+                      onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, nodeSpacing: v }))} color="secondary" />
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>RANK SPACING: {layoutOptions.rankSpacing}</Typography>
+                    <Slider size="small" value={layoutOptions.rankSpacing} min={50} max={400} step={10}
+                      onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, rankSpacing: v }))} color="secondary" />
+                  </Box>
+                </Box>
+              )}
 
-              <Box>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>COLLISION: {layoutOptions.collisionRadius}</Typography>
-                <Slider size="small" value={layoutOptions.collisionRadius} min={20} max={200} step={5} 
-                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, collisionRadius: v }))} color="secondary" />
-              </Box>
+              {activeLayout === 'circular' && (
+                <Box>
+                  <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.65rem', fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center', gap: 1, letterSpacing: 1 }}>
+                    <CircularIcon sx={{ fontSize: 14, color: COLORS.secondary }} /> CIRCULAR SETUP
+                  </Typography>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>RADIUS: {layoutOptions.radius}</Typography>
+                    <Slider size="small" value={layoutOptions.radius} min={100} max={2000} step={50}
+                      onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, radius: v }))} color="secondary" />
+                  </Box>
+                </Box>
+              )}
+
+              {activeLayout === 'concentric' && (
+                <Box>
+                  <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.65rem', fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center', gap: 1, letterSpacing: 1 }}>
+                    <ConcentricIcon sx={{ fontSize: 14, color: COLORS.primary }} /> CONCENTRIC SETUP
+                  </Typography>
+                  <Box sx={{ mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>RING SPACING: {layoutOptions.ringSpacing}</Typography>
+                    <Slider size="small" value={layoutOptions.ringSpacing} min={50} max={500} step={10}
+                      onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, ringSpacing: v }))} color="secondary" />
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>NODES PER RING: {layoutOptions.nodesPerRing}</Typography>
+                    <Slider size="small" value={layoutOptions.nodesPerRing} min={2} max={20} step={1}
+                      onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, nodesPerRing: v }))} color="secondary" />
+                  </Box>
+                </Box>
+              )}
             </Box>
 
-            <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
+            <Divider sx={{ mt: 1, borderColor: 'rgba(255,255,255,0.05)' }} />
 
-            {/* Sequential Settings */}
-            <Box>
-              <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.70rem', fontWeight: 'bold', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <TreeIcon sx={{ fontSize: 14, color: COLORS.primary }} /> SEQUENTIAL
-              </Typography>
-              
-              <Box sx={{ mb: 1 }}>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>NODE SPACING: {layoutOptions.nodeSpacing}</Typography>
-                <Slider size="small" value={layoutOptions.nodeSpacing} min={20} max={300} step={10} 
-                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, nodeSpacing: v }))} color="secondary" />
-              </Box>
-
-              <Box>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>RANK SPACING: {layoutOptions.rankSpacing}</Typography>
-                <Slider size="small" value={layoutOptions.rankSpacing} min={50} max={400} step={10} 
-                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, rankSpacing: v }))} color="secondary" />
-              </Box>
+            {/* Action Area: Export/Import Config */}
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button 
+                variant="outlined" size="small" fullWidth
+                onClick={() => {
+                  navigator.clipboard.writeText(JSON.stringify(layoutOptions, null, 2));
+                  setStatusParts([{ trigger: 'INFO', action: 'Config copied' }]);
+                  setTimeout(() => setStatusParts([]), 2000);
+                }}
+                sx={{ fontSize: '0.65rem', textTransform: 'none', borderRadius: 1.5, borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.5)' }}
+                startIcon={<Icons.ContentCopy sx={{ fontSize: 12 }} />}
+              >
+                Copy
+              </Button>
+              <Button 
+                variant="outlined" size="small" fullWidth
+                onClick={() => {
+                  const json = window.prompt("Paste Layout JSON here:");
+                  if (json) {
+                    try {
+                      const cfg = JSON.parse(json);
+                      setLayoutOptions(prev => ({ ...prev, ...cfg }));
+                      setStatusParts([{ trigger: 'INFO', action: 'Config applied' }]);
+                      setTimeout(() => setStatusParts([]), 2000);
+                    } catch(e) { alert("Invalid JSON"); }
+                  }
+                }}
+                sx={{ fontSize: '0.65rem', textTransform: 'none', borderRadius: 1.5, borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.5)' }}
+                startIcon={<Icons.FileUpload sx={{ fontSize: 12 }} />}
+              >
+                Paste
+              </Button>
             </Box>
-
-            <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
-
-            {/* Circular Settings */}
-            <Box>
-              <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.70rem', fontWeight: 'bold', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <CircularIcon sx={{ fontSize: 14, color: COLORS.secondary }} /> CIRCULAR
-              </Typography>
-              
-              <Box>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>RADIUS: {layoutOptions.radius}</Typography>
-                <Slider size="small" value={layoutOptions.radius} min={100} max={2000} step={50} 
-                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, radius: v }))} color="secondary" />
-              </Box>
-            </Box>
-
-            <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
-
-            {/* Concentric Settings */}
-            <Box>
-              <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.70rem', fontWeight: 'bold', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <ConcentricIcon sx={{ fontSize: 14, color: '#fff' }} /> CONCENTRIC
-              </Typography>
-              
-              <Box sx={{ mb: 1 }}>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>RING SPACING: {layoutOptions.ringSpacing}</Typography>
-                <Slider size="small" value={layoutOptions.ringSpacing} min={50} max={500} step={10} 
-                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, ringSpacing: v }))} color="secondary" />
-              </Box>
-
-              <Box>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>NODES PER RING: {layoutOptions.nodesPerRing}</Typography>
-                <Slider size="small" value={layoutOptions.nodesPerRing} min={2} max={20} step={1} 
-                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, nodesPerRing: v }))} color="secondary" />
-              </Box>
-            </Box>
-            
-            <Button size="small" variant="contained" fullWidth sx={{ 
-              mt: 1, py: 1, fontSize: '0.65rem', fontWeight: 'bold',
-              bgcolor: COLORS.secondary, '&:hover': { bgcolor: COLORS.secondary },
-              boxShadow: '0 4px 12px ' + COLORS.secondary + '44'
-            }} 
-              onClick={() => runLayout(activeLayout)}>
-              RUN LAYOUT
-            </Button>
           </Paper>
         )}
       </Box>

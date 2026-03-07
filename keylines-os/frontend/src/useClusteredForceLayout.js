@@ -126,7 +126,7 @@ export const useClusteredForceLayout = (nodes, edges, setNodes, options, isActiv
     // Repulsion (Many-Body)
     if (!sim.force('charge')) sim.force('charge', d3Force.forceManyBody());
     sim.force('charge')
-       .strength(d => (options.repulsion || -1000) * (d.importance || 0.5) * 2)
+       .strength(d => (options.repulsion || -1000) * (d.importance || 0.5) * (options.importanceWeight || 2.0))
        .distanceMax(1000);
 
     // Links
@@ -163,6 +163,7 @@ export const useClusteredForceLayout = (nodes, edges, setNodes, options, isActiv
     options.collisionRadius,
     options.linkDistance,
     options.friction,
+    options.importanceWeight,
     clusterCenters,
     isActive
   ]);
