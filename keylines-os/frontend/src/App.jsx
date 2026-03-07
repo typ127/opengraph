@@ -2222,19 +2222,22 @@ export default function App() {
           </IconButton>
         ) : (
           <Paper sx={{ 
-            position: 'absolute', top: 20, right: 20, zIndex: 1000, 
-            width: 310, p: 2, 
-            background: 'rgba(18,18,18,0.9)', 
+            position: 'absolute', top: 16, right: 16, zIndex: 1200, 
+            width: 320, p: 3, 
+            bgcolor: 'rgba(30, 30, 30, 0.9)',
             backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(255,255,255,0.1)',
+            border: `1px solid ${COLORS.panelBorder}`,
             maxHeight: 'calc(80vh + 50px)', overflowY: 'auto',
-            display: 'flex', flexDirection: 'column', gap: 2,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.4)'
+            display: 'flex', flexDirection: 'column', gap: 3,
+            boxShadow: 10,
+            borderRadius: 2,
+            '&::-webkit-scrollbar': { width: '4px' }, 
+            '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(255,255,255,0.1)', borderRadius: '4px' }
           }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="caption" sx={{ color: COLORS.secondary, fontWeight: 'bold', letterSpacing: 1 }}>GRAPH TUNING</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', color: COLORS.secondary, letterSpacing: 1 }}>TUNING</Typography>
               <IconButton size="small" onClick={() => setIsLayoutSettingsOpen(false)} sx={{ color: 'rgba(255,255,255,0.3)' }}>
-                <CloseIcon sx={{ fontSize: 18 }} />
+                <CloseIcon sx={{ fontSize: 20 }} />
               </IconButton>
             </Box>
 

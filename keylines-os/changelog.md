@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.62.0] - 2026-03-07
+
+### Geändert
+- **Tuning Panel Visual Refinement**:
+    - **Toolbar Alignment**: Das Panel ist nun auf die Position der globalen Toolbars ausgerichtet (`top: 16`, `right: 16`).
+    - **Glass-Morphism**: Umstellung auf `rgba(30, 30, 30, 0.9)` mit `backdropFilter: blur(10px)` für eine perfekte optische Integration mit den anderen Toolbars.
+    - **UI Polish**: Entfernung farbiger Ränder zugunsten eines subtilen Panel-Borders und Erhöhung des Z-Index (1200) für eine saubere Layer-Trennung.
+
 ## [1.61.0] - 2026-03-07
 
 ### Geändert
