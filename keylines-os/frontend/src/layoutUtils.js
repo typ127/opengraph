@@ -16,18 +16,24 @@ export const getLayoutCenter = (nodes) => {
  * Uses Dagre for hierarchical positioning.
  */
 const getSequentialLayout = (nodes, edges, options = {}, rootNodeId = null) => {
+  console.log("DAGRE CALCULATION - Ranker:", options.ranker, "Direction:", options.rankDir);
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
 
-  const nodeWidth = 180;
-  const nodeHeight = 80;
+  const nodeWidth = options.nodeWidth || 180;
+  const nodeHeight = options.nodeHeight || 80;
   
   // Use specific options or fallback to defaults
   const nodeSep = options.nodeSpacing || 120;
   const rankSep = options.rankSpacing || 180;
+  const rankDir = options.rankDir || 'TB';
+  const ranker = options.ranker || 'network-simplex';
+  const align = options.align || 'UL';
 
   dagreGraph.setGraph({
-    rankdir: 'TB',
+    rankdir: rankDir,
+    ranker: ranker,
+    align: align,
     nodesep: nodeSep,
     ranksep: rankSep,
     marginx: 50,
@@ -184,6 +190,7 @@ export const calculateLayout = (nodes, edges, type, options = {}, rootNodeId = n
 
   let layoutedNodes = [];
   switch (type) {
+    case 'hierarchical':
     case 'sequential':
       layoutedNodes = getSequentialLayout(nodes, edges, options, rootNodeId);
       break;

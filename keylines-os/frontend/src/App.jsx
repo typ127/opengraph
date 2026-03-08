@@ -271,7 +271,9 @@ export default function App() {
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [pathEdges, setPathEdges] = useState([]);
   const [activeLayout, setActiveLayout] = useState(() => {
-    return localStorage.getItem('kl_activeLayout') || 'force';
+    const saved = localStorage.getItem('kl_activeLayout');
+    if (saved === 'sequential') return 'hierarchical';
+    return saved || 'force';
   });
   const [activeAlgorithm, setActiveAlgorithm] = useState(null);
   const [layoutTrigger, setLayoutTrigger] = useState(0);
@@ -373,7 +375,9 @@ export default function App() {
               rotation: 0,
               edgeCurvature: 0.5,
               clusterGravity: 0.1,
-              importanceWeight: 2.0
+              importanceWeight: 2.0,
+              rankDir: 'TB',
+              ranker: 'network-simplex'
             };
             const saved = localStorage.getItem('kl_layoutOptions');
             if (saved !== null) {
@@ -512,7 +516,7 @@ export default function App() {
             }
 
             prevLayoutOptionsRef.current = { ...layoutOptions };
-          }, [layoutOptions.rotation, layoutOptions.nodeSizeFactor, setNodes]);
+          }, [layoutOptions.rotation, layoutOptions.nodeSizeFactor, layoutOptions.ranker, layoutOptions.rankDir, setNodes]);
             // Real-time Edge Curvature & Path Type Updates
             useEffect(() => {
             const updateEdges = (eds) => eds.map(edge => ({
@@ -531,16 +535,21 @@ export default function App() {
     setLayoutTrigger(prev => prev + 1);
   }, []);
 
-  // Handle structural layout changes (button click)
+  // Handle structural layout changes (button click or option change)
   useEffect(() => {
-    const layoutedVisible = runLayout(activeLayout);
-    // Smoothly trigger fitView with a slight delay for transition
+    if (activeLayout === 'force' || activeLayout === 'clustered') return;
+    
+    console.log("Triggering structural layout recalculation:", activeLayout);
+    // Only use a root if a node is explicitly selected by the user
+    const rootId = selectedNode?.id || null;
+    const layoutedVisible = runLayout(activeLayout, layoutSpacing, rootId);
+    
     if (layoutedVisible && layoutedVisible.length > 0) {
       setTimeout(() => {
         fitToNodes(layoutedVisible);
       }, 300);
     }
-  }, [activeLayout, layoutTrigger, runLayout, fitToNodes]);
+  }, [activeLayout, layoutTrigger, runLayout, fitToNodes, layoutOptions, selectedNode?.id]);
 
   const prevLayoutSpacingRef = useRef(layoutSpacing);
   const prevLayoutOptionsRef = useRef(layoutOptions);
@@ -1682,7 +1691,74 @@ export default function App() {
     setTimeout(() => setStatusParts([]), 3000);
   }, [layoutOptions]);
 
+  const onLoadTreeTestGraph = useCallback(() => {
+    // 1. Reset layout options to clean tree defaults to see effects clearly
+    setLayoutOptions(prev => ({
+      ...prev,
+      ranker: 'network-simplex',
+      rankDir: 'TB',
+      align: 'UL',
+      nodeSpacing: 100,
+      rankSpacing: 150,
+      nodeWidth: 180,
+      nodeHeight: 80
+    }));
+
+    // 2. Clear current stage
+    setNodes([]);
+    setEdges([]);
+
+    // 3. Create a complex DAG (Directed Acyclic Graph)
+    // This structure is designed to show clear differences between Simplex and Longest Path
+    const testNodes = [
+      { id: 'root', data: { label: 'CORE SYSTEM', type: 'robot', importance: 1.0 }, position: { x: 0, y: 0 } },
+      { id: 'n1', data: { label: 'Module Alpha', type: 'science', importance: 0.7 }, position: { x: 0, y: 0 } },
+      { id: 'n2', data: { label: 'Module Beta', type: 'science', importance: 0.7 }, position: { x: 0, y: 0 } },
+      { id: 'n3', data: { label: 'Sub-Processor', type: 'science', importance: 0.5 }, position: { x: 0, y: 0 } },
+      { id: 'n4', data: { label: 'End Terminal', type: 'item', importance: 0.3 }, position: { x: 0, y: 0 } },
+      { id: 'n5', data: { label: 'Direct Bypass', type: 'mutant', importance: 0.9 }, position: { x: 0, y: 0 } },
+      { id: 'n6', data: { label: 'Cross-Linker', type: 'planet', importance: 0.6 }, position: { x: 0, y: 0 } },
+      { id: 'n7', data: { label: 'Final Output', type: 'book', importance: 0.8 }, position: { x: 0, y: 0 } }
+    ];
+
+    const testEdges = [
+      { id: 'e1', source: 'root', target: 'n1', label: 'initializes', data: { type: 'CONNECTS' } },
+      { id: 'e2', source: 'root', target: 'n2', label: 'initializes', data: { type: 'CONNECTS' } },
+      { id: 'e3', source: 'n1', target: 'n3', label: 'tasks', data: { type: 'FOLLOWS' } },
+      { id: 'e4', source: 'n2', target: 'n3', label: 'tasks', data: { type: 'FOLLOWS' } },
+      { id: 'e5', source: 'n3', target: 'n4', label: 'ends at', data: { type: 'CREATED' } },
+      { id: 'e6', source: 'root', target: 'n5', label: 'bypass', data: { type: 'CONNECTS' } },
+      { id: 'e7', source: 'n5', target: 'n7', label: 'direct result', data: { type: 'CREATED' } },
+      { id: 'e8', source: 'n4', target: 'n7', label: 'sequential result', data: { type: 'FOLLOWS' } },
+      { id: 'e9', source: 'n2', target: 'n6', label: 'monitors', data: { type: 'CONNECTS' } },
+      { id: 'e10', source: 'n6', target: 'n7', label: 'validates', data: { type: 'FOLLOWS' } }
+    ];
+
+    const mappedNodes = testNodes.map(n => ({
+      ...n,
+      data: {
+        ...n.data,
+        showDonuts: enableDonuts,
+        onSegmentClick: (cat, e) => expandNode(n.id, cat, e)
+      }
+    }));
+
+    // Use a small timeout to ensure state batching doesn't eat the layout trigger
+    setTimeout(() => {
+      setNodes(mappedNodes);
+      setEdges(testEdges);
+      setPathEdges(testEdges.map(e => ({ ...e, type: edgePathType })));
+
+      setActiveLayout('hierarchical');
+      setLayoutTrigger(prev => prev + 1);
+
+      setStatusParts([{ trigger: 'INFO', action: 'Complex DAG loaded. Test different Rankers now.' }]);
+      setTimeout(() => setStatusParts([]), 3000);
+    }, 50);
+
+  }, [enableDonuts, expandNode, edgePathType]);
   const onLoadTestGraph = async () => {
+
     try {
       const res = await fetch('http://localhost:8000/random-subgraph');
       const data = await res.json();
@@ -1938,8 +2014,9 @@ export default function App() {
           </Tooltip>
           <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
           <ButtonGroup variant="text" size="small">
-            <Tooltip title="Sequential (LR)"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Sequential Left-to-Right Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('sequential')} color={activeLayout === 'sequential' ? 'secondary' : 'primary'}><TreeIcon /></IconButton></Tooltip>
+            <Tooltip title="Hierarchical Tree (TB)"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Hierarchical Tree Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('hierarchical')} color={activeLayout === 'hierarchical' ? 'secondary' : 'primary'}><TreeIcon /></IconButton></Tooltip>
             <Tooltip title="Organic (Force)"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Force-Directed Organic Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('force')} color={activeLayout === 'force' ? 'secondary' : 'primary'}><ForceIcon /></IconButton></Tooltip>
+
             <Tooltip title="Clustered (Planet)"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Clustered Island Layout (by Planet)' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('clustered')} color={activeLayout === 'clustered' ? 'secondary' : 'primary'}><GroupIcon /></IconButton></Tooltip>
             <Tooltip title="Circular"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Circular Hub Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('circular')} color={activeLayout === 'circular' ? 'secondary' : 'primary'}><CircularIcon /></IconButton></Tooltip>
             <Tooltip title="Concentric"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Importance-Based Concentric Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('concentric')} color={activeLayout === 'concentric' ? 'secondary' : 'primary'}><ConcentricIcon /></IconButton></Tooltip>
@@ -2331,20 +2408,143 @@ export default function App() {
                 </Box>
               )}
 
-              {activeLayout === 'sequential' && (
+              {activeLayout === 'hierarchical' && (
                 <Box>
                   <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.65rem', fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center', gap: 1, letterSpacing: 1 }}>
-                    <TreeIcon sx={{ fontSize: 14, color: COLORS.primary }} /> SEQUENTIAL SETUP
+                    <TreeIcon sx={{ fontSize: 14, color: COLORS.primary }} /> TREE SETUP
                   </Typography>
+
+                  <Box sx={{ mb: 1.5, p: 1, borderRadius: 1, bgcolor: 'rgba(255,255,255,0.03)', border: '1px dashed rgba(255,255,255,0.1)' }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontSize: '8px', display: 'block', mb: 0.5 }}>ACTIVE ROOT</Typography>
+                    <Typography variant="caption" sx={{ color: COLORS.primary, fontSize: '10px', fontWeight: 'bold' }}>
+                      {selectedNode ? selectedNode.data.label : (nodes.length > 0 ? nodes[0].data.label : 'None')}
+                    </Typography>
+                  </Box>
+
                   <Box sx={{ mb: 1.5 }}>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>NODE SPACING: {layoutOptions.nodeSpacing}</Typography>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>RANKER ALGORITHM</Typography>
+                      <Tooltip title="AI Influenced"><Icons.Psychology sx={{ fontSize: 12, color: COLORS.secondary }} /></Tooltip>
+                    </Box>
+                    <Select
+                      size="small"
+                      value={layoutOptions.ranker || 'network-simplex'}
+                      onChange={(e) => {
+                        console.log("RANKER CHANGE:", e.target.value);
+                        setLayoutOptions(prev => ({ ...prev, ranker: e.target.value }));
+                      }}
+                      fullWidth
+                      sx={{ 
+                        fontSize: '9px', height: 26, color: COLORS.secondary,
+                        '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' }
+                      }}
+                    >
+                      <MenuItem value="network-simplex" sx={{ fontSize: '10px' }}>Network Simplex</MenuItem>
+                      <MenuItem value="tight-tree" sx={{ fontSize: '10px' }}>Tight Tree</MenuItem>
+                      <MenuItem value="longest-path" sx={{ fontSize: '10px' }}>Longest Path</MenuItem>
+                    </Select>
+                  </Box>
+
+                  <Box sx={{ mb: 1.5 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>NODE ALIGNMENT</Typography>
+                      <Tooltip title="AI Influenced"><Icons.Psychology sx={{ fontSize: 12, color: COLORS.secondary }} /></Tooltip>
+                    </Box>
+                    <Select
+                      size="small"
+                      value={layoutOptions.align || 'UL'}
+                      onChange={(e) => setLayoutOptions(prev => ({ ...prev, align: e.target.value }))}
+                      fullWidth
+                      sx={{ 
+                        fontSize: '9px', height: 26, color: COLORS.secondary,
+                        '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' }
+                      }}
+                    >
+                      <MenuItem value="UL" sx={{ fontSize: '10px' }}>Up-Left (Tight)</MenuItem>
+                      <MenuItem value="UR" sx={{ fontSize: '10px' }}>Up-Right</MenuItem>
+                      <MenuItem value="DL" sx={{ fontSize: '10px' }}>Down-Left</MenuItem>
+                      <MenuItem value="DR" sx={{ fontSize: '10px' }}>Down-Right</MenuItem>
+                    </Select>
+                  </Box>
+
+                  <Box sx={{ mb: 1.5 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>TREE EDGE STYLE</Typography>
+                      <Tooltip title="AI Influenced"><Icons.Psychology sx={{ fontSize: 12, color: COLORS.secondary }} /></Tooltip>
+                    </Box>
+                    <Select
+                      size="small"
+                      value={edgePathType}
+                      onChange={(e) => setEdgePathType(e.target.value)}
+                      fullWidth
+                      sx={{ 
+                        fontSize: '9px', height: 26, color: COLORS.secondary,
+                        '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' }
+                      }}
+                    >
+                      <MenuItem value="bezier" sx={{ fontSize: '10px' }}>Bezier (Curved)</MenuItem>
+                      <MenuItem value="simplebezier" sx={{ fontSize: '10px' }}>Simple Bezier</MenuItem>
+                      <MenuItem value="straight" sx={{ fontSize: '10px' }}>Straight</MenuItem>
+                      <MenuItem value="step" sx={{ fontSize: '10px' }}>Step (Orthogonal)</MenuItem>
+                      <MenuItem value="smoothstep" sx={{ fontSize: '10px' }}>Smooth Step</MenuItem>
+                    </Select>
+                  </Box>
+
+                  <Box sx={{ mb: 1.5 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>TREE DIRECTION</Typography>
+                      <Tooltip title="AI Influenced"><Icons.Psychology sx={{ fontSize: 12, color: COLORS.secondary }} /></Tooltip>
+                    </Box>
+                    <Select
+                      size="small"
+                      value={layoutOptions.rankDir || 'TB'}
+                      onChange={(e) => setLayoutOptions(prev => ({ ...prev, rankDir: e.target.value }))}
+                      fullWidth
+                      sx={{ 
+                        fontSize: '9px', height: 26, color: COLORS.secondary,
+                        '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' }
+                      }}
+                    >
+                      <MenuItem value="TB" sx={{ fontSize: '10px' }}>Top to Bottom</MenuItem>
+                      <MenuItem value="BT" sx={{ fontSize: '10px' }}>Bottom to Top</MenuItem>
+                      <MenuItem value="LR" sx={{ fontSize: '10px' }}>Left to Right</MenuItem>
+                      <MenuItem value="RL" sx={{ fontSize: '10px' }}>Right to Left</MenuItem>
+                    </Select>
+                  </Box>
+
+                  <Box sx={{ mb: 1.5 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>NODE SPACING: {layoutOptions.nodeSpacing}</Typography>
+                      <Tooltip title="AI Influenced"><Icons.Psychology sx={{ fontSize: 12, color: COLORS.secondary }} /></Tooltip>
+                    </Box>
                     <Slider size="small" value={layoutOptions.nodeSpacing} min={20} max={300} step={10}
                       onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, nodeSpacing: v }))} color="secondary" />
                   </Box>
-                  <Box>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>RANK SPACING: {layoutOptions.rankSpacing}</Typography>
+                  <Box sx={{ mb: 1.5 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>RANK SPACING: {layoutOptions.rankSpacing}</Typography>
+                      <Tooltip title="AI Influenced"><Icons.Psychology sx={{ fontSize: 12, color: COLORS.secondary }} /></Tooltip>
+                    </Box>
                     <Slider size="small" value={layoutOptions.rankSpacing} min={50} max={400} step={10}
                       onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, rankSpacing: v }))} color="secondary" />
+                  </Box>
+
+                  <Box sx={{ mb: 1.5 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>NODE WIDTH: {layoutOptions.nodeWidth || 180}</Typography>
+                      <Tooltip title="AI Influenced"><Icons.Psychology sx={{ fontSize: 12, color: COLORS.secondary }} /></Tooltip>
+                    </Box>
+                    <Slider size="small" value={layoutOptions.nodeWidth || 180} min={100} max={400} step={10}
+                      onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, nodeWidth: v }))} color="secondary" />
+                  </Box>
+
+                  <Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>NODE HEIGHT: {layoutOptions.nodeHeight || 80}</Typography>
+                      <Tooltip title="AI Influenced"><Icons.Psychology sx={{ fontSize: 12, color: COLORS.secondary }} /></Tooltip>
+                    </Box>
+                    <Slider size="small" value={layoutOptions.nodeHeight || 80} min={40} max={200} step={5}
+                      onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, nodeHeight: v }))} color="secondary" />
                   </Box>
                 </Box>
               )}
@@ -3160,18 +3360,31 @@ export default function App() {
               <IconButton onClick={() => setIsTrainingOpen(false)} sx={{ color: 'rgba(255,255,255,0.5)' }}><ChevronLeftIcon /></IconButton>
             </Box>
 
-            <Box sx={{ flexGrow: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4, pr: 1, '&::-webkit-scrollbar': { width: '4px' }, '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(255,255,255,0.1)', borderRadius: '4px' } }}>
+            <Box sx={{ flexGrow: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 3, pr: 1, '&::-webkit-scrollbar': { width: '4px' }, '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(255,255,255,0.1)', borderRadius: '4px' } }}>
               
-              <Button 
-                variant="outlined" 
-                color="secondary" 
-                fullWidth 
-                startIcon={<AlgorithmIcon />}
-                onClick={onLoadTestGraph}
-                sx={{ borderRadius: 2, py: 1.5, fontWeight: 'bold' }}
-              >
-                Load Test Graph
-              </Button>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                <Button 
+                  variant="outlined" 
+                  color="secondary" 
+                  fullWidth 
+                  startIcon={<ForceIcon />}
+                  onClick={onLoadTestGraph}
+                  sx={{ borderRadius: 2, py: 1.5, fontWeight: 'bold' }}
+                >
+                  Load Force Test Graph
+                </Button>
+
+                <Button 
+                  variant="outlined" 
+                  color="primary" 
+                  fullWidth 
+                  startIcon={<TreeIcon />}
+                  onClick={onLoadTreeTestGraph}
+                  sx={{ borderRadius: 2, py: 1.5, fontWeight: 'bold' }}
+                >
+                  Load Tree Test Graph
+                </Button>
+              </Box>
 
               <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
 

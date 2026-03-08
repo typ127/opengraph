@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.65.0] - 2026-03-07
+
+### Neu
+- **Detaillierte Tree-Justierung**:
+    - **NODE DIMENSIONS**: Neue Slider für `NODE WIDTH` und `NODE HEIGHT` zur präzisen Steuerung der Bounding Boxes für Dagre.
+    - **NODE ALIGNMENT**: Unterstützung für `UL`, `UR`, `DL`, `DR` Ausrichtungen innerhalb der Ebenen.
+    - **TREE EDGE STYLE**: Direkte Auswahl des Kantenstils (Bezier, Step, Straight) im Tree-Setup für einen konsistenten Look.
+- **Dynamische Root-Logik**: Der Tree nutzt nun den selektierten Knoten als Ankerpunkt (Root). Ohne Selektion wird ein natürliches Ranking basierend auf der DB-Struktur berechnet.
+
+### Behoben
+- **Reaktivitäts-Fix**: Tree-Parameter lösen nun sofort eine Neuberechnung des Layouts aus.
+- **MUI Warning Fix**: Fehler behoben, bei dem `simplebezier` als ungültiger Wert im Tree-Auswahlmenü gemeldet wurde.
+
+## [1.64.0] - 2026-03-07
+
+### Neu
+- **Tree Test Graph Generator**: Neuer Button im AI Training Panel zum Laden einer speziellen DAG-Struktur (Directed Acyclic Graph).
+- **Ranker-Visualisierung**: Der Test-Graph enthält Pfade unterschiedlicher Länge (Direkt-Links vs. Multi-Hop), um die Unterschiede zwischen den Ranker-Algorithmen (*Longest Path* vs. *Network Simplex*) deutlich zu machen.
+
+## [1.63.0] - 2026-03-07
+
+### Neu
+- **Hierarchisches Tree-Layout**: Das "Sequential"-Layout wurde durch ein vollwertiges hierarchisches Baum-Layout ersetzt.
+- **Strukturelle Tree-Parameter**: Neue Regler und Auswahlfelder im Tuning-Panel:
+    - **RANKER ALGORITHM**: Auswahl zwischen *Network Simplex*, *Tight Tree* und *Longest Path* zur Steuerung der Ebenen-Zuweisung.
+    - **TREE DIRECTION**: Flexible Ausrichtung des Baums (Top-to-Bottom, Bottom-to-Top, Left-to-Right, Right-to-Left).
+    - **Spacing Controls**: Feinjustierung von horizontalem (Node Spacing) und vertikalem (Rank Spacing) Abstand.
+- **Tuning-Panel Synchronisation**: Das Graph Tuning Panel zeigt nun spezifische Parameter für das Tree-Layout an, sobald dieses ausgewählt ist.
+- **KI-Training für Bäume**: Alle neuen Tree-Parameter wurden in das KI-Trainingssystem aufgenommen und mit dem Psychology-Icon markiert.
+
 ## [1.62.0] - 2026-03-07
 
 ### Geändert
