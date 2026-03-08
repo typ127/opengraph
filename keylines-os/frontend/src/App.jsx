@@ -278,6 +278,8 @@ export default function App() {
   const [activeAlgorithm, setActiveAlgorithm] = useState(null);
   const [layoutTrigger, setLayoutTrigger] = useState(0);
   const [selectedNode, setSelectedNode] = useState(null);
+  const [activeRootNodeId, setActiveRootNodeId] = useState(null);
+  const [isNodeSidebarOpen, setIsNodeSidebarOpen] = useState(false);
   const [selectedEdge, setSelectedEdge] = useState(null);
   const [selectedNodeNeighbors, setSelectedNodeNeighbors] = useState([]);
   const [selectedNodeEdges, setSelectedNodeEdges] = useState([]);
@@ -540,8 +542,8 @@ export default function App() {
     if (activeLayout === 'force' || activeLayout === 'clustered') return;
     
     console.log("Triggering structural layout recalculation:", activeLayout);
-    // Only use a root if a node is explicitly selected by the user
-    const rootId = selectedNode?.id || null;
+    // Only use a root if a node is explicitly set as root by the user (Shift+Click)
+    const rootId = activeRootNodeId || null;
     const layoutedVisible = runLayout(activeLayout, layoutSpacing, rootId);
     
     if (layoutedVisible && layoutedVisible.length > 0) {
@@ -549,7 +551,7 @@ export default function App() {
         fitToNodes(layoutedVisible);
       }, 300);
     }
-  }, [activeLayout, layoutTrigger, runLayout, fitToNodes, layoutOptions, selectedNode?.id]);
+  }, [activeLayout, layoutTrigger, runLayout, fitToNodes, layoutOptions, activeRootNodeId]);
 
   const prevLayoutSpacingRef = useRef(layoutSpacing);
   const prevLayoutOptionsRef = useRef(layoutOptions);
@@ -780,6 +782,7 @@ export default function App() {
               }
               
               setSelectedNode(null); 
+              setIsNodeSidebarOpen(false);
               setSelectedEdge(null);
               setPendingConnection(null);
               setPreviewData(null); 
@@ -896,13 +899,15 @@ export default function App() {
                   }, [setEdges, setNodes, selectedEdge, selectedNode, previewData, selectedNodeNeighbors]);
               
               const openDetails = useCallback(async (node, forceEdit = false) => {
-    // Wenn wir gerade einen anderen Knoten editiert haben, speichern wir diesen erst
-    if (selectedNode && isEditingNode && selectedNode.id !== node.id) {
-      persistNode(selectedNode);
-    }
-    
-          setSelectedNode(node); 
-          setSelectedEdge(null);
+                // Wenn wir gerade einen anderen Knoten editiert haben, speichern wir diesen erst
+                if (selectedNode && isEditingNode && selectedNode.id !== node.id) {
+                  persistNode(selectedNode);
+                }
+
+                      setSelectedNode(node);
+                      setIsNodeSidebarOpen(true);
+                      setSelectedEdge(null);
+
           setPreviewData(null);
           setIsEditingNode(forceEdit);
               // Snapshot für mögliches Revert (Escape) erstellen
@@ -945,8 +950,10 @@ export default function App() {
                   console.log("Connection initiated:", params);
                   setPendingConnection(params);
                   setSelectedNode(null);
+                  setIsNodeSidebarOpen(false);
                   setSelectedEdge(null);
                   setPreviewData(null);
+
                   setIsEditingNode(false);
                 }, []);
                             const confirmConnection = useCallback(async (type) => {
@@ -1662,35 +1669,40 @@ export default function App() {
     const repulsionFactor = user.spread / ai.spread;
     const linkFactor = user.avgLinkDist / ai.avgLinkDist;
     const suggestedCollision = Math.max(20, Math.min(200, Math.round(user.minDist / 2.2)));
-    
-    // Smooth factor updates so it doesn't jump too wildly in one go
+
     const newRepulsion = Math.max(-5000, Math.min(-100, Math.round(layoutOptions.repulsion * repulsionFactor)));
     const newLinkDist = Math.max(50, Math.min(600, Math.round(layoutOptions.linkDistance * linkFactor)));
-    // Inverse proportion for gravity: bigger spread -> lower gravity
     const newGravity = Math.max(0.01, Math.min(0.5, layoutOptions.gravityX / (repulsionFactor > 0 ? repulsionFactor : 1)));
 
     setAnalysisResult({
       suggestedRepulsion: newRepulsion,
       suggestedLinkDist: newLinkDist,
       suggestedCollision: suggestedCollision,
-      suggestedGravity: newGravity.toFixed(2),
+      suggestedGravity: parseFloat(newGravity.toFixed(2)),
       spreadRatio: repulsionFactor.toFixed(2),
       linkRatio: linkFactor.toFixed(2),
     });
 
-    setLayoutOptions(prev => ({
-      ...prev,
-      repulsion: newRepulsion,
-      linkDistance: newLinkDist,
-      collisionRadius: suggestedCollision,
-      gravityX: parseFloat(newGravity.toFixed(2)),
-      gravityY: parseFloat(newGravity.toFixed(2)),
-    }));
-    
-    setStatusParts([{ trigger: 'INFO', action: 'Auto-applied learned force parameters' }]);
+    setStatusParts([{ trigger: 'INFO', action: 'Suggestions calculated. Review in Tuning Panel.' }]);
     setTimeout(() => setStatusParts([]), 3000);
   }, [layoutOptions]);
 
+  const onApplySuggestions = useCallback(() => {
+    if (!analysisResult) return;
+
+    setLayoutOptions(prev => ({
+      ...prev,
+      repulsion: analysisResult.suggestedRepulsion,
+      linkDistance: analysisResult.suggestedLinkDist,
+      collisionRadius: analysisResult.suggestedCollision,
+      gravityX: analysisResult.suggestedGravity,
+      gravityY: analysisResult.suggestedGravity,
+    }));
+
+    setAnalysisResult(null); // Clear after applying
+    setStatusParts([{ trigger: 'INFO', action: 'Learned parameters applied to live stage' }]);
+    setTimeout(() => setStatusParts([]), 3000);
+  }, [analysisResult]);
   const onLoadTreeTestGraph = useCallback(() => {
     // 1. Reset layout options to clean tree defaults to see effects clearly
     setLayoutOptions(prev => ({
@@ -1749,9 +1761,9 @@ export default function App() {
       setEdges(testEdges);
       setPathEdges(testEdges.map(e => ({ ...e, type: edgePathType })));
 
+      setActiveRootNodeId('root');
       setActiveLayout('hierarchical');
       setLayoutTrigger(prev => prev + 1);
-
       setStatusParts([{ trigger: 'INFO', action: 'Complex DAG loaded. Test different Rankers now.' }]);
       setTimeout(() => setStatusParts([]), 3000);
     }, 50);
@@ -2251,8 +2263,10 @@ export default function App() {
             // Wenn auf ein Donut-Segment geklickt wurde, ignorieren wir den Node-Klick
             if (e.target.classList.contains('donut-segment')) return;
             if (e.shiftKey) {
-              const layouted = runLayout(activeLayoutRef.current, layoutSpacing, n.id);
-              if (layouted && layouted.length > 0) setTimeout(() => fitToNodes(layouted), 300);
+              // Permanently set as root for hierarchical layout (decoupled from sidebar)
+              setActiveRootNodeId(n.id);
+              if (activeLayout !== 'hierarchical') setActiveLayout('hierarchical');
+              setLayoutTrigger(prev => prev + 1);
             } else {
               openDetails(n);
             }
@@ -2339,12 +2353,45 @@ export default function App() {
               <Box sx={{ mb: 1.5 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
                   <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>LINK DISTANCE: {layoutOptions.linkDistance}</Typography>
+                  {analysisResult?.suggestedLinkDist && (
+                    <Typography variant="caption" sx={{ 
+                      color: COLORS.primary, 
+                      fontSize: '9px', fontWeight: 'bold' 
+                    }}>
+                      {analysisResult.suggestedLinkDist > layoutOptions.linkDistance ? '→ +' : '← '}{analysisResult.suggestedLinkDist - layoutOptions.linkDistance}
+                    </Typography>
+                  )}
                   <Tooltip title="AI Influenced"><Icons.Psychology sx={{ fontSize: 12, color: COLORS.secondary }} /></Tooltip>
                 </Box>
-                <Slider size="small" value={layoutOptions.linkDistance} min={50} max={600} step={10}
-                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, linkDistance: v }))} color="primary" />
+                <Box sx={{ position: 'relative', px: 1 }}>
+                  <Slider size="small" value={layoutOptions.linkDistance} min={50} max={600} step={10}
+                    onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, linkDistance: v }))} color="primary" />
+                  {analysisResult?.suggestedLinkDist && (
+                    <>
+                      {/* Directional Arrow Path */}
+                      <Box sx={{ 
+                        position: 'absolute', 
+                        left: `${Math.min(((layoutOptions.linkDistance - 50) / 550) * 100, ((analysisResult.suggestedLinkDist - 50) / 550) * 100)}%`,
+                        width: `${Math.abs(layoutOptions.linkDistance - analysisResult.suggestedLinkDist) / 550 * 100}%`,
+                        height: '1px',
+                        bgcolor: `${COLORS.primary}66`,
+                        top: '42%',
+                        pointerEvents: 'none'
+                      }} />
+                      {/* Suggestion Marker */}
+                      <Box sx={{ 
+                        position: 'absolute', 
+                        left: `${((analysisResult.suggestedLinkDist - 50) / 550) * 100}%`, 
+                        top: '42%', transform: 'translate(-50%, -50%)',
+                        width: 2, height: 10, 
+                        bgcolor: COLORS.primary, 
+                        borderRadius: '1px',
+                        pointerEvents: 'none', zIndex: 1
+                      }} />
+                    </>
+                  )}
+                </Box>
               </Box>
-
               <Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
                   <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>IMPORTANCE WEIGHT: {layoutOptions.importanceWeight?.toFixed(1)}x</Typography>
@@ -2368,28 +2415,97 @@ export default function App() {
                   <Box sx={{ mb: 1.5 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>REPULSION: {layoutOptions.repulsion}</Typography>
+                      {analysisResult?.suggestedRepulsion && (
+                        <Typography variant="caption" sx={{ color: COLORS.secondary, fontSize: '9px', fontWeight: 'bold' }}>
+                          {analysisResult.suggestedRepulsion > layoutOptions.repulsion ? '→ +' : '← '}{analysisResult.suggestedRepulsion - layoutOptions.repulsion}
+                        </Typography>
+                      )}
                       <Tooltip title="AI Influenced"><Icons.Psychology sx={{ fontSize: 12, color: COLORS.secondary }} /></Tooltip>
                     </Box>
-                    <Slider size="small" value={layoutOptions.repulsion} min={-5000} max={-100} step={100}
-                      onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, repulsion: v }))} color="secondary" />
+                    <Box sx={{ position: 'relative', px: 1 }}>
+                      <Slider size="small" value={layoutOptions.repulsion} min={-5000} max={-100} step={100}
+                        onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, repulsion: v }))} color="secondary" />
+                      {analysisResult?.suggestedRepulsion && (
+                        <>
+                          <Box sx={{ 
+                            position: 'absolute', 
+                            left: `${Math.min(((layoutOptions.repulsion - (-5000)) / 4900) * 100, ((analysisResult.suggestedRepulsion - (-5000)) / 4900) * 100)}%`,
+                            width: `${Math.abs(layoutOptions.repulsion - analysisResult.suggestedRepulsion) / 4900 * 100}%`,
+                            height: '1px', bgcolor: `${COLORS.secondary}66`, top: '42%', pointerEvents: 'none'
+                          }} />
+                          <Box sx={{ 
+                            position: 'absolute', 
+                            left: `${((analysisResult.suggestedRepulsion - (-5000)) / 4900) * 100}%`, 
+                            top: '42%', transform: 'translate(-50%, -50%)',
+                            width: 2, height: 10, bgcolor: COLORS.secondary, borderRadius: '1px', pointerEvents: 'none', zIndex: 1
+                          }} />
+                        </>
+                      )}
+                    </Box>
                   </Box>
 
                   <Box sx={{ mb: 1.5 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>GRAVITY: {layoutOptions.gravityX.toFixed(2)}</Typography>
+                      {analysisResult?.suggestedGravity && (
+                        <Typography variant="caption" sx={{ color: COLORS.secondary, fontSize: '9px', fontWeight: 'bold' }}>
+                          {analysisResult.suggestedGravity > layoutOptions.gravityX ? '→ +' : '← '}{(analysisResult.suggestedGravity - layoutOptions.gravityX).toFixed(2)}
+                        </Typography>
+                      )}
                       <Tooltip title="AI Influenced"><Icons.Psychology sx={{ fontSize: 12, color: COLORS.secondary }} /></Tooltip>
                     </Box>
-                    <Slider size="small" value={layoutOptions.gravityX} min={0} max={0.5} step={0.01}
-                      onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, gravityX: v, gravityY: v }))} color="secondary" />
+                    <Box sx={{ position: 'relative', px: 1 }}>
+                      <Slider size="small" value={layoutOptions.gravityX} min={0} max={0.5} step={0.01}
+                        onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, gravityX: v, gravityY: v }))} color="secondary" />
+                      {analysisResult?.suggestedGravity && (
+                        <>
+                          <Box sx={{ 
+                            position: 'absolute', 
+                            left: `${Math.min((layoutOptions.gravityX / 0.5) * 100, (analysisResult.suggestedGravity / 0.5) * 100)}%`,
+                            width: `${Math.abs(layoutOptions.gravityX - analysisResult.suggestedGravity) / 0.5 * 100}%`,
+                            height: '1px', bgcolor: `${COLORS.secondary}66`, top: '42%', pointerEvents: 'none'
+                          }} />
+                          <Box sx={{ 
+                            position: 'absolute', 
+                            left: `${(analysisResult.suggestedGravity / 0.5) * 100}%`, 
+                            top: '42%', transform: 'translate(-50%, -50%)',
+                            width: 2, height: 10, bgcolor: COLORS.secondary, borderRadius: '1px', pointerEvents: 'none', zIndex: 1
+                          }} />
+                        </>
+                      )}
+                    </Box>
                   </Box>
 
                   <Box sx={{ mb: 1.5 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>COLLISION: {layoutOptions.collisionRadius}</Typography>
+                      {analysisResult?.suggestedCollision && (
+                        <Typography variant="caption" sx={{ color: COLORS.secondary, fontSize: '9px', fontWeight: 'bold' }}>
+                          {analysisResult.suggestedCollision > layoutOptions.collisionRadius ? '→ +' : '← '}{analysisResult.suggestedCollision - layoutOptions.collisionRadius}
+                        </Typography>
+                      )}
                       <Tooltip title="AI Influenced"><Icons.Psychology sx={{ fontSize: 12, color: COLORS.secondary }} /></Tooltip>
                     </Box>
-                    <Slider size="small" value={layoutOptions.collisionRadius} min={20} max={200} step={5}
-                      onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, collisionRadius: v }))} color="secondary" />
+                    <Box sx={{ position: 'relative', px: 1 }}>
+                      <Slider size="small" value={layoutOptions.collisionRadius} min={20} max={200} step={5}
+                        onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, collisionRadius: v }))} color="secondary" />
+                      {analysisResult?.suggestedCollision && (
+                        <>
+                          <Box sx={{ 
+                            position: 'absolute', 
+                            left: `${Math.min(((layoutOptions.collisionRadius - 20) / 180) * 100, ((analysisResult.suggestedCollision - 20) / 180) * 100)}%`,
+                            width: `${Math.abs(layoutOptions.collisionRadius - analysisResult.suggestedCollision) / 180 * 100}%`,
+                            height: '1px', bgcolor: `${COLORS.secondary}66`, top: '42%', pointerEvents: 'none'
+                          }} />
+                          <Box sx={{ 
+                            position: 'absolute', 
+                            left: `${((analysisResult.suggestedCollision - 20) / 180) * 100}%`, 
+                            top: '42%', transform: 'translate(-50%, -50%)',
+                            width: 2, height: 10, bgcolor: COLORS.secondary, borderRadius: '1px', pointerEvents: 'none', zIndex: 1
+                          }} />
+                        </>
+                      )}
+                    </Box>
                   </Box>
 
                   {activeLayout === 'clustered' && (
@@ -2417,7 +2533,7 @@ export default function App() {
                   <Box sx={{ mb: 1.5, p: 1, borderRadius: 1, bgcolor: 'rgba(255,255,255,0.03)', border: '1px dashed rgba(255,255,255,0.1)' }}>
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontSize: '8px', display: 'block', mb: 0.5 }}>ACTIVE ROOT</Typography>
                     <Typography variant="caption" sx={{ color: COLORS.primary, fontSize: '10px', fontWeight: 'bold' }}>
-                      {selectedNode ? selectedNode.data.label : (nodes.length > 0 ? nodes[0].data.label : 'None')}
+                      {activeRootNodeId ? (nodes.find(n => n.id === activeRootNodeId)?.data.label || activeRootNodeId) : 'Auto-Calculated'}
                     </Typography>
                   </Box>
 
@@ -2645,7 +2761,7 @@ export default function App() {
         </Box>
       </Box>
 
-                      <Drawer anchor="right" open={!!selectedNode || !!selectedEdge || !!previewData || !!pendingConnection} onClose={handleDrawerClose} variant="temporary" sx={{ width: 350, '& .MuiDrawer-paper': { width: 350, borderLeft: `4px solid ${sidebarColor}`, boxShadow: -5, bgcolor: COLORS.paper, overflow: 'hidden' } }}>
+                      <Drawer anchor="right" open={(!!selectedNode && isNodeSidebarOpen) || !!selectedEdge || !!previewData || !!pendingConnection} onClose={handleDrawerClose} variant="temporary" sx={{ width: 350, '& .MuiDrawer-paper': { width: 350, borderLeft: `4px solid ${sidebarColor}`, boxShadow: -5, bgcolor: COLORS.paper, overflow: 'hidden' } }}>
                         <Box sx={{ p: 3, pb: 5, height: '100vh', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
                           <Box sx={{ flexGrow: 1, overflowY: 'auto', pr: 1, '&::-webkit-scrollbar': { width: '4px' }, '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(255,255,255,0.1)', borderRadius: '4px' } }}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
@@ -3351,13 +3467,21 @@ export default function App() {
 
         {/* TRAINING ENVIRONMENT DRAWER (AI TRAINING) */}
         <Drawer 
-          anchor="left" open={isTrainingOpen} onClose={() => setIsTrainingOpen(false)} variant="temporary"
+          anchor="left" open={isTrainingOpen} onClose={() => {
+            setIsTrainingOpen(false);
+            setTrainingUser(null);
+            setAnalysisResult(null);
+          }} variant="temporary"
           sx={{ width: isTrainingOpen ? 320 : 0, flexShrink: 0, '& .MuiDrawer-paper': { width: 320, borderRight: `2px solid ${COLORS.panelBorder}`, bgcolor: COLORS.paper, boxShadow: 5, overflow: 'hidden' } }}
         >
           <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
               <Typography variant="h6" sx={{ fontWeight: 'bold', color: COLORS.secondary, letterSpacing: 1 }}>AI TRAINING</Typography>
-              <IconButton onClick={() => setIsTrainingOpen(false)} sx={{ color: 'rgba(255,255,255,0.5)' }}><ChevronLeftIcon /></IconButton>
+              <IconButton onClick={() => {
+                setIsTrainingOpen(false);
+                setTrainingUser(null);
+                setAnalysisResult(null);
+              }} sx={{ color: 'rgba(255,255,255,0.5)' }}><ChevronLeftIcon /></IconButton>
             </Box>
 
             <Box sx={{ flexGrow: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 3, pr: 1, '&::-webkit-scrollbar': { width: '4px' }, '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(255,255,255,0.1)', borderRadius: '4px' } }}>
@@ -3497,11 +3621,13 @@ export default function App() {
               {/* ACTION: ANALYZE */}
               <Box sx={{ mt: 'auto', pt: 2 }}>
                 {analysisResult ? (
-                  <Paper sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, border: `1px solid ${COLORS.panelBorder}` }}>
-                    <Typography variant="caption" sx={{ color: COLORS.secondary, fontWeight: 'bold', mb: 1, display: 'block', letterSpacing: 1 }}>ANALYSIS RESULTS</Typography>
+                  <Paper sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, border: `1px solid ${COLORS.secondary}44`, boxShadow: `0 0 15px ${COLORS.secondary}22` }}>
+                    <Typography variant="caption" sx={{ color: COLORS.secondary, fontWeight: 'bold', mb: 1, display: 'block', letterSpacing: 1 }}>ANALYSIS RESULTS (PENDING)</Typography>
                     
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontStyle: 'italic', mb: 1 }}>Parameters Auto-Applied (Importance-Scaling Active)!</Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 2 }}>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontStyle: 'italic', mb: 1 }}>
+                        Review changes in the Tuning Panel (green/red markers) before applying.
+                      </Typography>
                       
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Typography variant="caption">Repulsion</Typography>
@@ -3519,6 +3645,23 @@ export default function App() {
                         <Typography variant="caption">Gravity</Typography>
                         <Typography variant="caption" sx={{ color: COLORS.secondary, fontWeight: 'bold' }}>{analysisResult.suggestedGravity}</Typography>
                       </Box>
+                    </Box>
+
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Button 
+                        variant="outlined" color="secondary" fullWidth 
+                        onClick={onApplySuggestions}
+                        sx={{ borderRadius: 2, fontWeight: 'bold', textTransform: 'none', py: 1 }}
+                      >
+                        APPLY
+                      </Button>
+                      <Button 
+                        variant="outlined" color="inherit" fullWidth 
+                        onClick={() => { setAnalysisResult(null); setTrainingUser(null); }}
+                        sx={{ borderRadius: 2, fontWeight: 'bold', textTransform: 'none', py: 1, color: 'rgba(255,255,255,0.5)', borderColor: 'rgba(255,255,255,0.2)' }}
+                      >
+                        CANCEL
+                      </Button>
                     </Box>
                   </Paper>
                 ) : (

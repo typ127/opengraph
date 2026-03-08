@@ -2,6 +2,53 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.71.0] - 2026-03-08
+
+### Neu
+- **Vollständige Root-Entkopplung**: Ein normaler Klick auf einen Knoten öffnet nun **nur noch** die Sidebar. Es findet **kein** automatischer Layout-Wechsel oder Root-Wechsel mehr statt.
+- **Explizites Setting via Shift+Klick**: Die strukturelle Neuordnung (Root-Anker setzen) ist nun exklusiv an `Shift+Klick` gebunden. Dies verhindert versehentliche Graph-Sprünge beim reinen Inspizieren von Daten.
+
+## [1.70.0] - 2026-03-08
+
+### Neu
+- **Sidebar-Entkopplung**: `Shift+Klick` auf einen Knoten setzt diesen nun als Root (Anker) für das hierarchische Layout, **ohne** dass sich die Node-Sidebar auf der rechten Seite öffnet. Die Sidebar öffnet sich weiterhin nur bei einem normalen Klick.
+
+## [1.69.0] - 2026-03-08
+
+### Neu
+- **Shift+Click für Root-Anker**: Ein `Shift+Klick` auf einen Knoten setzt diesen nun permanent als **Root** für das hierarchische Layout.
+- **Auto-Switch & Reorganize**: Beim Setzen des Roots via Shift+Klick wechselt das System automatisch in das **Hierarchical-Layout** (falls nicht bereits aktiv) und berechnet die Positionen sofort neu.
+- **Tuner-Synchronisation**: Der neue Root wird sofort im Tree-Setup des Tuning-Panels angezeigt.
+
+## [1.68.0] - 2026-03-08
+
+### Neu
+- **Refined Layout Comparison UI**:
+    - **Vektorisierte Pfeile**: Anzeige von Richtungs-Pfeilen (`→` / `←`) zwischen aktuellem Wert und KI-Vorschlag.
+    - **Dezentes Design**: Entfernung des Glow-Effekts; Marker sind nun schmale 2px-Striche, die bündig zur Slider-Bahn ausgerichtet sind (2px nach oben versetzt).
+    - **Themen-Konsistenz**: Marker nutzen nun die Systemfarben `Primary` (Blau) und `Secondary` (Pink) anstatt Rot/Grün.
+    - **Verbindungslinien**: Eine subtile Linie verbindet den aktuellen Daumen des Sliders mit dem Ziel-Marker der KI.
+
+## [1.67.0] - 2026-03-08
+
+### Neu
+- **AI Training UX Refinement**:
+    - **Auto-Cleanup**: User Snapshots und Analyse-Ergebnisse werden jetzt beim Schließen des AI-Panels automatisch geleert.
+    - **Cancel-Button**: Neuer Button zum manuellen Verwerfen der Analyse-Ergebnisse ohne Anwendung.
+    - **Verbesserte Visualisierung**:
+        - Grüne Markierung/Delta: Wenn der KI-Wert eine Verbesserung darstellt (z.B. mehr Spread, weniger Gravity).
+        - Rote Markierung/Delta: Wenn der KI-Wert eine Verschlechterung/Regression darstellt.
+- **Outlined Design**: Alle Buttons im AI Panel nutzen nun konsequent den `outlined` Stil für ein leichteres UI-Gefühl.
+
+## [1.66.0] - 2026-03-07
+
+### Neu
+- **AI Training Comparison UI**:
+    - **Vorschau-Modus**: Analyse-Ergebnisse werden nicht mehr sofort angewandt, sondern als "Vorschau" im Tuning-Panel visualisiert.
+    - **RPG-Style Comparison Sliders**: Slider im Tuning-Panel zeigen nun grüne Markierungen für die vorgeschlagenen KI-Werte.
+    - **Delta-Anzeige**: Neben den Slidern wird die Differenz zum aktuellen Wert angezeigt (z.B. +150 oder -0.05).
+    - **Manueller Apply-Button**: Neuer Button im AI Training Panel ("APPLY LEARNED PARAMETERS") zum finalen Übernehmen der Werte.
+
 ## [1.65.0] - 2026-03-07
 
 ### Neu
