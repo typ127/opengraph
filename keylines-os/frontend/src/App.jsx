@@ -77,7 +77,6 @@ import {
   Star as PageRankIcon,
   Stream as ClosenessIcon,
   GridView as GridIcon,
-  Adjust as ConcentricIcon,
   ChevronLeft as ChevronLeftIcon,
   BuildOutlined as BuildIcon,
   Person as PersonIcon,
@@ -98,7 +97,6 @@ import {
   import { COLORS, EDGE_TYPES, NODE_CATEGORIES } from './theme';
   import { calculateLayout, getLayoutCenter } from './layoutUtils';
   import { useLiveForceLayout } from './useLiveForceLayout';
-  import { useClusteredForceLayout } from './useClusteredForceLayout';
   
   const nodeTypes = {
     keylines: KeyLinesNode,
@@ -370,13 +368,10 @@ export default function App() {
               collisionRadius: 90,
               nodeSpacing: 120,
               rankSpacing: 180,
-              ringSpacing: 250,
-              nodesPerRing: 8,
               radius: 500,
               nodeSizeFactor: 0,
               rotation: 0,
               edgeCurvature: 0.5,
-              clusterGravity: 0.1,
               importanceWeight: 2.0,
               rankDir: 'TB',
               ranker: 'network-simplex'
@@ -392,7 +387,6 @@ export default function App() {
 
           // ACTIVATE LIVE FORCE LAYOUT
           useLiveForceLayout(nodes, edges, setNodes, layoutOptions, activeLayout === 'force', layoutTrigger);
-          useClusteredForceLayout(nodes, edges, setNodes, layoutOptions, activeLayout === 'clustered', layoutTrigger);
 
           const [pendingConnection, setPendingConnection] = useState(null);
 
@@ -440,7 +434,7 @@ export default function App() {
 
           const runLayout = useCallback((type, gravityValue = layoutSpacing, rootNodeId = null) => {
             // SKIP STATIC CALCULATION FOR LIVE FORCE
-            if (type === 'force' || type === 'clustered') return [];
+            if (type === 'force') return [];
 
             const visibleNodesOnStage = nodesRef.current.filter(n => !hiddenTypes.has(n.data.type));
 
@@ -539,7 +533,7 @@ export default function App() {
 
   // Handle structural layout changes (button click or option change)
   useEffect(() => {
-    if (activeLayout === 'force' || activeLayout === 'clustered') return;
+    if (activeLayout === 'force') return;
     
     console.log("Triggering structural layout recalculation:", activeLayout);
     // Only use a root if a node is explicitly set as root by the user (Shift+Click)
@@ -1796,8 +1790,7 @@ export default function App() {
         data: { ...e, type: 'DIRECT_RELATION' }
       }));
       setPathEdges(initialPathEdges);
-      
-      if (activeLayout !== 'force') setActiveLayout('force');
+
       setLayoutTrigger(prev => prev + 1);
 
       // Auto capture AI layout after short layout settle
@@ -2029,9 +2022,7 @@ export default function App() {
             <Tooltip title="Hierarchical Tree (TB)"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Hierarchical Tree Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('hierarchical')} color={activeLayout === 'hierarchical' ? 'secondary' : 'primary'}><TreeIcon /></IconButton></Tooltip>
             <Tooltip title="Organic (Force)"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Force-Directed Organic Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('force')} color={activeLayout === 'force' ? 'secondary' : 'primary'}><ForceIcon /></IconButton></Tooltip>
 
-            <Tooltip title="Clustered (Planet)"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Clustered Island Layout (by Planet)' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('clustered')} color={activeLayout === 'clustered' ? 'secondary' : 'primary'}><GroupIcon /></IconButton></Tooltip>
             <Tooltip title="Circular"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Circular Hub Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('circular')} color={activeLayout === 'circular' ? 'secondary' : 'primary'}><CircularIcon /></IconButton></Tooltip>
-            <Tooltip title="Concentric"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Importance-Based Concentric Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('concentric')} color={activeLayout === 'concentric' ? 'secondary' : 'primary'}><ConcentricIcon /></IconButton></Tooltip>
           </ButtonGroup>
           <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
           <ButtonGroup variant="text" size="small">
@@ -2406,7 +2397,7 @@ export default function App() {
 
             {/* Context Specific Settings */}
             <Box sx={{ px: 0.5 }}>
-              {(activeLayout === 'force' || activeLayout === 'clustered') && (
+              {activeLayout === 'force' && (
                 <Box>
                   <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.65rem', fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center', gap: 1, letterSpacing: 1 }}>
                     <ForceIcon sx={{ fontSize: 14, color: COLORS.secondary }} /> {activeLayout.toUpperCase()} PHYSICS
@@ -2507,14 +2498,6 @@ export default function App() {
                       )}
                     </Box>
                   </Box>
-
-                  {activeLayout === 'clustered' && (
-                    <Box sx={{ mb: 1.5 }}>
-                      <Typography variant="caption" sx={{ color: COLORS.secondary, fontSize: '9px', display: 'block', mb: 0.5, fontWeight: 'bold' }}>CLUSTER GRAVITY: {layoutOptions.clusterGravity.toFixed(2)}</Typography>
-                      <Slider size="small" value={layoutOptions.clusterGravity} min={0.01} max={0.8} step={0.01}
-                        onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, clusterGravity: v }))} color="secondary" />
-                    </Box>
-                  )}
 
                   <Box>
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>FRICTION: {layoutOptions.friction.toFixed(2)}</Typography>
@@ -2674,24 +2657,6 @@ export default function App() {
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>RADIUS: {layoutOptions.radius}</Typography>
                     <Slider size="small" value={layoutOptions.radius} min={100} max={2000} step={50}
                       onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, radius: v }))} color="secondary" />
-                  </Box>
-                </Box>
-              )}
-
-              {activeLayout === 'concentric' && (
-                <Box>
-                  <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.65rem', fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center', gap: 1, letterSpacing: 1 }}>
-                    <ConcentricIcon sx={{ fontSize: 14, color: COLORS.primary }} /> CONCENTRIC SETUP
-                  </Typography>
-                  <Box sx={{ mb: 1.5 }}>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>RING SPACING: {layoutOptions.ringSpacing}</Typography>
-                    <Slider size="small" value={layoutOptions.ringSpacing} min={50} max={500} step={10}
-                      onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, ringSpacing: v }))} color="secondary" />
-                  </Box>
-                  <Box>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>NODES PER RING: {layoutOptions.nodesPerRing}</Typography>
-                    <Slider size="small" value={layoutOptions.nodesPerRing} min={2} max={20} step={1}
-                      onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, nodesPerRing: v }))} color="secondary" />
                   </Box>
                 </Box>
               )}
@@ -3495,7 +3460,7 @@ export default function App() {
                   onClick={onLoadTestGraph}
                   sx={{ borderRadius: 2, py: 1.5, fontWeight: 'bold' }}
                 >
-                  Load Force Test Graph
+                  Load Random Subgraph
                 </Button>
 
                 <Button 

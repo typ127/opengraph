@@ -147,42 +147,6 @@ const getCircularLayout = (nodes, options = {}) => {
 };
 
 /**
- * 4. Concentric Layout
- * Nodes with higher importance are placed on inner rings.
- */
-const getConcentricLayout = (nodes, options = {}, rootNodeId = null) => {
-  const center = getLayoutCenter(nodes);
-  const sorted = [...nodes].sort((a, b) => (b.data.importance || 0) - (a.data.importance || 0));
-
-  // If we have a root node, force it to index 0 (Ring 1 - Absolute Center)
-  if (rootNodeId) {
-    const rootIdx = sorted.findIndex(n => n.id === rootNodeId);
-    if (rootIdx > -1) {
-      const [root] = sorted.splice(rootIdx, 1);
-      sorted.unshift(root);
-    }
-  }
-
-  const ringSpacing = options.ringSpacing || 250;
-  const nodesPerRing = options.nodesPerRing || 8;
-
-  return sorted.map((node, i) => {
-    const ringIndex = Math.floor(i / nodesPerRing);
-    const nodeIndexInRing = i % nodesPerRing;
-    const ringRadius = ringIndex * ringSpacing;
-    const angle = (2 * Math.PI * nodeIndexInRing) / (Math.min(nodes.length - ringIndex * nodesPerRing, nodesPerRing));
-
-    return {
-      ...node,
-      position: {
-        x: center.x + ringRadius * Math.cos(angle),
-        y: center.y + ringRadius * Math.sin(angle),
-      },
-    };
-  });
-};
-
-/**
  * Main Layout Entry Point
  */
 export const calculateLayout = (nodes, edges, type, options = {}, rootNodeId = null) => {
@@ -199,9 +163,6 @@ export const calculateLayout = (nodes, edges, type, options = {}, rootNodeId = n
       break;
     case 'circular':
       layoutedNodes = getCircularLayout(nodes, options);
-      break;
-    case 'concentric':
-      layoutedNodes = getConcentricLayout(nodes, options, rootNodeId);
       break;
     default:
       return nodes;

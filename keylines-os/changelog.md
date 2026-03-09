@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.72.0] - 2026-03-09
+
+### Entfernt
+- **Clustered Force Layout**: Die experimentelle "Planet Island" Ansicht wurde vollständig entfernt, um die Komplexität des Systems zu reduzieren und den Fokus auf das organische Force-Layout zu legen.
+- **Concentric Layout**: Die konzentrische Anordnung wurde entfernt. Die hierarchische und zirkuläre Ansicht decken die strukturellen Anforderungen ausreichend ab.
+- **Bereinigung**: Unnötige Hooks (`useClusteredForceLayout`) und Hilfsfunktionen (`getConcentricLayout`) wurden aus der Codebase gelöscht.
+
+### Änderungen
+- **AI Training Panel Optimierung**:
+    - **Load Random Subgraph**: Der Button wurde umbenannt (zuvor "Load Force Test Graph") und ändert nun nicht mehr automatisch das aktive Layout.
+    - **Layout-Entkopplung**: Das Laden von Testdaten beeinflusst nicht mehr den gewählten Ansichtsmodus (z.B. Hierarchical), was stabilere Vergleiche ermöglicht.
+
 ## [1.71.0] - 2026-03-08
 
 ### Neu

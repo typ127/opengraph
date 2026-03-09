@@ -78,7 +78,6 @@ In den Drawern werden Nachbarn mit ihrer spezifischen Relation angezeigt:
 - **Hierarchisch:** Sortiert Knoten nach Typ und Label in Ebenen.
 - **Circular:** Ordnet Hubs und deren Umfeld im Kreis an.
 - **Force:** Organische Physik-Simulation (Default).
-- **Concentric:** Platziert wichtige Knoten (hoher Score) im Zentrum.
 
 ### Graph-Metriken (Social Network Analysis)
 Über die Analyse-Icons können Knoten basierend auf ihrer Bedeutung skaliert werden:
