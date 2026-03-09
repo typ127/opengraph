@@ -2531,6 +2531,7 @@ export default function App() {
                       onChange={(e) => {
                         console.log("RANKER CHANGE:", e.target.value);
                         setLayoutOptions(prev => ({ ...prev, ranker: e.target.value }));
+                        setLayoutTrigger(prev => prev + 1);
                       }}
                       fullWidth
                       sx={{ 
@@ -2552,7 +2553,10 @@ export default function App() {
                     <Select
                       size="small"
                       value={layoutOptions.align || 'UL'}
-                      onChange={(e) => setLayoutOptions(prev => ({ ...prev, align: e.target.value }))}
+                      onChange={(e) => {
+                        setLayoutOptions(prev => ({ ...prev, align: e.target.value }));
+                        setLayoutTrigger(prev => prev + 1);
+                      }}
                       fullWidth
                       sx={{ 
                         fontSize: '9px', height: 26, color: COLORS.secondary,
@@ -2574,7 +2578,10 @@ export default function App() {
                     <Select
                       size="small"
                       value={edgePathType}
-                      onChange={(e) => setEdgePathType(e.target.value)}
+                      onChange={(e) => {
+                        setEdgePathType(e.target.value);
+                        setLayoutTrigger(prev => prev + 1);
+                      }}
                       fullWidth
                       sx={{ 
                         fontSize: '9px', height: 26, color: COLORS.secondary,
@@ -2597,7 +2604,10 @@ export default function App() {
                     <Select
                       size="small"
                       value={layoutOptions.rankDir || 'TB'}
-                      onChange={(e) => setLayoutOptions(prev => ({ ...prev, rankDir: e.target.value }))}
+                      onChange={(e) => {
+                        setLayoutOptions(prev => ({ ...prev, rankDir: e.target.value }));
+                        setLayoutTrigger(prev => prev + 1);
+                      }}
                       fullWidth
                       sx={{ 
                         fontSize: '9px', height: 26, color: COLORS.secondary,
