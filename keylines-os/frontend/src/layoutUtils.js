@@ -143,7 +143,22 @@ const getCircularLayout = (nodes, options = {}) => {
   const radius = options.radius || Math.max(200, nodes.length * 40);
   const angleStep = (2 * Math.PI) / nodes.length;
 
-  return nodes.map((node, i) => {
+  // Sorting logic
+  let sortedNodes = [...nodes];
+  const sortMode = options.circularSort || 'standard';
+
+  if (sortMode === 'byType') {
+    sortedNodes.sort((a, b) => {
+      const typeA = a.data.type || '';
+      const typeB = b.data.type || '';
+      return typeA.localeCompare(typeB);
+    });
+  } else if (sortMode === 'byImportance') {
+    sortedNodes.sort((a, b) => (b.data.importance || 0) - (a.data.importance || 0));
+  }
+  // 'standard' keeps original order
+
+  return sortedNodes.map((node, i) => {
     const angle = i * angleStep;
     return {
       ...node,

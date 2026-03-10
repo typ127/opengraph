@@ -16,6 +16,9 @@ All notable changes to this project will be documented in this file.
     - **Live Updates**: Alle Einstellungen im Tree-Setup (Ranker, Alignment, Spacing) triggern nun sofort eine Neuberechnung.
     - **Kompaktere Ansichten**: Spacing-Werte können nun bis auf 1 (Node) bzw. 10 (Rank) reduziert werden.
     - **Importance-Scaling**: Der neue Regler `IMPORTANCE WEIGHT` skaliert Knoten im Baum proportional zu ihrer Bedeutung.
+- **Circular Setup Upgrade**:
+    - **Node Sorting**: Neue Sortier-Optionen für das zirkuläre Layout (Standard, By Type, By Importance).
+    - **Live Updates**: Radius-Änderungen triggern nun sofort eine Neuberechnung.
 - **AI Training Panel Upgrade**:
     - **Tree-Layout Support**: Die KI analysiert nun auch Baum-Strukturen und schlägt optimierte Spacing-Werte vor.
     - **Dynamische UI**: Die Analyse-Ergebnisse passen sich automatisch dem aktiven Layout-Typ an.

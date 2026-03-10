@@ -374,7 +374,8 @@ export default function App() {
               edgeCurvature: 0.5,
               importanceWeight: 2.0,
               rankDir: 'TB',
-              ranker: 'network-simplex'
+              ranker: 'network-simplex',
+              circularSort: 'standard'
             };
             const saved = localStorage.getItem('kl_layoutOptions');
             if (saved !== null) {
@@ -2668,10 +2669,34 @@ export default function App() {
                   <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.65rem', fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center', gap: 1, letterSpacing: 1 }}>
                     <CircularIcon sx={{ fontSize: 14, color: COLORS.secondary }} /> CIRCULAR SETUP
                   </Typography>
-                  <Box>
+                  <Box sx={{ mb: 1.5 }}>
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>RADIUS: {layoutOptions.radius}</Typography>
                     <Slider size="small" value={layoutOptions.radius} min={100} max={2000} step={50}
-                      onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, radius: v }))} color="secondary" />
+                      onChange={(e, v) => {
+                        setLayoutOptions(prev => ({ ...prev, radius: v }));
+                        setLayoutTrigger(prev => prev + 1);
+                      }} color="secondary" />
+                  </Box>
+
+                  <Box>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>SORTING</Typography>
+                    <Select
+                      size="small"
+                      value={layoutOptions.circularSort || 'standard'}
+                      onChange={(e) => {
+                        setLayoutOptions(prev => ({ ...prev, circularSort: e.target.value }));
+                        setLayoutTrigger(prev => prev + 1);
+                      }}
+                      fullWidth
+                      sx={{ 
+                        fontSize: '9px', height: 26, color: COLORS.secondary,
+                        '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' }
+                      }}
+                    >
+                      <MenuItem value="standard" sx={{ fontSize: '10px' }}>Standard</MenuItem>
+                      <MenuItem value="byType" sx={{ fontSize: '10px' }}>By Type</MenuItem>
+                      <MenuItem value="byImportance" sx={{ fontSize: '10px' }}>By Importance</MenuItem>
+                    </Select>
                   </Box>
                 </Box>
               )}
