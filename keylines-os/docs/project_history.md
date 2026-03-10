@@ -51,17 +51,20 @@ Die aktuelle Phase fokussiert sich auf extreme Performance und "intelligente", a
 
 ---
 
-## Phase 4: Struktur-Integrität & Layout-Präzision (v1.70.0 - v1.75.0)
+## Phase 4: Struktur-Integrität & Layout-Präzision (v1.70.0 - v1.74.0)
 *9. März - 10. März 2026*
 
-In dieser Phase wurde der Fokus auf die mathematische Stabilität der Layout-Engine (Dagre) und die saubere Trennung von Analyse-Visualisierung und Graph-Struktur gelegt.
+In dieser Phase wurde der Fokus auf die mathematische Stabilität der Layout-Engine (Dagre), die Reduktion der DOM-Last und die visuelle Konsistenz der Steuerungselemente gelegt.
 
 ### Zentrale Architektur-Fixes & Evolution:
-- **Trennung von Struktur & Visualisierung (v1.72.0)**:
-    - **Discovery**: Identifizierung eines kritischen "Constraint-Konflikts". Die Layout-Engine (Dagre) wurde durch `pathEdges` (temporäre Analyse-Hervorhebungen) kontaminiert, die redundant über den echten `edges` (Datenbank-Struktur) lagen.
-    - **Lösung**: Implementierung einer strikten **Structural-Only Filterung** für Layout-Berechnungen. Während `pathEdges` weiterhin gezeichnet werden, ignoriert die Engine sie bei der Positionsberechnung konsequent, was "Layout-Explosionen" beim Hinzufügen von Knoten (Spawning) vollständig eliminiert.
+- **Unified Visual Layer (v1.74.0)**:
+    - **Discovery**: Identifizierung redundanter Kanten-Renderings im DOM. Base `edges` (Datenstruktur) und `pathEdges` (Visualisierung) überlagerten sich, was zu Performance-Einbußen und visuellen Artefakten führte.
+    - **Lösung**: Umstellung auf eine reine **Visual-Layer-Architektur**. Nur noch `pathEdges` werden im DOM gerrendered (inklusive 1-Längen Pfaden), während die Basis-Relationen exklusiv als unsichtbarer Daten-Layer für die Layout-Berechnungen dienen. Dies eliminiert redundante DOM-Elemente vollständig.
 - **Persistent Tuning Sync (v1.73.0)**:
     - Einführung von **State-Synchronisierten Refs** (`layoutOptionsRef`, `activeAlgorithmRef`). Diese stellen sicher, dass asynchrone Callbacks (z.B. nach einem Datenbank-Fetch beim Knoten-Spawn) immer auf die exakten Benutzer-Tuning-Parameter zugreifen, anstatt auf veraltete Standardwerte zurückzufallen.
+- **Tuning UI Professionalisierung (v1.74.0)**:
+    - **Kontext-Sensitivität**: Regler wie `Importance Weight` wurden aus dem globalen Bereich entfernt und in die spezifischen Layout-Sektionen (z.B. Force Physics) verschoben, wo sie tatsächlich wirken.
+    - **Visuelle Kohärenz**: Vereinheitlichung aller Slider-Layouts (Padding, Farben, Größen) im Tuning Panel für ein bündiges, professionelles Interface.
 - **Intelligente Root-Wahl (v1.72.0)**:
     - Automatisierung der Hierarchie-Anker. Falls kein manueller Root via `Shift+Click` gesetzt wurde, wählt das System nun dynamisch den Knoten mit der höchsten `importance` als stabilen Ankerpunkt für den Baum.
 - **Zirkuläre Segmentierung (v1.72.0)**:

@@ -22,7 +22,6 @@ const getSequentialLayout = (nodes, edges, options = {}, rootNodeId = null) => {
 
   const baseWidth = options.nodeWidth || 180;
   const baseHeight = options.nodeHeight || 80;
-  const importanceWeight = options.importanceWeight || 2.0;
   
   // Use specific options or fallback to defaults
   const nodeSep = options.nodeSpacing || 120;
@@ -45,12 +44,8 @@ const getSequentialLayout = (nodes, edges, options = {}, rootNodeId = null) => {
   });
 
   nodes.forEach((node) => {
-    // Scale node size in the layout engine based on importance
-    const imp = node.data.importance || 0.5;
-    const scale = 1 + (imp * importanceWeight);
-    const w = baseWidth * scale;
-    const h = baseHeight * scale;
-    dagreGraph.setNode(node.id, { width: w, height: h });
+    // Fixed node size in the layout engine for cleaner tree structures
+    dagreGraph.setNode(node.id, { width: baseWidth, height: baseHeight });
   });
 
   // Re-orient edges away from the root if provided

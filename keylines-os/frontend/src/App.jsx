@@ -2378,14 +2378,18 @@ export default function App() {
               
               <Box sx={{ mb: 1.5 }}>
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>NODE SCALE: {layoutOptions.nodeSizeFactor.toFixed(1)}</Typography>
-                <Slider size="small" value={layoutOptions.nodeSizeFactor} min={-1} max={1} step={0.1}
-                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, nodeSizeFactor: v }))} color="primary" />
+                <Box sx={{ px: 1 }}>
+                  <Slider size="small" value={layoutOptions.nodeSizeFactor} min={-1} max={1} step={0.1}
+                    onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, nodeSizeFactor: v }))} color="primary" />
+                </Box>
               </Box>
 
               <Box sx={{ mb: 1.5 }}>
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>ROTATION: {layoutOptions.rotation}°</Typography>
-                <Slider size="small" value={layoutOptions.rotation} min={0} max={360} step={5}
-                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, rotation: v }))} color="primary" />
+                <Box sx={{ px: 1 }}>
+                  <Slider size="small" value={layoutOptions.rotation} min={0} max={360} step={5}
+                    onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, rotation: v }))} color="primary" />
+                </Box>
               </Box>
 
               <Box sx={{ mb: 1.5 }}>
@@ -2430,17 +2434,6 @@ export default function App() {
                   )}
                 </Box>
               </Box>
-              <Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>IMPORTANCE WEIGHT: {layoutOptions.importanceWeight?.toFixed(1)}x</Typography>
-                  <Tooltip title="AI Influenced"><Icons.Psychology sx={{ fontSize: 12, color: COLORS.secondary }} /></Tooltip>
-                </Box>
-                <Slider size="small" value={layoutOptions.importanceWeight || 2.0} min={0.1} max={5.0} step={0.1}
-                  onChange={(e, v) => {
-                    setLayoutOptions(prev => ({ ...prev, importanceWeight: v }));
-                    setLayoutTrigger(prev => prev + 1);
-                  }} color="primary" />
-              </Box>
             </Box>
 
             <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
@@ -2452,6 +2445,19 @@ export default function App() {
                   <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.65rem', fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center', gap: 1, letterSpacing: 1 }}>
                     <ForceIcon sx={{ fontSize: 14, color: COLORS.secondary }} /> {activeLayout.toUpperCase()} PHYSICS
                   </Typography>
+
+                  <Box sx={{ mb: 1.5 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>IMPORTANCE WEIGHT: {layoutOptions.importanceWeight?.toFixed(1)}x</Typography>
+                      <Tooltip title="AI Influenced"><Icons.Psychology sx={{ fontSize: 12, color: COLORS.secondary }} /></Tooltip>
+                    </Box>
+                    <Box sx={{ px: 1 }}>
+                      <Slider size="small" value={layoutOptions.importanceWeight || 2.0} min={0.1} max={5.0} step={0.1}
+                        onChange={(e, v) => {
+                          setLayoutOptions(prev => ({ ...prev, importanceWeight: v }));
+                        }} color="secondary" />
+                    </Box>
+                  </Box>
 
                   <Box sx={{ mb: 1.5 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
@@ -2551,8 +2557,10 @@ export default function App() {
 
                   <Box>
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>FRICTION: {layoutOptions.friction.toFixed(2)}</Typography>
-                    <Slider size="small" value={layoutOptions.friction} min={0.1} max={0.9} step={0.05}
-                      onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, friction: v }))} color="secondary" />
+                    <Box sx={{ px: 1 }}>
+                      <Slider size="small" value={layoutOptions.friction} min={0.1} max={0.9} step={0.05}
+                        onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, friction: v }))} color="secondary" />
+                    </Box>
                   </Box>
                 </Box>
               )}
