@@ -51,6 +51,24 @@ Die aktuelle Phase fokussiert sich auf extreme Performance und "intelligente", a
 
 ---
 
+## Phase 4: Struktur-Integrität & Layout-Präzision (v1.70.0 - v1.75.0)
+*9. März - 10. März 2026*
+
+In dieser Phase wurde der Fokus auf die mathematische Stabilität der Layout-Engine (Dagre) und die saubere Trennung von Analyse-Visualisierung und Graph-Struktur gelegt.
+
+### Zentrale Architektur-Fixes & Evolution:
+- **Trennung von Struktur & Visualisierung (v1.72.0)**:
+    - **Discovery**: Identifizierung eines kritischen "Constraint-Konflikts". Die Layout-Engine (Dagre) wurde durch `pathEdges` (temporäre Analyse-Hervorhebungen) kontaminiert, die redundant über den echten `edges` (Datenbank-Struktur) lagen.
+    - **Lösung**: Implementierung einer strikten **Structural-Only Filterung** für Layout-Berechnungen. Während `pathEdges` weiterhin gezeichnet werden, ignoriert die Engine sie bei der Positionsberechnung konsequent, was "Layout-Explosionen" beim Hinzufügen von Knoten (Spawning) vollständig eliminiert.
+- **Persistent Tuning Sync (v1.73.0)**:
+    - Einführung von **State-Synchronisierten Refs** (`layoutOptionsRef`, `activeAlgorithmRef`). Diese stellen sicher, dass asynchrone Callbacks (z.B. nach einem Datenbank-Fetch beim Knoten-Spawn) immer auf die exakten Benutzer-Tuning-Parameter zugreifen, anstatt auf veraltete Standardwerte zurückzufallen.
+- **Intelligente Root-Wahl (v1.72.0)**:
+    - Automatisierung der Hierarchie-Anker. Falls kein manueller Root via `Shift+Click` gesetzt wurde, wählt das System nun dynamisch den Knoten mit der höchsten `importance` als stabilen Ankerpunkt für den Baum.
+- **Zirkuläre Segmentierung (v1.72.0)**:
+    - Erweiterung des Circular Layouts um **semantische Sortierung** (Standard, By Type, By Importance). Dies ermöglicht eine sofortige visuelle Gruppierung von Clustern entlang des Kreises.
+
+---
+
 ## Technischer Stack - Zusammenfassung
 
 | Komponente | Technologie | Rolle |

@@ -401,10 +401,16 @@ export default function App() {
   const edgesRef = useRef(edges);
   const pathEdgesRef = useRef(pathEdges);
   const activeLayoutRef = useRef(activeLayout);
+  const layoutOptionsRef = useRef(layoutOptions);
+  const activeAlgorithmRef = useRef(activeAlgorithm);
+  const activeRootNodeIdRef = useRef(activeRootNodeId);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   useEffect(() => { edgesRef.current = edges; }, [edges]);
   useEffect(() => { pathEdgesRef.current = pathEdges; }, [pathEdges]);
-          useEffect(() => { activeLayoutRef.current = activeLayout; }, [activeLayout]);
+  useEffect(() => { activeLayoutRef.current = activeLayout; }, [activeLayout]);
+  useEffect(() => { layoutOptionsRef.current = layoutOptions; }, [layoutOptions]);
+  useEffect(() => { activeAlgorithmRef.current = activeAlgorithm; }, [activeAlgorithm]);
+  useEffect(() => { activeRootNodeIdRef.current = activeRootNodeId; }, [activeRootNodeId]);
       
           // Persist Settings to LocalStorage
           useEffect(() => {
@@ -1255,20 +1261,44 @@ export default function App() {
                     style: getEdgeStyle(relType) 
                   };
                   
-                  setNodes(nds => deduplicate([...nds, newNode]));
-                  setEdges(eds => deduplicate([...eds, newEdge]));
+                  const nextNodes = deduplicate([...currentNodes, newNode]);
+                  const nextEdges = deduplicate([...edgesRef.current, newEdge]);
+
+                  setNodes(nextNodes);
+                  setEdges(nextEdges);
                   
                   // Trigger layout only for visible nodes
                   setTimeout(() => {
-                    const visibleOnStage = nodesRef.current.filter(n => !hiddenTypes.has(n.data.type));
+                    const visibleOnStage = nextNodes.filter(n => !hiddenTypes.has(n.data.type));
                     const visibleIds = new Set(visibleOnStage.map(n => n.id));
                     
-                    // CRITICAL: Must include BOTH pathEdges and standard edges so the layout engine sees the links!
-                    const allRelevantEdges = [...edgesRef.current, ...pathEdgesRef.current];
-                    const visibleEdges = allRelevantEdges.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
+                    // STRUCTURAL ONLY: Exclude pathEdges!
+                    const visibleEdges = nextEdges.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
                     
-                    const layoutedVisible = calculateLayout(visibleOnStage, visibleEdges, activeLayoutRef.current, layoutOptions);
-                    const layoutedMap = new Map(layoutedVisible.map(n => [n.id, n.position]));
+                    const layoutedVisible = calculateLayout(visibleOnStage, visibleEdges, activeLayout, layoutOptions, activeRootNodeId);
+                    
+                    // APPLY ROTATION (Must match runLayout)
+                    let rotatedVisible = layoutedVisible;
+                    if (layoutOptions.rotation !== 0 && layoutedVisible.length > 0) {
+                      const center = getLayoutCenter(layoutedVisible);
+                      const rad = (layoutOptions.rotation * Math.PI) / 180;
+                      const cos = Math.cos(rad);
+                      const sin = Math.sin(rad);
+
+                      rotatedVisible = layoutedVisible.map(n => {
+                        const dx = n.position.x - center.x;
+                        const dy = n.position.y - center.y;
+                        return {
+                          ...n,
+                          position: {
+                            x: center.x + (dx * cos - dy * sin),
+                            y: center.y + (dx * sin + dy * cos)
+                          }
+                        };
+                      });
+                    }
+
+                    const layoutedMap = new Map(rotatedVisible.map(n => [n.id, n.position]));
 
                     setNodes(nds => nds.map(n => {
                       if (layoutedMap.has(n.id)) {
@@ -1277,9 +1307,9 @@ export default function App() {
                       return n;
                     }));
                     
-                    setTimeout(() => fitToNodes(layoutedVisible), 300);
+                    setTimeout(() => fitToNodes(rotatedVisible), 300);
                   }, 50);
-                }, [expandNode, fitToNodes, setNodes, setEdges, enableDonuts, layoutSpacing, getSmartPosition, hiddenTypes]);
+                }, [expandNode, fitToNodes, setNodes, setEdges, enableDonuts, getSmartPosition, hiddenTypes, activeLayout, layoutOptions, activeRootNodeId, activeAlgorithm]);
 
                   const addAllNodesOfType = useCallback(async (category) => {
       console.log(`FETCHING ALL ${category.toUpperCase()} NODES...`);
@@ -1320,33 +1350,55 @@ export default function App() {
           };
         });
 
-        setNodes(nds => deduplicate([...nds, ...preparedNodes]));
+        const nextNodes = deduplicate([...currentNodes, ...preparedNodes]);
+        setNodes(nextNodes);
         
         // Trigger layout
         setTimeout(() => {
-          const visibleOnStage = nodesRef.current.filter(n => !hiddenTypes.has(n.data.type));
+          const visibleOnStage = nextNodes.filter(n => !hiddenTypes.has(n.data.type));
           const visibleIds = new Set(visibleOnStage.map(n => n.id));
           
-          // CRITICAL: Include both standard and path edges for the layout engine
-          const allRelevantEdges = [...edgesRef.current, ...pathEdgesRef.current];
-          const visibleEdges = allRelevantEdges.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
+          // STRUCTURAL ONLY: Exclude pathEdges!
+          const visibleEdges = edgesRef.current.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
           
-          const layoutedVisible = calculateLayout(visibleOnStage, visibleEdges, activeLayoutRef.current, layoutOptions);
-          const layoutedMap = new Map(layoutedVisible.map(n => [n.id, n.position]));
+          const layoutedVisible = calculateLayout(visibleOnStage, visibleEdges, activeLayout, layoutOptions, activeRootNodeId);
+          
+          // APPLY ROTATION (Must match runLayout)
+          let rotatedVisible = layoutedVisible;
+          if (layoutOptions.rotation !== 0 && layoutedVisible.length > 0) {
+            const center = getLayoutCenter(layoutedVisible);
+            const rad = (layoutOptions.rotation * Math.PI) / 180;
+            const cos = Math.cos(rad);
+            const sin = Math.sin(rad);
+
+            rotatedVisible = layoutedVisible.map(n => {
+              const dx = n.position.x - center.x;
+              const dy = n.position.y - center.y;
+              return {
+                ...n,
+                position: {
+                  x: center.x + (dx * cos - dy * sin),
+                  y: center.y + (dx * sin + dy * cos)
+                }
+              };
+            });
+          }
+
+          const layoutedMap = new Map(rotatedVisible.map(n => [n.id, n.position]));
 
           setNodes(nds => nds.map(n => {
             if (layoutedMap.has(n.id)) {
-              return { ...n, position: layoutedMap.get(n.id), data: { ...n.data, sizeFactor: layoutOptions.nodeSizeFactor } };
+              return { ...n, position: layoutedMap.get(n.id) };
             }
-            return { ...n, data: { ...n.data, sizeFactor: layoutOptions.nodeSizeFactor } };
+            return n;
           }));
           
-          setTimeout(() => fitToNodes(layoutedVisible), 300);
+          setTimeout(() => fitToNodes(rotatedVisible), 300);
         }, 50);
       } catch (e) {
         console.error("Batch load error:", e);
       }
-    }, [enableDonuts, expandNode, fitToNodes, setNodes, getSmartPosition, layoutSpacing, hiddenTypes]);
+    }, [enableDonuts, expandNode, fitToNodes, setNodes, getSmartPosition, hiddenTypes, activeLayout, layoutOptions, activeRootNodeId, activeAlgorithm]);
 
     const onDrillDown = useCallback(() => {
     if (highlightedTypes.size === 0) return;
@@ -1409,27 +1461,52 @@ export default function App() {
                       onSegmentClick: (cat, e) => expandNode(fullNode.id, cat, e) 
                     } 
                   };
-                setNodes(nds => deduplicate([...nds, newNode]));
+
+                const nextNodes = deduplicate([...nodesRef.current, newNode]);
+                setNodes(nextNodes);
         existing = newNode;
         
         // Trigger layout calculation for the new node to integrate it
         setTimeout(() => {
-          const visibleOnStage = nodesRef.current.filter(n => !hiddenTypes.has(n.data.type));
+          const visibleOnStage = nextNodes.filter(n => !hiddenTypes.has(n.data.type));
           const visibleIds = new Set(visibleOnStage.map(n => n.id));
-          const allRelevantEdges = [...edgesRef.current, ...pathEdgesRef.current];
-          const visibleEdges = allRelevantEdges.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
           
-          const layoutedVisible = calculateLayout(visibleOnStage, visibleEdges, activeLayoutRef.current, layoutOptions);
-          const layoutedMap = new Map(layoutedVisible.map(n => [n.id, n.position]));
+          // STRUCTURAL ONLY: Exclude pathEdges!
+          const visibleEdges = edgesRef.current.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
+          
+          const layoutedVisible = calculateLayout(visibleOnStage, visibleEdges, activeLayout, layoutOptions, activeRootNodeId);
+          
+          // APPLY ROTATION (Must match runLayout)
+          let rotatedVisible = layoutedVisible;
+          if (layoutOptions.rotation !== 0 && layoutedVisible.length > 0) {
+            const center = getLayoutCenter(layoutedVisible);
+            const rad = (layoutOptions.rotation * Math.PI) / 180;
+            const cos = Math.cos(rad);
+            const sin = Math.sin(rad);
+
+            rotatedVisible = layoutedVisible.map(n => {
+              const dx = n.position.x - center.x;
+              const dy = n.position.y - center.y;
+              return {
+                ...n,
+                position: {
+                  x: center.x + (dx * cos - dy * sin),
+                  y: center.y + (dx * sin + dy * cos)
+                }
+              };
+            });
+          }
+
+          const layoutedMap = new Map(rotatedVisible.map(n => [n.id, n.position]));
 
           setNodes(nds => nds.map(n => {
             if (layoutedMap.has(n.id)) {
-              return { ...n, position: layoutedMap.get(n.id), data: { ...n.data, sizeFactor: layoutOptions.nodeSizeFactor } };
+              return { ...n, position: layoutedMap.get(n.id) };
             }
-            return { ...n, data: { ...n.data, sizeFactor: layoutOptions.nodeSizeFactor } };
+            return n;
           }));
           
-          setTimeout(() => fitToNodes(layoutedVisible), 300);
+          setTimeout(() => fitToNodes(rotatedVisible), 300);
         }, 50);
       }
     }
@@ -1570,57 +1647,59 @@ export default function App() {
             });
           }, [nodes, edges, pathEdges, hiddenTypes, highlightedTypes]);
         const visibleEdges = useMemo(() => {
-        const nodeIds = new Set(visibleNodes.map(n => n.id));
-        const hasHighlight = highlightedTypes.size > 0;
+          const nodeIds = new Set(visibleNodes.map(n => n.id));
+          const hasHighlight = highlightedTypes.size > 0;
 
-        // Wir nutzen NUR noch pathEdges (die jetzt auch direkte Relationen enthalten)
-        const filteredPathEdges = pathEdges.filter(pe => {
-        const { source, target } = pe;
-        const length = pe.data?.length || 0;
+          // Wir nutzen NUR noch pathEdges für das Rendering auf der Stage.
+          // Die Basis-Relationen (edges) werden NICHT mehr im DOM gerendert,
+          // sondern dienen nur noch als Daten-Layer für das Layout-Engine.
+          const filteredPathEdges = pathEdges.filter(pe => {
+            const { source, target } = pe;
+            const length = pe.data?.length || 0;
 
-        if (!nodeIds.has(source) || !nodeIds.has(target)) return false;
+            if (!nodeIds.has(source) || !nodeIds.has(target)) return false;
 
-        if (length === 1) {
-        return true;
-        } else {
-        const fullPathNodes = pe.data?.fullPathNodes || [];
-        const pathIds = fullPathNodes.map(n => n.id);
-        const intermediateIds = pathIds.filter(id => id !== source && id !== target);
-        // Wenn alle Zwischenknoten bereits auf der Stage sind, verbergen wir den virtuellen Pfad
-        const allIntermediatesOnStage = intermediateIds.length > 0 && intermediateIds.every(id => nodeIds.has(id));
+            if (length === 1) {
+              return true;
+            } else {
+              const fullPathNodes = pe.data?.fullPathNodes || [];
+              const pathIds = fullPathNodes.map(n => n.id);
+              const intermediateIds = pathIds.filter(id => id !== source && id !== target);
+              // Wenn alle Zwischenknoten bereits auf der Stage sind, verbergen wir den virtuellen Pfad
+              const allIntermediatesOnStage = intermediateIds.length > 0 && intermediateIds.every(id => nodeIds.has(id));
 
-        return !allIntermediatesOnStage;
-        }
-        });
+              return !allIntermediatesOnStage;
+            }
+          });
 
-        return filteredPathEdges.map(edge => {
-        const sourceNode = nodes.find(n => n.id === edge.source); 
-        const targetNode = nodes.find(n => n.id === edge.target);
-        const isPath = edge.data?.type === 'PATH';
-        const isHighlighted = hasHighlight ? (highlightedTypes.has(sourceNode?.data.type) || highlightedTypes.has(targetNode?.data.type)) : true;
+          return filteredPathEdges.map(edge => {
+            const sourceNode = nodes.find(n => n.id === edge.source); 
+            const targetNode = nodes.find(n => n.id === edge.target);
+            const isPath = edge.data?.type === 'PATH';
+            const isHighlighted = hasHighlight ? (highlightedTypes.has(sourceNode?.data.type) || highlightedTypes.has(targetNode?.data.type)) : true;
 
-        const highlightOpacity = isPath ? 1.0 : (hasHighlight ? (isHighlighted ? 0.8 : 0.1) : 1.0);
-        const updatedData = isPath ? { ...edge.data, pathType: edgePathType } : edge.data;
+            const highlightOpacity = isPath ? 1.0 : (hasHighlight ? (isHighlighted ? 0.8 : 0.1) : 1.0);
+            const updatedData = isPath ? { ...edge.data, pathType: edgePathType } : edge.data;
 
-        return { 
-        ...edge, 
-        type: isPath ? 'pathEdge' : edgePathType, 
-        data: updatedData,
-        label: isPath ? "" : (zoomLevel > 0.6 ? (edge.label || edge.data?.dbType?.replace("_", " ").toLowerCase()) : ""), 
-        className: isPath ? 'path-edge' : '',
-        zIndex: isPath ? -1 : -2, 
-        labelStyle: { fill: COLORS.nodeLabel, fontWeight: 600, fontSize: '10px', fontFamily: '"Open Sans", sans-serif', fontStyle: 'italic' },
-        labelBgStyle: { fill: COLORS.background, fillOpacity: 1 },
-        labelBgPadding: [4, 2],
-        labelBgBorderRadius: 4,
-        style: { 
-          ...edge.style, 
-          stroke: isPath ? COLORS.secondary : COLORS.primary,
-          opacity: highlightOpacity,
-          transition: 'opacity 0.3s ease'
-        }
-        };
-        });
+            return { 
+              ...edge, 
+              type: isPath ? 'pathEdge' : edgePathType, 
+              data: updatedData,
+              label: isPath ? "" : (zoomLevel > 0.6 ? (edge.label || edge.data?.dbType?.replace("_", " ").toLowerCase()) : ""), 
+              className: isPath ? 'path-edge' : '',
+              zIndex: isPath ? -1 : -2, 
+              labelStyle: { fill: COLORS.nodeLabel, fontWeight: 600, fontSize: '10px', fontFamily: '"Open Sans", sans-serif', fontStyle: 'italic' },
+              labelBgStyle: { fill: COLORS.background, fillOpacity: 1 },
+              labelBgPadding: [4, 2],
+              labelBgBorderRadius: 4,
+              style: { 
+                ...edge.style, 
+                stroke: isPath ? COLORS.secondary : COLORS.primary,
+                opacity: highlightOpacity,
+                transition: 'opacity 0.3s ease'
+              }
+            };
+          });
         }, [nodes, pathEdges, visibleNodes, hiddenTypes, highlightedTypes, edgePathType, zoomLevel]);
   const onDeleteSnapshot = useCallback((id) => {
     setSnapshots(prev => prev.filter(s => s.id !== id));

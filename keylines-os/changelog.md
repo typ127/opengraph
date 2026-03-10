@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.74.0] - 2026-03-10
+
+### Neu
+- **Unified Visual Layer (Architektur)**: 
+    - Die Basis-Relationen (`edges`) wurden vollständig aus dem Rendering-Prozess (DOM) entfernt. Sie fungieren nun als unsichtbarer, reiner Daten-Layer für die Layout-Berechnungen (Dagre/Force).
+    - Die `pathEdges` übernehmen die exklusive Darstellung auf der Stage (inklusive 1-er Pfaden). Dies verhindert doppelt gezeichnete Kanten und verbessert die Render-Performance signifikant.
+- **Persistent Layout Sync**: 
+    - Implementierung von `layoutOptionsRef` und `activeRootNodeIdRef`, um asynchrone Callbacks (z.B. nach Datenbank-Fetches beim Knoten-Spawn) exakt mit den aktuellen Tuning-Einstellungen des Benutzers zu synchronisieren.
+
+### Änderungen
+- **Dauerhafte Layout-Stabilität**: Der "Layout-Jumping"-Bug beim Hinzufügen neuer Knoten wurde behoben. Neue Knoten integrieren sich nun sofort lautlos in die bestehende, vom Nutzer getunte Baum-Struktur.
+- **Performance-Optimierung**: Signifikante Reduktion der DOM-Elemente durch Eliminierung redundanter Kanten-Rendering-Aufrufe.
+
+### Dokumentation
+- **Technischer Bericht**: Neuer `docs/layout_stability_report.md` dokumentiert die Trennung von Struktur und Präsentation.
+
 ## [1.72.0] - 2026-03-09
 
 ### Entfernt
