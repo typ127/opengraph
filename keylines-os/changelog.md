@@ -5,19 +5,21 @@ All notable changes to this project will be documented in this file.
 ## [1.72.0] - 2026-03-09
 
 ### Entfernt
-- **Clustered Force Layout**: Die experimentelle "Planet Island" Ansicht wurde vollständig entfernt, um die Komplexität des Systems zu reduzieren und den Fokus auf das organische Force-Layout zu legen.
-- **Concentric Layout**: Die konzentrische Anordnung wurde entfernt. Die hierarchische und zirkuläre Ansicht decken die strukturellen Anforderungen ausreichend ab.
+- **Clustered Force Layout**: Die experimentelle "Planet Island" Ansicht wurde vollständig entfernt.
+- **Concentric Layout**: Die konzentrische Anordnung wurde entfernt.
+- **UI-Bereinigung**: Redundante Regler (`Node Width`, `Node Height`, `Link Distance`) im Tree-Setup sowie der "Load Tree Test Graph"-Button wurden entfernt.
 - **Bereinigung**: Unnötige Hooks (`useClusteredForceLayout`) und Hilfsfunktionen (`getConcentricLayout`) wurden aus der Codebase gelöscht.
 
 ### Änderungen
-- **AI Training Panel Optimierung**:
-    - **Load Random Subgraph**: Der Button wurde umbenannt (zuvor "Load Force Test Graph") und ändert nun nicht mehr automatisch das aktive Layout.
-    - **Layout-Entkopplung**: Das Laden von Testdaten beeinflusst nicht mehr den gewählten Ansichtsmodus (z.B. Hierarchical), was stabilere Vergleiche ermöglicht.
-- **Tree Setup Fixes**:
-    - **Stabilitäts-Fix**: Redundante Kanten-Daten (Dopplung durch `pathEdges`) aus der Layout-Berechnung entfernt. Dies verhindert das Zusammenbrechen der Baum-Struktur in ein ungeordnetes Netzwerk bei Parameter-Änderungen.
-    - **Root-Reset**: Der aktive Root-Anker wird nun beim Laden neuer Test-Graphen automatisch zurückgesetzt.
-    - **Timing-Sicherheit**: Ein kleiner Delay (100ms) beim Layout-Trigger verhindert Race Conditions zwischen State-Updates und Struktur-Berechnung.
-    - **Live Updates**: Alle Einstellungen im Tree-Setup (Ranker, Alignment, Spacing, Node-Size) triggern nun sofort eine Neuberechnung des Layouts.
+- **Tree Setup Optimierung**:
+    - **Automatische Root-Wahl**: Falls kein Root manuell gesetzt wurde, wählt die Engine nun automatisch den Knoten mit der höchsten `importance` als Anker.
+    - **Live Updates**: Alle Einstellungen im Tree-Setup (Ranker, Alignment, Spacing) triggern nun sofort eine Neuberechnung.
+    - **Kompaktere Ansichten**: Spacing-Werte können nun bis auf 1 (Node) bzw. 10 (Rank) reduziert werden.
+    - **Importance-Scaling**: Der neue Regler `IMPORTANCE WEIGHT` skaliert Knoten im Baum proportional zu ihrer Bedeutung.
+- **AI Training Panel Upgrade**:
+    - **Tree-Layout Support**: Die KI analysiert nun auch Baum-Strukturen und schlägt optimierte Spacing-Werte vor.
+    - **Dynamische UI**: Die Analyse-Ergebnisse passen sich automatisch dem aktiven Layout-Typ an.
+    - **Load Random Subgraph**: Button umbenannt und von Layout-Wechseln entkoppelt.
 
 ## [1.71.0] - 2026-03-08
 

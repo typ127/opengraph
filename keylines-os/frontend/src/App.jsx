@@ -374,7 +374,7 @@ export default function App() {
               edgeCurvature: 0.5,
               importanceWeight: 2.0,
               rankDir: 'TB',
-              ranker: undefined
+              ranker: 'network-simplex'
             };
             const saved = localStorage.getItem('kl_layoutOptions');
             if (saved !== null) {
@@ -1724,72 +1724,7 @@ export default function App() {
     setStatusParts([{ trigger: 'INFO', action: 'Learned parameters applied to live stage' }]);
     setTimeout(() => setStatusParts([]), 3000);
   }, [analysisResult]);
-  const onLoadTreeTestGraph = useCallback(() => {
-    // 1. Reset layout options to clean tree defaults to see effects clearly
-    setLayoutOptions(prev => ({
-      ...prev,
-      ranker: undefined,
-      rankDir: 'TB',
-      align: 'UL',
-      nodeSpacing: 100,
-      rankSpacing: 150,
-      nodeWidth: 180,
-      nodeHeight: 80
-    }));
 
-    // 2. Clear current stage
-    setNodes([]);
-    setEdges([]);
-
-    // 3. Create a complex DAG (Directed Acyclic Graph)
-    // This structure is designed to show clear differences between Simplex and Longest Path
-    const testNodes = [
-      { id: 'root', data: { label: 'CORE SYSTEM', type: 'robot', importance: 1.0 }, position: { x: 0, y: 0 } },
-      { id: 'n1', data: { label: 'Module Alpha', type: 'science', importance: 0.7 }, position: { x: 0, y: 0 } },
-      { id: 'n2', data: { label: 'Module Beta', type: 'science', importance: 0.7 }, position: { x: 0, y: 0 } },
-      { id: 'n3', data: { label: 'Sub-Processor', type: 'science', importance: 0.5 }, position: { x: 0, y: 0 } },
-      { id: 'n4', data: { label: 'End Terminal', type: 'item', importance: 0.3 }, position: { x: 0, y: 0 } },
-      { id: 'n5', data: { label: 'Direct Bypass', type: 'mutant', importance: 0.9 }, position: { x: 0, y: 0 } },
-      { id: 'n6', data: { label: 'Cross-Linker', type: 'planet', importance: 0.6 }, position: { x: 0, y: 0 } },
-      { id: 'n7', data: { label: 'Final Output', type: 'book', importance: 0.8 }, position: { x: 0, y: 0 } }
-    ];
-
-    const testEdges = [
-      { id: 'e1', source: 'root', target: 'n1', label: 'initializes', data: { type: 'CONNECTS' } },
-      { id: 'e2', source: 'root', target: 'n2', label: 'initializes', data: { type: 'CONNECTS' } },
-      { id: 'e3', source: 'n1', target: 'n3', label: 'tasks', data: { type: 'FOLLOWS' } },
-      { id: 'e4', source: 'n2', target: 'n3', label: 'tasks', data: { type: 'FOLLOWS' } },
-      { id: 'e5', source: 'n3', target: 'n4', label: 'ends at', data: { type: 'CREATED' } },
-      { id: 'e6', source: 'root', target: 'n5', label: 'bypass', data: { type: 'CONNECTS' } },
-      { id: 'e7', source: 'n5', target: 'n7', label: 'direct result', data: { type: 'CREATED' } },
-      { id: 'e8', source: 'n4', target: 'n7', label: 'sequential result', data: { type: 'FOLLOWS' } },
-      { id: 'e9', source: 'n2', target: 'n6', label: 'monitors', data: { type: 'CONNECTS' } },
-      { id: 'e10', source: 'n6', target: 'n7', label: 'validates', data: { type: 'FOLLOWS' } }
-    ];
-
-    const mappedNodes = testNodes.map(n => ({
-      ...n,
-      data: {
-        ...n.data,
-        showDonuts: enableDonuts,
-        onSegmentClick: (cat, e) => expandNode(n.id, cat, e)
-      }
-    }));
-
-    // Use a small timeout to ensure state batching doesn't eat the layout trigger
-    setTimeout(() => {
-      setNodes(mappedNodes);
-      setEdges(testEdges);
-      setPathEdges(testEdges.map(e => ({ ...e, type: edgePathType })));
-
-      setActiveRootNodeId('root');
-      setActiveLayout('hierarchical');
-      setLayoutTrigger(prev => prev + 1);
-      setStatusParts([{ trigger: 'INFO', action: 'Complex DAG loaded. Test different Rankers now.' }]);
-      setTimeout(() => setStatusParts([]), 3000);
-    }, 50);
-
-  }, [enableDonuts, expandNode, edgePathType]);
   const onLoadTestGraph = async () => {
 
     try {
@@ -2420,8 +2355,11 @@ export default function App() {
                   <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>IMPORTANCE WEIGHT: {layoutOptions.importanceWeight?.toFixed(1)}x</Typography>
                   <Tooltip title="AI Influenced"><Icons.Psychology sx={{ fontSize: 12, color: COLORS.secondary }} /></Tooltip>
                 </Box>
-                <Slider size="small" value={layoutOptions.importanceWeight || 2.0} min={0} max={5.0} step={0.1}
-                  onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, importanceWeight: v }))} color="primary" />
+                <Slider size="small" value={layoutOptions.importanceWeight || 2.0} min={0.1} max={5.0} step={0.1}
+                  onChange={(e, v) => {
+                    setLayoutOptions(prev => ({ ...prev, importanceWeight: v }));
+                    setLayoutTrigger(prev => prev + 1);
+                  }} color="primary" />
               </Box>
             </Box>
 
@@ -2559,12 +2497,10 @@ export default function App() {
                     </Box>
                     <Select
                       size="small"
-                      value={layoutOptions.ranker === undefined ? "" : layoutOptions.ranker}
-                      displayEmpty
+                      value={layoutOptions.ranker || 'network-simplex'}
                       onChange={(e) => {
-                        const val = e.target.value === "" ? undefined : e.target.value;
-                        console.log("RANKER CHANGE:", val);
-                        setLayoutOptions(prev => ({ ...prev, ranker: val }));
+                        console.log("RANKER CHANGE:", e.target.value);
+                        setLayoutOptions(prev => ({ ...prev, ranker: e.target.value }));
                         setLayoutTrigger(prev => prev + 1);
                       }}
                       fullWidth
@@ -2573,7 +2509,6 @@ export default function App() {
                         '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' }
                       }}
                     >
-                      <MenuItem value="" sx={{ fontSize: '10px', fontStyle: 'italic' }}>Auto (Simplex)</MenuItem>
                       <MenuItem value="network-simplex" sx={{ fontSize: '10px' }}>Network Simplex</MenuItem>
                       <MenuItem value="tight-tree" sx={{ fontSize: '10px' }}>Tight Tree</MenuItem>
                       <MenuItem value="longest-path" sx={{ fontSize: '10px' }}>Longest Path</MenuItem>
@@ -2718,76 +2653,6 @@ export default function App() {
                           <Box sx={{ 
                             position: 'absolute', 
                             left: `${((analysisResult.suggestedRankSpacing - 10) / 390) * 100}%`, 
-                            top: '42%', transform: 'translate(-50%, -50%)',
-                            width: 2, height: 10, bgcolor: COLORS.secondary, borderRadius: '1px', pointerEvents: 'none', zIndex: 1
-                          }} />
-                        </>
-                      )}
-                    </Box>
-                  </Box>
-
-                  <Box sx={{ mb: 1.5 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>NODE WIDTH: {layoutOptions.nodeWidth || 180}</Typography>
-                      {analysisResult?.suggestedNodeWidth && (
-                        <Typography variant="caption" sx={{ color: COLORS.secondary, fontSize: '9px', fontWeight: 'bold' }}>
-                          {analysisResult.suggestedNodeWidth > (layoutOptions.nodeWidth || 180) ? '→ +' : '← '}{analysisResult.suggestedNodeWidth - (layoutOptions.nodeWidth || 180)}
-                        </Typography>
-                      )}
-                      <Tooltip title="AI Influenced"><Icons.Psychology sx={{ fontSize: 12, color: COLORS.secondary }} /></Tooltip>
-                    </Box>
-                    <Box sx={{ position: 'relative', px: 1 }}>
-                      <Slider size="small" value={layoutOptions.nodeWidth || 180} min={40} max={400} step={10}
-                        onChange={(e, v) => {
-                          setLayoutOptions(prev => ({ ...prev, nodeWidth: v }));
-                          setLayoutTrigger(prev => prev + 1);
-                        }} color="secondary" />
-                      {analysisResult?.suggestedNodeWidth && (
-                        <>
-                          <Box sx={{ 
-                            position: 'absolute', 
-                            left: `${Math.min((((layoutOptions.nodeWidth || 180) - 40) / 360) * 100, ((analysisResult.suggestedNodeWidth - 40) / 360) * 100)}%`,
-                            width: `${Math.abs((layoutOptions.nodeWidth || 180) - analysisResult.suggestedNodeWidth) / 360 * 100}%`,
-                            height: '1px', bgcolor: `${COLORS.secondary}66`, top: '42%', pointerEvents: 'none'
-                          }} />
-                          <Box sx={{ 
-                            position: 'absolute', 
-                            left: `${((analysisResult.suggestedNodeWidth - 40) / 360) * 100}%`, 
-                            top: '42%', transform: 'translate(-50%, -50%)',
-                            width: 2, height: 10, bgcolor: COLORS.secondary, borderRadius: '1px', pointerEvents: 'none', zIndex: 1
-                          }} />
-                        </>
-                      )}
-                    </Box>
-                  </Box>
-
-                  <Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>NODE HEIGHT: {layoutOptions.nodeHeight || 80}</Typography>
-                      {analysisResult?.suggestedNodeHeight && (
-                        <Typography variant="caption" sx={{ color: COLORS.secondary, fontSize: '9px', fontWeight: 'bold' }}>
-                          {analysisResult.suggestedNodeHeight > (layoutOptions.nodeHeight || 80) ? '→ +' : '← '}{analysisResult.suggestedNodeHeight - (layoutOptions.nodeHeight || 80)}
-                        </Typography>
-                      )}
-                      <Tooltip title="AI Influenced"><Icons.Psychology sx={{ fontSize: 12, color: COLORS.secondary }} /></Tooltip>
-                    </Box>
-                    <Box sx={{ position: 'relative', px: 1 }}>
-                      <Slider size="small" value={layoutOptions.nodeHeight || 80} min={20} max={200} step={5}
-                        onChange={(e, v) => {
-                          setLayoutOptions(prev => ({ ...prev, nodeHeight: v }));
-                          setLayoutTrigger(prev => prev + 1);
-                        }} color="secondary" />
-                      {analysisResult?.suggestedNodeHeight && (
-                        <>
-                          <Box sx={{ 
-                            position: 'absolute', 
-                            left: `${Math.min((((layoutOptions.nodeHeight || 80) - 20) / 180) * 100, ((analysisResult.suggestedNodeHeight - 20) / 180) * 100)}%`,
-                            width: `${Math.abs((layoutOptions.nodeHeight || 80) - analysisResult.suggestedNodeHeight) / 180 * 100}%`,
-                            height: '1px', bgcolor: `${COLORS.secondary}66`, top: '42%', pointerEvents: 'none'
-                          }} />
-                          <Box sx={{ 
-                            position: 'absolute', 
-                            left: `${((analysisResult.suggestedNodeHeight - 20) / 180) * 100}%`, 
                             top: '42%', transform: 'translate(-50%, -50%)',
                             width: 2, height: 10, bgcolor: COLORS.secondary, borderRadius: '1px', pointerEvents: 'none', zIndex: 1
                           }} />
@@ -3611,17 +3476,6 @@ export default function App() {
                   sx={{ borderRadius: 2, py: 1.5, fontWeight: 'bold' }}
                 >
                   Load Random Subgraph
-                </Button>
-
-                <Button 
-                  variant="outlined" 
-                  color="primary" 
-                  fullWidth 
-                  startIcon={<TreeIcon />}
-                  onClick={onLoadTreeTestGraph}
-                  sx={{ borderRadius: 2, py: 1.5, fontWeight: 'bold' }}
-                >
-                  Load Tree Test Graph
                 </Button>
               </Box>
 

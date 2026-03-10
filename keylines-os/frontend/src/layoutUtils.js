@@ -20,12 +20,16 @@ const getSequentialLayout = (nodes, edges, options = {}, rootNodeId = null) => {
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
 
-  const nodeWidth = options.nodeWidth || 180;
-  const nodeHeight = options.nodeHeight || 80;
+  const baseWidth = options.nodeWidth || 180;
+  const baseHeight = options.nodeHeight || 80;
+  const importanceWeight = options.importanceWeight || 2.0;
   
   // Use specific options or fallback to defaults
   const nodeSep = options.nodeSpacing || 120;
-  const rankSep = options.rankSpacing || 180;
+  
+  // linkDistance acts as a base for rank spacing if rankSpacing is high
+  const rankSep = (options.rankSpacing || 180) * (options.linkDistance / 250);
+  
   const rankDir = options.rankDir || 'TB';
   const ranker = options.ranker || 'network-simplex';
   const align = options.align || 'UL';
@@ -41,7 +45,12 @@ const getSequentialLayout = (nodes, edges, options = {}, rootNodeId = null) => {
   });
 
   nodes.forEach((node) => {
-    dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
+    // Scale node size in the layout engine based on importance
+    const imp = node.data.importance || 0.5;
+    const scale = 1 + (imp * importanceWeight);
+    const w = baseWidth * scale;
+    const h = baseHeight * scale;
+    dagreGraph.setNode(node.id, { width: w, height: h });
   });
 
   // Re-orient edges away from the root if provided
@@ -84,7 +93,7 @@ const getSequentialLayout = (nodes, edges, options = {}, rootNodeId = null) => {
     const pos = dagreGraph.node(node.id);
     return {
       ...node,
-      position: { x: pos.x - nodeWidth / 2, y: pos.y - nodeHeight / 2 },
+      position: { x: pos.x - baseWidth / 2, y: pos.y - baseHeight / 2 },
     };
   });
 };
@@ -152,11 +161,21 @@ const getCircularLayout = (nodes, options = {}) => {
 export const calculateLayout = (nodes, edges, type, options = {}, rootNodeId = null) => {
   if (!nodes || nodes.length === 0) return [];
 
+  // Auto-select root if none provided for hierarchical layouts
+  let effectiveRootId = rootNodeId;
+  if (!effectiveRootId && (type === 'hierarchical' || type === 'sequential')) {
+    const sortedByImportance = [...nodes].sort((a, b) => (b.data.importance || 0) - (a.data.importance || 0));
+    if (sortedByImportance.length > 0) {
+      effectiveRootId = sortedByImportance[0].id;
+      console.log(`[LayoutEngine] Auto-selected root node by importance: ${effectiveRootId} (${sortedByImportance[0].data.label})`);
+    }
+  }
+
   let layoutedNodes = [];
   switch (type) {
     case 'hierarchical':
     case 'sequential':
-      layoutedNodes = getSequentialLayout(nodes, edges, options, rootNodeId);
+      layoutedNodes = getSequentialLayout(nodes, edges, options, effectiveRootId);
       break;
     case 'force':
       layoutedNodes = getForceLayout(nodes, edges, options);
