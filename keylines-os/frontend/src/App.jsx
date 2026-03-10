@@ -57,6 +57,7 @@ import {
   BarChart as HistogramIcon,
   AccountTree as TreeIcon, 
   BlurCircular as CircularIcon, 
+  Hub as HiveIcon,
   ElectricBolt as ForceIcon,
   Close as CloseIcon, 
   Info as InfoIcon, 
@@ -375,7 +376,9 @@ export default function App() {
               importanceWeight: 2.0,
               rankDir: 'TB',
               ranker: 'network-simplex',
-              circularSort: 'standard'
+              circularSort: 'standard',
+              hiveInnerRadius: 200,
+              hiveAxisLength: 800
             };
             const saved = localStorage.getItem('kl_layoutOptions');
             if (saved !== null) {
@@ -2070,8 +2073,8 @@ export default function App() {
             <Tooltip title="Organic (Force)"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Force-Directed Organic Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('force')} color={activeLayout === 'force' ? 'secondary' : 'primary'}><ForceIcon /></IconButton></Tooltip>
 
             <Tooltip title="Circular"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Circular Hub Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('circular')} color={activeLayout === 'circular' ? 'secondary' : 'primary'}><CircularIcon /></IconButton></Tooltip>
-          </ButtonGroup>
-          <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+            <Tooltip title="Hive Plot"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Deterministic Hive Plot Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => { onLayoutClick('hive'); setEdgePathType('bezier'); }} color={activeLayout === 'hive' ? 'secondary' : 'primary'}><HiveIcon /></IconButton></Tooltip>
+            </ButtonGroup>          <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
           <ButtonGroup variant="text" size="small">
             <Tooltip title="Degree"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Scale by Degree Centrality (Connectivity)' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onAnalyze('degree')} color={activeAlgorithm === 'degree' ? 'secondary' : 'primary'}><DegreeIcon /></IconButton></Tooltip>
             <Tooltip title="Betweenness"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Scale by Betweenness (Bridge Nodes)' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onAnalyze('betweenness')} color={activeAlgorithm === 'betweenness' ? 'secondary' : 'primary'}><BetweennessIcon /></IconButton></Tooltip>
@@ -2784,6 +2787,34 @@ export default function App() {
                       <MenuItem value="byType" sx={{ fontSize: '10px' }}>By Type</MenuItem>
                       <MenuItem value="byImportance" sx={{ fontSize: '10px' }}>By Importance</MenuItem>
                     </Select>
+                  </Box>
+                </Box>
+              )}
+
+              {activeLayout === 'hive' && (
+                <Box>
+                  <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.65rem', fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center', gap: 1, letterSpacing: 1 }}>
+                    <HiveIcon sx={{ fontSize: 14, color: COLORS.secondary }} /> HIVE SETUP
+                  </Typography>
+                  <Box sx={{ mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>INNER RADIUS: {layoutOptions.hiveInnerRadius}</Typography>
+                    <Box sx={{ px: 1 }}>
+                      <Slider size="small" value={layoutOptions.hiveInnerRadius} min={50} max={1000} step={25}
+                        onChange={(e, v) => {
+                          setLayoutOptions(prev => ({ ...prev, hiveInnerRadius: v }));
+                          setLayoutTrigger(prev => prev + 1);
+                        }} color="secondary" />
+                    </Box>
+                  </Box>
+                  <Box sx={{ mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>AXIS LENGTH: {layoutOptions.hiveAxisLength}</Typography>
+                    <Box sx={{ px: 1 }}>
+                      <Slider size="small" value={layoutOptions.hiveAxisLength} min={200} max={3000} step={100}
+                        onChange={(e, v) => {
+                          setLayoutOptions(prev => ({ ...prev, hiveAxisLength: v }));
+                          setLayoutTrigger(prev => prev + 1);
+                        }} color="secondary" />
+                    </Box>
                   </Box>
                 </Box>
               )}

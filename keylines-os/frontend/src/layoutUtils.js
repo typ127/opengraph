@@ -166,6 +166,64 @@ const getCircularLayout = (nodes, options = {}) => {
 };
 
 /**
+ * 4. Hive Plot Layout
+ * Groups nodes by type onto radial axes.
+ */
+const getHivePlotLayout = (nodes, options = {}) => {
+  const center = getLayoutCenter(nodes);
+  const innerRadius = options.hiveInnerRadius || 200;
+  const axisLength = options.hiveAxisLength || 800;
+  
+  // 1. Group nodes into axes based on type
+  // Axis 0: PERSON, MUTANT
+  // Axis 1: PLANET, LOCATION, ENTITY
+  // Axis 2: ROBOT, ITEM, SCIENCE, OTHER
+  const axes = [[], [], []];
+  
+  nodes.forEach(node => {
+    const type = (node.data.type || 'OTHER').toUpperCase();
+    if (['PERSON', 'MUTANT'].includes(type)) {
+      axes[0].push(node);
+    } else if (['PLANET', 'LOCATION', 'ENTITY'].includes(type)) {
+      axes[1].push(node);
+    } else {
+      axes[2].push(node);
+    }
+  });
+
+  // 2. Position nodes along each axis
+  const result = [];
+  const axisAngles = [0, (2 * Math.PI) / 3, (4 * Math.PI) / 3]; // 0°, 120°, 240°
+
+  axes.forEach((axisNodes, axisIdx) => {
+    const angle = axisAngles[axisIdx];
+    
+    // Sort by importance (highest importance furthest from center)
+    const sorted = [...axisNodes].sort((a, b) => (a.data.importance || 0) - (b.data.importance || 0));
+    
+    sorted.forEach((node, nodeIdx) => {
+      // Linear distribution along the axis length
+      const progress = sorted.length > 1 ? nodeIdx / (sorted.length - 1) : 0.5;
+      const radius = innerRadius + (progress * axisLength);
+      
+      // Add a tiny spiral offset if importance is identical to avoid overlap
+      const spiralOffset = (node.data.importance || 0) * 0.05;
+      const finalAngle = angle + spiralOffset;
+
+      result.push({
+        ...node,
+        position: {
+          x: center.x + radius * Math.cos(finalAngle),
+          y: center.y + radius * Math.sin(finalAngle),
+        }
+      });
+    });
+  });
+
+  return result;
+};
+
+/**
  * Main Layout Entry Point
  */
 export const calculateLayout = (nodes, edges, type, options = {}, rootNodeId = null) => {
@@ -192,6 +250,9 @@ export const calculateLayout = (nodes, edges, type, options = {}, rootNodeId = n
       break;
     case 'circular':
       layoutedNodes = getCircularLayout(nodes, options);
+      break;
+    case 'hive':
+      layoutedNodes = getHivePlotLayout(nodes, options);
       break;
     default:
       return nodes;

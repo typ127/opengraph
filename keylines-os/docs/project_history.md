@@ -69,6 +69,10 @@ In dieser Phase wurde der Fokus auf die mathematische Stabilität der Layout-Eng
     - Automatisierung der Hierarchie-Anker. Falls kein manueller Root via `Shift+Click` gesetzt wurde, wählt das System nun dynamisch den Knoten mit der höchsten `importance` als stabilen Ankerpunkt für den Baum.
 - **Zirkuläre Segmentierung (v1.72.0)**:
     - Erweiterung des Circular Layouts um **semantische Sortierung** (Standard, By Type, By Importance). Dies ermöglicht eine sofortige visuelle Gruppierung von Clustern entlang des Kreises.
+- **Deterministic Hive Plot Layout (v1.75.0)**:
+    - **Mathematische Ordnung**: Implementierung eines Hive Plot Algorithmus zur Kategorisierung des Asimov-Universums auf 3 radialen Achsen (0°, 120°, 240°).
+    - **Importance-Mapping**: Knoten werden entlang der Achsen strikt nach ihrem `importance` Score verteilt, was eine absolute, vergleichende Analyse der Entitäten ermöglicht.
+    - **Visual Flow**: Automatisierte Umstellung auf Bezier-Kurven für Kanten, um die typische "fließende" Ästhetik zwischen den Hive-Achsen zu erzielen.
 
 ---
 

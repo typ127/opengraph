@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.75.0] - 2026-03-10
+
+### Neu
+- **Hive Plot Layout**: 
+    - Implementierung eines deterministischen radialen Layouts zur strukturellen Analyse des Asimov-Universums.
+    - Knoten werden basierend auf ihrem Typ auf drei 120°-Achsen (Personen, Orte, Technik) verteilt.
+    - Innerhalb der Achsen erfolgt die Positionierung (Radius) strikt nach der `importance` Eigenschaft.
+- **Hive Setup Tuning Panel**: Neue Regler für `Inner Radius` und `Axis Length` zur interaktiven Steuerung der radialen Spreizung.
+- **Aesthetic Edge Routing**: Automatischer Wechsel auf `bezier` Kantenführung beim Aktivieren des Hive Plots für optimale visuelle "Flow"-Ästhetik.
+
 ## [1.74.0] - 2026-03-10
 
 ### Neu
