@@ -13,6 +13,11 @@ All notable changes to this project will be documented in this file.
 - **AI Training Panel Optimierung**:
     - **Load Random Subgraph**: Der Button wurde umbenannt (zuvor "Load Force Test Graph") und ändert nun nicht mehr automatisch das aktive Layout.
     - **Layout-Entkopplung**: Das Laden von Testdaten beeinflusst nicht mehr den gewählten Ansichtsmodus (z.B. Hierarchical), was stabilere Vergleiche ermöglicht.
+- **Tree Setup Fixes**:
+    - **Stabilitäts-Fix**: Redundante Kanten-Daten (Dopplung durch `pathEdges`) aus der Layout-Berechnung entfernt. Dies verhindert das Zusammenbrechen der Baum-Struktur in ein ungeordnetes Netzwerk bei Parameter-Änderungen.
+    - **Root-Reset**: Der aktive Root-Anker wird nun beim Laden neuer Test-Graphen automatisch zurückgesetzt.
+    - **Timing-Sicherheit**: Ein kleiner Delay (100ms) beim Layout-Trigger verhindert Race Conditions zwischen State-Updates und Struktur-Berechnung.
+    - **Live Updates**: Alle Einstellungen im Tree-Setup (Ranker, Alignment, Spacing, Node-Size) triggern nun sofort eine Neuberechnung des Layouts.
 
 ## [1.71.0] - 2026-03-08
 

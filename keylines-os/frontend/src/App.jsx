@@ -374,7 +374,7 @@ export default function App() {
               edgeCurvature: 0.5,
               importanceWeight: 2.0,
               rankDir: 'TB',
-              ranker: 'network-simplex'
+              ranker: undefined
             };
             const saved = localStorage.getItem('kl_layoutOptions');
             if (saved !== null) {
@@ -439,9 +439,9 @@ export default function App() {
             const visibleNodesOnStage = nodesRef.current.filter(n => !hiddenTypes.has(n.data.type));
 
             const visibleIds = new Set(visibleNodesOnStage.map(n => n.id));
-            const allRelevantEdges = [...edgesRef.current, ...pathEdgesRef.current];
-            const visibleEdgesOnStage = allRelevantEdges.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
+            const visibleEdgesOnStage = edgesRef.current.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
 
+            console.log(`[LayoutEngine] Calculating "${type}" layout with options:`, layoutOptions, `RootNode: ${rootNodeId}`);
             let layoutedVisible = calculateLayout(visibleNodesOnStage, visibleEdgesOnStage, type, layoutOptions, rootNodeId);
 
             // APPLY ROTATION (if any)
@@ -1660,38 +1660,65 @@ export default function App() {
     const ai = getMetrics(aiData);
     const user = getMetrics(userData);
 
-    const repulsionFactor = user.spread / ai.spread;
-    const linkFactor = user.avgLinkDist / ai.avgLinkDist;
-    const suggestedCollision = Math.max(20, Math.min(200, Math.round(user.minDist / 2.2)));
+    if (activeLayout === 'hierarchical') {
+      // TREE LAYOUT ANALYSIS
+      const nodeSpacingFactor = user.minDist / ai.minDist;
+      const rankSpacingFactor = user.spread / ai.spread;
+      
+      setAnalysisResult({
+        layoutType: 'hierarchical',
+        suggestedNodeSpacing: Math.max(1, Math.min(300, Math.round(layoutOptions.nodeSpacing * nodeSpacingFactor))),
+        suggestedRankSpacing: Math.max(10, Math.min(400, Math.round(layoutOptions.rankSpacing * rankSpacingFactor))),
+        suggestedNodeWidth: Math.max(40, Math.min(400, Math.round((layoutOptions.nodeWidth || 180) * nodeSpacingFactor))),
+        suggestedNodeHeight: Math.max(20, Math.min(200, Math.round((layoutOptions.nodeHeight || 80) * nodeSpacingFactor))),
+      });
+    } else {
+      // FORCE LAYOUT ANALYSIS
+      const repulsionFactor = user.spread / ai.spread;
+      const linkFactor = user.avgLinkDist / ai.avgLinkDist;
+      const suggestedCollision = Math.max(20, Math.min(200, Math.round(user.minDist / 2.2)));
 
-    const newRepulsion = Math.max(-5000, Math.min(-100, Math.round(layoutOptions.repulsion * repulsionFactor)));
-    const newLinkDist = Math.max(50, Math.min(600, Math.round(layoutOptions.linkDistance * linkFactor)));
-    const newGravity = Math.max(0.01, Math.min(0.5, layoutOptions.gravityX / (repulsionFactor > 0 ? repulsionFactor : 1)));
+      const newRepulsion = Math.max(-5000, Math.min(-100, Math.round(layoutOptions.repulsion * repulsionFactor)));
+      const newLinkDist = Math.max(50, Math.min(600, Math.round(layoutOptions.linkDistance * linkFactor)));
+      const newGravity = Math.max(0.01, Math.min(0.5, layoutOptions.gravityX / (repulsionFactor > 0 ? repulsionFactor : 1)));
 
-    setAnalysisResult({
-      suggestedRepulsion: newRepulsion,
-      suggestedLinkDist: newLinkDist,
-      suggestedCollision: suggestedCollision,
-      suggestedGravity: parseFloat(newGravity.toFixed(2)),
-      spreadRatio: repulsionFactor.toFixed(2),
-      linkRatio: linkFactor.toFixed(2),
-    });
+      setAnalysisResult({
+        layoutType: 'force',
+        suggestedRepulsion: newRepulsion,
+        suggestedLinkDist: newLinkDist,
+        suggestedCollision: suggestedCollision,
+        suggestedGravity: parseFloat(newGravity.toFixed(2)),
+        spreadRatio: repulsionFactor.toFixed(2),
+        linkRatio: linkFactor.toFixed(2),
+      });
+    }
 
     setStatusParts([{ trigger: 'INFO', action: 'Suggestions calculated. Review in Tuning Panel.' }]);
     setTimeout(() => setStatusParts([]), 3000);
-  }, [layoutOptions]);
+  }, [layoutOptions, activeLayout]);
 
   const onApplySuggestions = useCallback(() => {
     if (!analysisResult) return;
 
-    setLayoutOptions(prev => ({
-      ...prev,
-      repulsion: analysisResult.suggestedRepulsion,
-      linkDistance: analysisResult.suggestedLinkDist,
-      collisionRadius: analysisResult.suggestedCollision,
-      gravityX: analysisResult.suggestedGravity,
-      gravityY: analysisResult.suggestedGravity,
-    }));
+    if (analysisResult.layoutType === 'hierarchical') {
+      setLayoutOptions(prev => ({
+        ...prev,
+        nodeSpacing: analysisResult.suggestedNodeSpacing,
+        rankSpacing: analysisResult.suggestedRankSpacing,
+        nodeWidth: analysisResult.suggestedNodeWidth,
+        nodeHeight: analysisResult.suggestedNodeHeight,
+      }));
+      setLayoutTrigger(prev => prev + 1);
+    } else {
+      setLayoutOptions(prev => ({
+        ...prev,
+        repulsion: analysisResult.suggestedRepulsion,
+        linkDistance: analysisResult.suggestedLinkDist,
+        collisionRadius: analysisResult.suggestedCollision,
+        gravityX: analysisResult.suggestedGravity,
+        gravityY: analysisResult.suggestedGravity,
+      }));
+    }
 
     setAnalysisResult(null); // Clear after applying
     setStatusParts([{ trigger: 'INFO', action: 'Learned parameters applied to live stage' }]);
@@ -1701,7 +1728,7 @@ export default function App() {
     // 1. Reset layout options to clean tree defaults to see effects clearly
     setLayoutOptions(prev => ({
       ...prev,
-      ranker: 'network-simplex',
+      ranker: undefined,
       rankDir: 'TB',
       align: 'UL',
       nodeSpacing: 100,
@@ -1790,8 +1817,13 @@ export default function App() {
         data: { ...e, type: 'DIRECT_RELATION' }
       }));
       setPathEdges(initialPathEdges);
+      setActiveRootNodeId(null);
 
-      setLayoutTrigger(prev => prev + 1);
+      // Use a small timeout to ensure the state updates (setNodes, setEdges)
+      // are committed before runLayout starts (which uses nodesRef/edgesRef)
+      setTimeout(() => {
+        setLayoutTrigger(prev => prev + 1);
+      }, 100);
 
       // Auto capture AI layout after short layout settle
       setTimeout(() => {
@@ -1800,7 +1832,7 @@ export default function App() {
           edges: JSON.parse(JSON.stringify(edgesRef.current)),
           rawTimestamp: Date.now()
         });
-      }, 800);
+      }, 900);
     } catch (err) {
       console.error('Failed to load test graph:', err);
     }
@@ -2527,10 +2559,12 @@ export default function App() {
                     </Box>
                     <Select
                       size="small"
-                      value={layoutOptions.ranker || 'network-simplex'}
+                      value={layoutOptions.ranker === undefined ? "" : layoutOptions.ranker}
+                      displayEmpty
                       onChange={(e) => {
-                        console.log("RANKER CHANGE:", e.target.value);
-                        setLayoutOptions(prev => ({ ...prev, ranker: e.target.value }));
+                        const val = e.target.value === "" ? undefined : e.target.value;
+                        console.log("RANKER CHANGE:", val);
+                        setLayoutOptions(prev => ({ ...prev, ranker: val }));
                         setLayoutTrigger(prev => prev + 1);
                       }}
                       fullWidth
@@ -2539,6 +2573,7 @@ export default function App() {
                         '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' }
                       }}
                     >
+                      <MenuItem value="" sx={{ fontSize: '10px', fontStyle: 'italic' }}>Auto (Simplex)</MenuItem>
                       <MenuItem value="network-simplex" sx={{ fontSize: '10px' }}>Network Simplex</MenuItem>
                       <MenuItem value="tight-tree" sx={{ fontSize: '10px' }}>Tight Tree</MenuItem>
                       <MenuItem value="longest-path" sx={{ fontSize: '10px' }}>Longest Path</MenuItem>
@@ -2624,36 +2659,141 @@ export default function App() {
                   <Box sx={{ mb: 1.5 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>NODE SPACING: {layoutOptions.nodeSpacing}</Typography>
+                      {analysisResult?.suggestedNodeSpacing && (
+                        <Typography variant="caption" sx={{ color: COLORS.secondary, fontSize: '9px', fontWeight: 'bold' }}>
+                          {analysisResult.suggestedNodeSpacing > layoutOptions.nodeSpacing ? '→ +' : '← '}{analysisResult.suggestedNodeSpacing - layoutOptions.nodeSpacing}
+                        </Typography>
+                      )}
                       <Tooltip title="AI Influenced"><Icons.Psychology sx={{ fontSize: 12, color: COLORS.secondary }} /></Tooltip>
                     </Box>
-                    <Slider size="small" value={layoutOptions.nodeSpacing} min={20} max={300} step={10}
-                      onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, nodeSpacing: v }))} color="secondary" />
+                    <Box sx={{ position: 'relative', px: 1 }}>
+                      <Slider size="small" value={layoutOptions.nodeSpacing} min={1} max={300} step={5}
+                        onChange={(e, v) => {
+                          setLayoutOptions(prev => ({ ...prev, nodeSpacing: v }));
+                          setLayoutTrigger(prev => prev + 1);
+                        }} color="secondary" />
+                      {analysisResult?.suggestedNodeSpacing && (
+                        <>
+                          <Box sx={{ 
+                            position: 'absolute', 
+                            left: `${Math.min(((layoutOptions.nodeSpacing - 1) / 299) * 100, ((analysisResult.suggestedNodeSpacing - 1) / 299) * 100)}%`,
+                            width: `${Math.abs(layoutOptions.nodeSpacing - analysisResult.suggestedNodeSpacing) / 299 * 100}%`,
+                            height: '1px', bgcolor: `${COLORS.secondary}66`, top: '42%', pointerEvents: 'none'
+                          }} />
+                          <Box sx={{ 
+                            position: 'absolute', 
+                            left: `${((analysisResult.suggestedNodeSpacing - 1) / 299) * 100}%`, 
+                            top: '42%', transform: 'translate(-50%, -50%)',
+                            width: 2, height: 10, bgcolor: COLORS.secondary, borderRadius: '1px', pointerEvents: 'none', zIndex: 1
+                          }} />
+                        </>
+                      )}
+                    </Box>
                   </Box>
+
                   <Box sx={{ mb: 1.5 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>RANK SPACING: {layoutOptions.rankSpacing}</Typography>
+                      {analysisResult?.suggestedRankSpacing && (
+                        <Typography variant="caption" sx={{ color: COLORS.secondary, fontSize: '9px', fontWeight: 'bold' }}>
+                          {analysisResult.suggestedRankSpacing > layoutOptions.rankSpacing ? '→ +' : '← '}{analysisResult.suggestedRankSpacing - layoutOptions.rankSpacing}
+                        </Typography>
+                      )}
                       <Tooltip title="AI Influenced"><Icons.Psychology sx={{ fontSize: 12, color: COLORS.secondary }} /></Tooltip>
                     </Box>
-                    <Slider size="small" value={layoutOptions.rankSpacing} min={50} max={400} step={10}
-                      onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, rankSpacing: v }))} color="secondary" />
+                    <Box sx={{ position: 'relative', px: 1 }}>
+                      <Slider size="small" value={layoutOptions.rankSpacing} min={10} max={400} step={5}
+                        onChange={(e, v) => {
+                          setLayoutOptions(prev => ({ ...prev, rankSpacing: v }));
+                          setLayoutTrigger(prev => prev + 1);
+                        }} color="secondary" />
+                      {analysisResult?.suggestedRankSpacing && (
+                        <>
+                          <Box sx={{ 
+                            position: 'absolute', 
+                            left: `${Math.min(((layoutOptions.rankSpacing - 10) / 390) * 100, ((analysisResult.suggestedRankSpacing - 10) / 390) * 100)}%`,
+                            width: `${Math.abs(layoutOptions.rankSpacing - analysisResult.suggestedRankSpacing) / 390 * 100}%`,
+                            height: '1px', bgcolor: `${COLORS.secondary}66`, top: '42%', pointerEvents: 'none'
+                          }} />
+                          <Box sx={{ 
+                            position: 'absolute', 
+                            left: `${((analysisResult.suggestedRankSpacing - 10) / 390) * 100}%`, 
+                            top: '42%', transform: 'translate(-50%, -50%)',
+                            width: 2, height: 10, bgcolor: COLORS.secondary, borderRadius: '1px', pointerEvents: 'none', zIndex: 1
+                          }} />
+                        </>
+                      )}
+                    </Box>
                   </Box>
 
                   <Box sx={{ mb: 1.5 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>NODE WIDTH: {layoutOptions.nodeWidth || 180}</Typography>
+                      {analysisResult?.suggestedNodeWidth && (
+                        <Typography variant="caption" sx={{ color: COLORS.secondary, fontSize: '9px', fontWeight: 'bold' }}>
+                          {analysisResult.suggestedNodeWidth > (layoutOptions.nodeWidth || 180) ? '→ +' : '← '}{analysisResult.suggestedNodeWidth - (layoutOptions.nodeWidth || 180)}
+                        </Typography>
+                      )}
                       <Tooltip title="AI Influenced"><Icons.Psychology sx={{ fontSize: 12, color: COLORS.secondary }} /></Tooltip>
                     </Box>
-                    <Slider size="small" value={layoutOptions.nodeWidth || 180} min={100} max={400} step={10}
-                      onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, nodeWidth: v }))} color="secondary" />
+                    <Box sx={{ position: 'relative', px: 1 }}>
+                      <Slider size="small" value={layoutOptions.nodeWidth || 180} min={40} max={400} step={10}
+                        onChange={(e, v) => {
+                          setLayoutOptions(prev => ({ ...prev, nodeWidth: v }));
+                          setLayoutTrigger(prev => prev + 1);
+                        }} color="secondary" />
+                      {analysisResult?.suggestedNodeWidth && (
+                        <>
+                          <Box sx={{ 
+                            position: 'absolute', 
+                            left: `${Math.min((((layoutOptions.nodeWidth || 180) - 40) / 360) * 100, ((analysisResult.suggestedNodeWidth - 40) / 360) * 100)}%`,
+                            width: `${Math.abs((layoutOptions.nodeWidth || 180) - analysisResult.suggestedNodeWidth) / 360 * 100}%`,
+                            height: '1px', bgcolor: `${COLORS.secondary}66`, top: '42%', pointerEvents: 'none'
+                          }} />
+                          <Box sx={{ 
+                            position: 'absolute', 
+                            left: `${((analysisResult.suggestedNodeWidth - 40) / 360) * 100}%`, 
+                            top: '42%', transform: 'translate(-50%, -50%)',
+                            width: 2, height: 10, bgcolor: COLORS.secondary, borderRadius: '1px', pointerEvents: 'none', zIndex: 1
+                          }} />
+                        </>
+                      )}
+                    </Box>
                   </Box>
 
                   <Box>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>NODE HEIGHT: {layoutOptions.nodeHeight || 80}</Typography>
+                      {analysisResult?.suggestedNodeHeight && (
+                        <Typography variant="caption" sx={{ color: COLORS.secondary, fontSize: '9px', fontWeight: 'bold' }}>
+                          {analysisResult.suggestedNodeHeight > (layoutOptions.nodeHeight || 80) ? '→ +' : '← '}{analysisResult.suggestedNodeHeight - (layoutOptions.nodeHeight || 80)}
+                        </Typography>
+                      )}
                       <Tooltip title="AI Influenced"><Icons.Psychology sx={{ fontSize: 12, color: COLORS.secondary }} /></Tooltip>
                     </Box>
-                    <Slider size="small" value={layoutOptions.nodeHeight || 80} min={40} max={200} step={5}
-                      onChange={(e, v) => setLayoutOptions(prev => ({ ...prev, nodeHeight: v }))} color="secondary" />
+                    <Box sx={{ position: 'relative', px: 1 }}>
+                      <Slider size="small" value={layoutOptions.nodeHeight || 80} min={20} max={200} step={5}
+                        onChange={(e, v) => {
+                          setLayoutOptions(prev => ({ ...prev, nodeHeight: v }));
+                          setLayoutTrigger(prev => prev + 1);
+                        }} color="secondary" />
+                      {analysisResult?.suggestedNodeHeight && (
+                        <>
+                          <Box sx={{ 
+                            position: 'absolute', 
+                            left: `${Math.min((((layoutOptions.nodeHeight || 80) - 20) / 180) * 100, ((analysisResult.suggestedNodeHeight - 20) / 180) * 100)}%`,
+                            width: `${Math.abs((layoutOptions.nodeHeight || 80) - analysisResult.suggestedNodeHeight) / 180 * 100}%`,
+                            height: '1px', bgcolor: `${COLORS.secondary}66`, top: '42%', pointerEvents: 'none'
+                          }} />
+                          <Box sx={{ 
+                            position: 'absolute', 
+                            left: `${((analysisResult.suggestedNodeHeight - 20) / 180) * 100}%`, 
+                            top: '42%', transform: 'translate(-50%, -50%)',
+                            width: 2, height: 10, bgcolor: COLORS.secondary, borderRadius: '1px', pointerEvents: 'none', zIndex: 1
+                          }} />
+                        </>
+                      )}
+                    </Box>
                   </Box>
                 </Box>
               )}
@@ -3601,25 +3741,44 @@ export default function App() {
                     
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 2 }}>
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontStyle: 'italic', mb: 1 }}>
-                        Review changes in the Tuning Panel (green/red markers) before applying.
+                        Review changes in the Tuning Panel (markers) before applying.
                       </Typography>
                       
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Typography variant="caption">Repulsion</Typography>
-                        <Typography variant="caption" sx={{ color: COLORS.secondary, fontWeight: 'bold' }}>{analysisResult.suggestedRepulsion}</Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Typography variant="caption">Link Distance</Typography>
-                        <Typography variant="caption" sx={{ color: COLORS.secondary, fontWeight: 'bold' }}>{analysisResult.suggestedLinkDist}</Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Typography variant="caption">Collision Radius</Typography>
-                        <Typography variant="caption" sx={{ color: COLORS.secondary, fontWeight: 'bold' }}>{analysisResult.suggestedCollision}</Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Typography variant="caption">Gravity</Typography>
-                        <Typography variant="caption" sx={{ color: COLORS.secondary, fontWeight: 'bold' }}>{analysisResult.suggestedGravity}</Typography>
-                      </Box>
+                      {analysisResult.layoutType === 'hierarchical' ? (
+                        <>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="caption">Node Spacing</Typography>
+                            <Typography variant="caption" sx={{ color: COLORS.secondary, fontWeight: 'bold' }}>{analysisResult.suggestedNodeSpacing}</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="caption">Rank Spacing</Typography>
+                            <Typography variant="caption" sx={{ color: COLORS.secondary, fontWeight: 'bold' }}>{analysisResult.suggestedRankSpacing}</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="caption">Node Dimensions</Typography>
+                            <Typography variant="caption" sx={{ color: COLORS.secondary, fontWeight: 'bold' }}>{analysisResult.suggestedNodeWidth}x{analysisResult.suggestedNodeHeight}</Typography>
+                          </Box>
+                        </>
+                      ) : (
+                        <>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="caption">Repulsion</Typography>
+                            <Typography variant="caption" sx={{ color: COLORS.secondary, fontWeight: 'bold' }}>{analysisResult.suggestedRepulsion}</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="caption">Link Distance</Typography>
+                            <Typography variant="caption" sx={{ color: COLORS.secondary, fontWeight: 'bold' }}>{analysisResult.suggestedLinkDist}</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="caption">Collision Radius</Typography>
+                            <Typography variant="caption" sx={{ color: COLORS.secondary, fontWeight: 'bold' }}>{analysisResult.suggestedCollision}</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="caption">Gravity</Typography>
+                            <Typography variant="caption" sx={{ color: COLORS.secondary, fontWeight: 'bold' }}>{analysisResult.suggestedGravity}</Typography>
+                          </Box>
+                        </>
+                      )}
                     </Box>
 
                     <Box sx={{ display: 'flex', gap: 1 }}>
