@@ -330,6 +330,49 @@ const getOrthogonalLayout = async (nodes, edges, options = {}, layoutTrigger = 0
 };
 
 /**
+ * 7. Arc Layout (Linear Timeline)
+ * Positions all nodes on a single horizontal axis.
+ */
+const getArcLayout = (nodes, options = {}) => {
+  const center = getLayoutCenter(nodes);
+  const spacing = options.nodeSpacing || 150;
+  const sortMode = options.arcSort || 'type';
+  
+  // 1. Sort nodes based on selected mode
+  const sorted = [...nodes].sort((a, b) => {
+    if (sortMode === 'lexical') {
+      const labelA = a.data.label || '';
+      const labelB = b.data.label || '';
+      return labelA.localeCompare(labelB);
+    } else if (sortMode === 'importance') {
+      return (b.data.importance || 0) - (a.data.importance || 0);
+    } else {
+      // Default: By Type (grouped by Planet first)
+      const planetA = a.data.planet || 'Unknown';
+      const planetB = b.data.planet || 'Unknown';
+      if (planetA !== planetB) return planetA.localeCompare(planetB);
+      const typeA = a.data.type || '';
+      const typeB = b.data.type || '';
+      return typeA.localeCompare(typeB);
+    }
+  });
+
+  // 2. Position linearly on X axis
+  const totalWidth = (sorted.length - 1) * spacing;
+  const startX = center.x - totalWidth / 2;
+
+  return sorted.map((node, i) => {
+    return {
+      ...node,
+      position: {
+        x: startX + i * spacing,
+        y: center.y, // Fixed horizontal line
+      }
+    };
+  });
+};
+
+/**
  * Main Layout Entry Point
  */
 export const calculateLayout = async (nodes, edges, type, options = {}, rootNodeId = null, layoutTrigger = 0) => {
@@ -365,6 +408,9 @@ export const calculateLayout = async (nodes, edges, type, options = {}, rootNode
       break;
     case 'orthogonal':
       layoutedNodes = await getOrthogonalLayout(nodes, edges, options, layoutTrigger);
+      break;
+    case 'arc':
+      layoutedNodes = getArcLayout(nodes, options);
       break;
     default:
       return nodes;

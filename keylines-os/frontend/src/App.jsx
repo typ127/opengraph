@@ -60,6 +60,7 @@ import {
   Hub as HiveIcon,
   Polyline as BundledIcon,
   SettingsInputComponent as OrthogonalIcon,
+  Timeline as ArcIcon,
   ElectricBolt as ForceIcon,
   Close as CloseIcon, 
   Info as InfoIcon, 
@@ -101,6 +102,7 @@ import {
   import { calculateLayout, getLayoutCenter } from './layoutUtils';
   import { useLiveForceLayout } from './useLiveForceLayout';
   import BundledEdge from './BundledEdge';
+  import ArcEdge from './ArcEdge';
   
   const nodeTypes = {
     keylines: KeyLinesNode,
@@ -200,6 +202,7 @@ import {
   const edgeTypes = {
     pathEdge: PathEdge,
     bundled: BundledEdge,
+    arc: ArcEdge,
   };
   
   const ExpandableText = ({ text, maxLength = 100 }) => {
@@ -400,7 +403,11 @@ export default function App() {
               elkLayerSpacing: 120,
               elkPlacementStrategy: 'BRANDES_KOEPF',
               elkCrossingStrategy: 'LAYER_SWEEP',
-              elkLayeringStrategy: 'NETWORK_SIMPLEX'
+              elkLayeringStrategy: 'NETWORK_SIMPLEX',
+              arcSort: 'type',
+              arcDirection: 'both',
+              arcImportanceWeight: 2.0,
+              arcUseSystemColor: false
             };
             const saved = localStorage.getItem('kl_layoutOptions');
             if (saved !== null) {
@@ -456,13 +463,18 @@ export default function App() {
           // Funktion zum manuellen Anpassen der Kamera an neue Knotenpositionen,
           // ignoriert CSS-Animationen für mehr Präzision.
           const fitToNodes = useCallback((nds) => {
-          if (nds.length === 0) return;
-          fitView({
-          duration: 600,
-          padding: 0.2,
-          nodes: nds
-          });
-          }, [fitView]);
+            if (nds.length === 0) return;
+            
+            // In Arc Mode, we need more padding because edges make wide semi-circles
+            // which are not part of the nodes' bounding box.
+            const padding = activeLayout === 'arc' ? 0.8 : 0.2;
+
+            fitView({
+              duration: 600,
+              padding: padding,
+              nodes: nds
+            });
+          }, [fitView, activeLayout]);
 
           const runLayout = useCallback(async (type, gravityValue = layoutSpacing, rootNodeId = null) => {
             // SKIP STATIC CALCULATION FOR LIVE FORCE
@@ -1711,20 +1723,24 @@ export default function App() {
             // Determination of the effective render type:
             // 1. If Layout is BUNDLED, force 'bundled' visual
             // 2. If Layout is ORTHOGONAL, force 'smoothstep' visual
-            // 3. Otherwise, use global edgePathType (simplebezier, straight, etc.)
+            // 3. If Layout is ARC, force 'arc' visual
+            // 4. Otherwise, use global edgePathType (simplebezier, straight, etc.)
             let effectiveType = activeLayout === 'bundled' ? 'bundled' : edgePathType;
             if (activeLayout === 'orthogonal') effectiveType = 'smoothstep';
+            if (activeLayout === 'arc') effectiveType = 'arc';
             
             const updatedData = { 
               ...edge.data, 
               pathType: effectiveType,
               layoutOptions,
-              nodes
+              nodes,
+              source: edge.source,
+              target: edge.target
             };
 
             return { 
               ...edge, 
-              type: (activeLayout === 'bundled' || activeLayout === 'orthogonal') ? effectiveType : 'pathEdge', 
+              type: (activeLayout === 'bundled' || activeLayout === 'orthogonal' || activeLayout === 'arc') ? effectiveType : 'pathEdge', 
               data: updatedData,
               label: isPath ? "" : (zoomLevel > 0.6 ? (edge.label || edge.data?.dbType?.replace("_", " ").toLowerCase()) : ""), 
               className: isPath ? 'path-edge' : '',
@@ -2156,6 +2172,7 @@ export default function App() {
             <Tooltip title="Hive Plot"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Deterministic Hive Plot Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('hive')} color={activeLayout === 'hive' ? 'secondary' : 'primary'}><HiveIcon /></IconButton></Tooltip>
             <Tooltip title="Bundled (HEB)"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Hierarchical Edge Bundling' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('bundled')} color={activeLayout === 'bundled' ? 'secondary' : 'primary'}><BundledIcon /></IconButton></Tooltip>
             <Tooltip title="Orthogonal (Manhattan)"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Orthogonal Manhattan Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('orthogonal')} color={activeLayout === 'orthogonal' ? 'secondary' : 'primary'}><OrthogonalIcon /></IconButton></Tooltip>
+            <Tooltip title="Arc Diagram"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Linear Arc Diagram Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('arc')} color={activeLayout === 'arc' ? 'secondary' : 'primary'}><ArcIcon /></IconButton></Tooltip>
             </ButtonGroup>          <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
           <ButtonGroup variant="text" size="small">
             <Tooltip title="Degree"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Scale by Degree Centrality (Connectivity)' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onAnalyze('degree')} color={activeAlgorithm === 'degree' ? 'secondary' : 'primary'}><DegreeIcon /></IconButton></Tooltip>
@@ -3049,6 +3066,89 @@ export default function App() {
                       <MenuItem value="LONGEST_PATH" sx={{ fontSize: '10px' }}>Longest Path</MenuItem>
                       <MenuItem value="COFFMAN_GRAHAM" sx={{ fontSize: '10px' }}>Coffman Graham</MenuItem>
                     </Select>
+                  </Box>
+                </Box>
+              )}
+
+              {activeLayout === 'arc' && (
+                <Box>
+                  <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.65rem', fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center', gap: 1, letterSpacing: 1 }}>
+                    <ArcIcon sx={{ fontSize: 14, color: COLORS.secondary }} /> ARC SETUP
+                  </Typography>
+                  <Box sx={{ mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>SORTING</Typography>
+                    <Select
+                      size="small"
+                      value={layoutOptions.arcSort || 'type'}
+                      onChange={(e) => {
+                        setLayoutOptions(prev => ({ ...prev, arcSort: e.target.value }));
+                        setLayoutTrigger(prev => prev + 1);
+                      }}
+                      fullWidth
+                      sx={{ 
+                        fontSize: '9px', height: 26, color: COLORS.secondary,
+                        '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' }
+                      }}
+                    >
+                      <MenuItem value="lexical" sx={{ fontSize: '10px' }}>Lexical (A-Z)</MenuItem>
+                      <MenuItem value="type" sx={{ fontSize: '10px' }}>By Type / Planet</MenuItem>
+                      <MenuItem value="importance" sx={{ fontSize: '10px' }}>By Importance</MenuItem>
+                    </Select>
+                  </Box>
+
+                  <Box sx={{ mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>ARC DIRECTION</Typography>
+                    <Select
+                      size="small"
+                      value={layoutOptions.arcDirection || 'both'}
+                      onChange={(e) => {
+                        setLayoutOptions(prev => ({ ...prev, arcDirection: e.target.value }));
+                      }}
+                      fullWidth
+                      sx={{ 
+                        fontSize: '9px', height: 26, color: COLORS.secondary,
+                        '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' }
+                      }}
+                    >
+                      <MenuItem value="up" sx={{ fontSize: '10px' }}>Up (Above)</MenuItem>
+                      <MenuItem value="down" sx={{ fontSize: '10px' }}>Down (Below)</MenuItem>
+                      <MenuItem value="both" sx={{ fontSize: '10px' }}>Both (Smart)</MenuItem>
+                    </Select>
+                  </Box>
+
+                  <Box sx={{ mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>IMPORTANCE WEIGHT: {layoutOptions.arcImportanceWeight?.toFixed(1)}x</Typography>
+                    <Box sx={{ px: 1 }}>
+                      <Slider size="small" value={layoutOptions.arcImportanceWeight || 2.0} min={0.1} max={5.0} step={0.1}
+                        onChange={(e, v) => {
+                          setLayoutOptions(prev => ({ ...prev, arcImportanceWeight: v }));
+                        }} color="secondary" />
+                    </Box>
+                  </Box>
+
+                  <Box sx={{ mb: 1.5 }}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox 
+                          size="small" 
+                          checked={layoutOptions.arcUseSystemColor || false}
+                          onChange={(e) => setLayoutOptions(prev => ({ ...prev, arcUseSystemColor: e.target.checked }))}
+                          sx={{ color: 'rgba(255,255,255,0.2)', '&.Mui-checked': { color: COLORS.secondary } }}
+                        />
+                      }
+                      label={<Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>USE SYSTEM COLORS (SINGLE)</Typography>}
+                    />
+                  </Box>
+
+                  <Box sx={{ mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>LINEAR GAP: {layoutOptions.nodeSpacing}</Typography>
+                    <Box sx={{ px: 1 }}>
+                      <Slider size="small" value={layoutOptions.nodeSpacing} min={50} max={400} step={10}
+                        onChange={(e, v) => {
+                          setLayoutOptions(prev => ({ ...prev, nodeSpacing: v }));
+                          setLayoutTrigger(prev => prev + 1);
+                        }} color="secondary" />
+                    </Box>
                   </Box>
                 </Box>
               )}

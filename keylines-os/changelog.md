@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.79.0] - 2026-03-10
+
+### Neu
+- **Arc Diagram Layout**:
+    - Implementierung eines linearen Layouts, das alle Knoten auf einer horizontalen Achse anordnet.
+    - **Dynamische Sortierung**: Neue Optionen für die Timeline-Anordnung (Lexikalisch, nach Typ/Planet, nach Bedeutung).
+    - **Custom ArcEdge**: Eine spezialisierte Kanten-Komponente, die Verbindungen als perfekte Halbkreise darstellt.
+    - **Konfigurierbare Arc-Richtung**: Steuerung der Bögen (Nur Oben, Nur Unten, oder Smart-Both).
+    - **Aesthetic Mapping**: Kantenfarben werden vom Quellknoten-Typ abgeleitet; die Linienstärke spiegelt dessen `importance` wider (regelbar via `Importance Weight`).
+    - **System Colors Mode**: Optionale Umstellung auf eine einheitliche Kantenfarbe (Primärblau) für einen technischeren Look.
+- **Arc Tuning Panel**: Umfassende Regler für `Linear Gap`, `Importance Weight`, `Sorting` und `Direction`.
+- **Smart Camera**: Erhöhtes Zoom-Padding (0.8) im Arc-Modus, um sicherzustellen, dass die hohen Bögen beim automatischen Zentrieren nicht abgeschnitten werden.
+
 ## [1.78.0] - 2026-03-10
 
 ### Neu

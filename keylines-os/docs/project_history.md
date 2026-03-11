@@ -81,6 +81,10 @@ In dieser Phase wurde der Fokus auf die mathematische Stabilität der Layout-Eng
     - **Manhattan-Routing**: Integration von ELK.js für ein streng orthogonales Layout, das Graphen in einer futuristischen "Circuit Board" Ästhetik darstellt.
     - **Async Evolution**: Umbau der zentralen Layout-Pipeline auf asynchrone Verarbeitung, um komplexe externe Solver (wie ELK) ohne Blockierung des UI-Threads zu integrieren.
     - **Algorithmic Fine-Tuning**: Bereitstellung mathematischer Parameter wie Kreuzungsminimierung und Platzierungs-Strategien direkt im User-Interface.
+- **Arc Diagram & Linear Alignment (v1.79.0)**:
+    - **Horizontale Ordnung**: Implementierung eines Arc Diagram Layouts zur Analyse von planetaren Gruppierungen entlang einer linearen Zeitachse/Struktur.
+    - **Directional Pathing**: Entwicklung der `ArcEdge`-Komponente, die Verbindungen als bidirektionale Halbkreise (oben/unten) visualisiert, um visuelle Clutter zu vermeiden.
+    - **Data Art Visualization**: Kopplung von Knoten-Bedeutung und Typ an Linienstärke und Farbe, was den Graphen in ein ästhetisches Informations-Kunstwerk verwandelt.
 
 ---
 
