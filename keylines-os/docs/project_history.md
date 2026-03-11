@@ -73,6 +73,10 @@ In dieser Phase wurde der Fokus auf die mathematische Stabilität der Layout-Eng
     - **Mathematische Ordnung**: Implementierung eines Hive Plot Algorithmus zur Kategorisierung des Asimov-Universums auf 3 radialen Achsen (0°, 120°, 240°).
     - **Importance-Mapping**: Knoten werden entlang der Achsen strikt nach ihrem `importance` Score verteilt, was eine absolute, vergleichende Analyse der Entitäten ermöglicht.
     - **Visual Flow**: Automatisierte Umstellung auf Bezier-Kurven für Kanten, um die typische "fließende" Ästhetik zwischen den Hive-Achsen zu erzielen.
+- **Hierarchical Edge Bundling (v1.76.0)**:
+    - **Organische Ordnung**: Einführung des HEB-Layouts zur Visualisierung dichter Beziehungsgeflechte durch radiale Gruppierung (nach Planeten) und Kantenbündelung im Zentrum.
+    - **Custom Edge Logic**: Entwicklung der `BundledEdge`-Komponente, die quadratische Bezier-Kurven nutzt, deren Kontrollpunkte dynamisch durch einen "Tension-Slider" (0.0 - 1.0) zum Graph-Kern gezogen werden.
+    - **UI-Entkopplung**: Implementierung einer intelligenten Rendering-Logik, die Layout-spezifische Kanten-Stile erzwingt, beim Verlassen des Modus jedoch nahtlos zu den globalen Benutzereinstellungen zurückkehrt.
 
 ---
 

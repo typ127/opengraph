@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.77.0] - 2026-03-10
+
+### Neu
+- **Spawn Random Node**:
+    - Neue Funktion im AI-Training Panel zum Hinzufügen einzelner Zufallsknoten aus der Datenbank.
+    - Implementierung des `/random-node` Backend-Endpoints mit automatischer Nachbarschafts-Analyse für Donut-Diagramme.
+    - Automatischer Fokus (`fitView`) und Layout-Update beim Hinzufügen neuer Knoten.
+- **HEB Layout Refinements**:
+    - Erhöhung des maximalen `Bundling Tension` Werts auf 2.5 für extreme Bündelungs-Effekte.
+    - Begrenzung des `Group Gap` Minimums auf 0.01 zur Vermeidung von Division-by-Zero Fehlern.
+    - Visuelle Harmonisierung der `BundledEdge` mit dem globalen Design-System (Farben, Opazität, Highlight-Effekte).
+
+### Fixes
+- **Backend Stabilität**: Fehlerbehebung bei der Cypher-Bindung im `/random-node` Endpoint.
+- **Layout Sync**: Korrektur der Datenübergabe an Custom Edges für zuverlässige Echtzeit-Updates der Bündelung.
+
+## [1.76.0] - 2026-03-10
+
+### Neu
+- **Hierarchical Edge Bundling (HEB)**: 
+    - Implementierung eines neuen Layout-Modus, der Knoten nach Planeten gruppiert und Kanten organisch zum Zentrum bündelt.
+    - **Custom BundledEdge**: Eine spezialisierte Kanten-Komponente mit mathematisch gesteuerten Bezier-Kurven, die in Richtung des Graph-Zentrums gezogen werden.
+    - **Bundled Setup Panel**: Neue Steuerungselemente für `Radius`, `Bundling Tension` (0.0 bis 1.0) und `Group Gap`.
+- **Intelligente Kanten-Entkopplung**: 
+    - Der visuelle Kanten-Stil (z.B. Bundling) wird nun dynamisch vom aktiven Layout bestimmt, ohne die globalen Benutzer-Einstellungen (`edgePathType`) zu überschreiben.
+    - Beim Wechsel des Layouts stellt das System automatisch den vorherigen globalen Zustand (Standard: `simplebezier`) wieder her.
+
 ## [1.75.0] - 2026-03-10
 
 ### Neu

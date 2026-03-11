@@ -224,6 +224,57 @@ const getHivePlotLayout = (nodes, options = {}) => {
 };
 
 /**
+ * 5. Bundled Layout (Hierarchical Edge Bundling Style)
+ * Groups nodes by planet/type on a circle with gaps.
+ */
+const getBundledLayout = (nodes, options = {}) => {
+  const center = getLayoutCenter(nodes);
+  const radius = options.radius || 800;
+  const groupGap = options.groupGap || 0.2; // Radians
+  
+  // 1. Group nodes by planet (or type as fallback)
+  const groups = {};
+  nodes.forEach(node => {
+    const planet = node.data.planet || node.data.type || 'Other';
+    if (!groups[planet]) groups[planet] = [];
+    groups[planet].push(node);
+  });
+
+  const groupKeys = Object.keys(groups).sort();
+  const totalNodes = nodes.length;
+  
+  // 2. Calculate total angular space including gaps
+  // We subtract some space for the gaps
+  const availableAngle = 2 * Math.PI - (groupKeys.length * groupGap);
+  const anglePerNode = availableAngle / totalNodes;
+
+  let currentAngle = 0;
+  const result = [];
+
+  groupKeys.forEach(key => {
+    const groupNodes = groups[key];
+    
+    // Sort within group by importance
+    groupNodes.sort((a, b) => (b.data.importance || 0) - (a.data.importance || 0));
+
+    groupNodes.forEach(node => {
+      result.push({
+        ...node,
+        position: {
+          x: center.x + radius * Math.cos(currentAngle),
+          y: center.y + radius * Math.sin(currentAngle),
+        }
+      });
+      currentAngle += anglePerNode;
+    });
+    
+    currentAngle += groupGap; // Add gap after each group
+  });
+
+  return result;
+};
+
+/**
  * Main Layout Entry Point
  */
 export const calculateLayout = (nodes, edges, type, options = {}, rootNodeId = null) => {
@@ -253,6 +304,9 @@ export const calculateLayout = (nodes, edges, type, options = {}, rootNodeId = n
       break;
     case 'hive':
       layoutedNodes = getHivePlotLayout(nodes, options);
+      break;
+    case 'bundled':
+      layoutedNodes = getBundledLayout(nodes, options);
       break;
     default:
       return nodes;

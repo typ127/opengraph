@@ -642,3 +642,60 @@ def get_random_subgraph():
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/random-node")
+def get_random_node():
+    """Holt einen einzelnen zufälligen Knoten aus der Datenbank."""
+    try:
+        query = """
+        MATCH (n)
+        WITH n, rand() as r ORDER BY r LIMIT 1
+        RETURN n;
+        """
+        results = list(memgraph.execute_and_fetch(query))
+        
+        if not results:
+            print("[RANDOM-NODE] No nodes found in DB")
+            return None
+            
+        n = results[0].get("n")
+        props = get_props(n)
+        p_id = props.get("id")
+        
+        if not p_id:
+            print(f"[RANDOM-NODE] Node found but has no 'id' property.")
+            return None
+
+        # Fetch neighbor types for donut calculation using the unique property 'id'
+        neighbor_query = f"MATCH (n {{id: '{p_id}'}})-[]-(m) RETURN properties(m).type as p_type"
+        try:
+            n_results = list(memgraph.execute_and_fetch(neighbor_query))
+            n_neighbor_types = [r.get("p_type") for r in n_results if r.get("p_type")]
+        except:
+            n_neighbor_types = []
+
+        node_type = props.get("type")
+        if not node_type:
+            labels = list(n.labels) if hasattr(n, "labels") else []
+            for l in labels:
+                if l != "Entity":
+                    node_type = l
+                    break
+        
+        return {
+            "id": p_id,
+            "type": "keylines",
+            "data": {
+                **props,
+                "id": p_id,
+                "label": props.get("label", props.get("name", p_id)),
+                "type": node_type or "Unknown",
+                "importance": props.get("importance", 0.5),
+                "donut": calculate_donut(n_neighbor_types)
+            }
+        }
+    except Exception as e:
+        print(f"Error fetching random node: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))

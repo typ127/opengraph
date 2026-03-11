@@ -58,6 +58,7 @@ import {
   AccountTree as TreeIcon, 
   BlurCircular as CircularIcon, 
   Hub as HiveIcon,
+  Polyline as BundledIcon,
   ElectricBolt as ForceIcon,
   Close as CloseIcon, 
   Info as InfoIcon, 
@@ -98,6 +99,7 @@ import {
   import { COLORS, EDGE_TYPES, NODE_CATEGORIES } from './theme';
   import { calculateLayout, getLayoutCenter } from './layoutUtils';
   import { useLiveForceLayout } from './useLiveForceLayout';
+  import BundledEdge from './BundledEdge';
   
   const nodeTypes = {
     keylines: KeyLinesNode,
@@ -120,7 +122,17 @@ import {
     let labelX, labelY;
 
     const pathParams = { sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition };
-    const type = data?.pathType || 'straight';
+    const type = data?.pathType || 'simplebezier';
+
+    if (type === 'bundled') {
+      return (
+        <BundledEdge 
+          id={id} sourceX={sourceX} sourceY={sourceY} targetX={targetX} targetY={targetY} 
+          style={style} markerEnd={markerEnd}
+          data={data}
+        />
+      );
+    }
 
     if (type === 'bezier') [edgePath, labelX, labelY] = getBezierPath(pathParams);
     else if (type === 'step') [edgePath, labelX, labelY] = getSmoothStepPath({ ...pathParams, borderRadius: 0 });
@@ -186,6 +198,7 @@ import {
 
   const edgeTypes = {
     pathEdge: PathEdge,
+    bundled: BundledEdge,
   };
   
   const ExpandableText = ({ text, maxLength = 100 }) => {
@@ -346,7 +359,7 @@ export default function App() {
             return saved !== null ? JSON.parse(saved) : true;
           });
           const [edgePathType, setEdgePathType] = useState(() => {
-            return localStorage.getItem('kl_edgePathType') || 'straight';
+            return localStorage.getItem('kl_edgePathType') || 'simplebezier';
           });
           const [layoutSpacing, setLayoutSpacing] = useState(() => {
             const saved = localStorage.getItem('kl_layoutSpacing');
@@ -378,7 +391,9 @@ export default function App() {
               ranker: 'network-simplex',
               circularSort: 'standard',
               hiveInnerRadius: 200,
-              hiveAxisLength: 800
+              hiveAxisLength: 800,
+              bundlingTension: 0.85,
+              groupGap: 0.4
             };
             const saved = localStorage.getItem('kl_layoutOptions');
             if (saved !== null) {
@@ -1682,11 +1697,22 @@ export default function App() {
             const isHighlighted = hasHighlight ? (highlightedTypes.has(sourceNode?.data.type) || highlightedTypes.has(targetNode?.data.type)) : true;
 
             const highlightOpacity = isPath ? 1.0 : (hasHighlight ? (isHighlighted ? 0.8 : 0.1) : 1.0);
-            const updatedData = isPath ? { ...edge.data, pathType: edgePathType } : edge.data;
+            
+            // Determination of the effective render type:
+            // 1. If Layout is BUNDLED, force 'bundled' visual
+            // 2. Otherwise, use global edgePathType (simplebezier, straight, etc.)
+            const effectiveType = activeLayout === 'bundled' ? 'bundled' : edgePathType;
+            
+            const updatedData = { 
+              ...edge.data, 
+              pathType: effectiveType,
+              layoutOptions,
+              nodes
+            };
 
             return { 
               ...edge, 
-              type: isPath ? 'pathEdge' : edgePathType, 
+              type: activeLayout === 'bundled' ? 'bundled' : 'pathEdge', 
               data: updatedData,
               label: isPath ? "" : (zoomLevel > 0.6 ? (edge.label || edge.data?.dbType?.replace("_", " ").toLowerCase()) : ""), 
               className: isPath ? 'path-edge' : '',
@@ -1703,7 +1729,7 @@ export default function App() {
               }
             };
           });
-        }, [nodes, pathEdges, visibleNodes, hiddenTypes, highlightedTypes, edgePathType, zoomLevel]);
+        }, [nodes, pathEdges, visibleNodes, hiddenTypes, highlightedTypes, edgePathType, zoomLevel, layoutOptions]);
   const onDeleteSnapshot = useCallback((id) => {
     setSnapshots(prev => prev.filter(s => s.id !== id));
   }, []);
@@ -1852,12 +1878,53 @@ export default function App() {
         });
       }, 900);
     } catch (err) {
-      console.error('Failed to load test graph:', err);
+    console.error('Failed to load test graph:', err);
+    }
+    };
+
+  const onSpawnRandomNode = async () => {
+    try {
+      const res = await fetch('http://localhost:8000/random-node');
+      const node = await res.json();
+      if (!node) return;
+
+      // Check if already on stage
+      if (nodesRef.current.find(n => n.id === node.id)) {
+        setStatusParts([{ trigger: 'INFO', action: `Node ${node.data.label} already on stage.` }]);
+        setTimeout(() => setStatusParts([]), 2000);
+        return;
+      }
+
+      const newNode = {
+        ...node,
+        position: { 
+          x: (Math.random() - 0.5) * 400 + 400, 
+          y: (Math.random() - 0.5) * 400 + 400 
+        },
+        data: {
+          ...node.data,
+          showDonuts: enableDonuts,
+          onSegmentClick: (cat, e) => expandNode(node.id, cat, e)
+        }
+      };
+
+      const nextNodes = [...nodesRef.current, newNode];
+      setNodes(nextNodes);
+      
+      setStatusParts([{ trigger: 'SPAWN', action: `Added ${node.data.label} to stage.` }]);
+      setTimeout(() => setStatusParts([]), 2000);
+
+      // Reheat simulation or trigger layout run
+      setLayoutTrigger(prev => prev + 1);
+      
+      // Focus on the new node
+      setTimeout(() => fitToNodes(nextNodes), 150);
+    } catch (err) {
+      console.error('Failed to spawn random node:', err);
     }
   };
 
-  const onLoadSnapshot = useCallback((snapshot) => {
-    if (!snapshot) return;
+    const onLoadSnapshot = useCallback((snapshot) => {    if (!snapshot) return;
     
     // JSON serialization strips functions, so we MUST re-attach the handlers
     const restoredNodes = snapshot.nodes.map(n => ({
@@ -2073,7 +2140,8 @@ export default function App() {
             <Tooltip title="Organic (Force)"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Force-Directed Organic Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('force')} color={activeLayout === 'force' ? 'secondary' : 'primary'}><ForceIcon /></IconButton></Tooltip>
 
             <Tooltip title="Circular"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Circular Hub Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('circular')} color={activeLayout === 'circular' ? 'secondary' : 'primary'}><CircularIcon /></IconButton></Tooltip>
-            <Tooltip title="Hive Plot"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Deterministic Hive Plot Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => { onLayoutClick('hive'); setEdgePathType('bezier'); }} color={activeLayout === 'hive' ? 'secondary' : 'primary'}><HiveIcon /></IconButton></Tooltip>
+            <Tooltip title="Hive Plot"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Deterministic Hive Plot Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('hive')} color={activeLayout === 'hive' ? 'secondary' : 'primary'}><HiveIcon /></IconButton></Tooltip>
+            <Tooltip title="Bundled (HEB)"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Hierarchical Edge Bundling' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('bundled')} color={activeLayout === 'bundled' ? 'secondary' : 'primary'}><BundledIcon /></IconButton></Tooltip>
             </ButtonGroup>          <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
           <ButtonGroup variant="text" size="small">
             <Tooltip title="Degree"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Scale by Degree Centrality (Connectivity)' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onAnalyze('degree')} color={activeAlgorithm === 'degree' ? 'secondary' : 'primary'}><DegreeIcon /></IconButton></Tooltip>
@@ -2812,6 +2880,43 @@ export default function App() {
                       <Slider size="small" value={layoutOptions.hiveAxisLength} min={200} max={3000} step={100}
                         onChange={(e, v) => {
                           setLayoutOptions(prev => ({ ...prev, hiveAxisLength: v }));
+                          setLayoutTrigger(prev => prev + 1);
+                        }} color="secondary" />
+                    </Box>
+                  </Box>
+                </Box>
+              )}
+
+              {activeLayout === 'bundled' && (
+                <Box>
+                  <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.65rem', fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center', gap: 1, letterSpacing: 1 }}>
+                    <BundledIcon sx={{ fontSize: 14, color: COLORS.secondary }} /> BUNDLED SETUP
+                  </Typography>
+                  <Box sx={{ mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>RADIUS: {layoutOptions.radius}</Typography>
+                    <Box sx={{ px: 1 }}>
+                      <Slider size="small" value={layoutOptions.radius} min={100} max={2000} step={50}
+                        onChange={(e, v) => {
+                          setLayoutOptions(prev => ({ ...prev, radius: v }));
+                          setLayoutTrigger(prev => prev + 1);
+                        }} color="secondary" />
+                    </Box>
+                  </Box>
+                  <Box sx={{ mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>BUNDLING TENSION: {layoutOptions.bundlingTension.toFixed(2)}</Typography>
+                    <Box sx={{ px: 1 }}>
+                      <Slider size="small" value={layoutOptions.bundlingTension} min={0} max={2.5} step={0.05}
+                        onChange={(e, v) => {
+                          setLayoutOptions(prev => ({ ...prev, bundlingTension: v }));
+                        }} color="secondary" />
+                    </Box>
+                  </Box>
+                  <Box sx={{ mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>GROUP GAP: {layoutOptions.groupGap.toFixed(2)}</Typography>
+                    <Box sx={{ px: 1 }}>
+                      <Slider size="small" value={layoutOptions.groupGap} min={0.01} max={1.5} step={0.05}
+                        onChange={(e, v) => {
+                          setLayoutOptions(prev => ({ ...prev, groupGap: v }));
                           setLayoutTrigger(prev => prev + 1);
                         }} color="secondary" />
                     </Box>
@@ -3610,18 +3715,28 @@ export default function App() {
             <Box sx={{ flexGrow: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 3, pr: 1, '&::-webkit-scrollbar': { width: '4px' }, '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(255,255,255,0.1)', borderRadius: '4px' } }}>
               
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                <Button 
-                  variant="outlined" 
-                  color="secondary" 
-                  fullWidth 
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  fullWidth
                   startIcon={<ForceIcon />}
                   onClick={onLoadTestGraph}
                   sx={{ borderRadius: 2, py: 1.5, fontWeight: 'bold' }}
                 >
                   Load Random Subgraph
                 </Button>
-              </Box>
 
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  fullWidth
+                  startIcon={<AddIcon />}
+                  onClick={onSpawnRandomNode}
+                  sx={{ borderRadius: 2, py: 1.5, fontWeight: 'bold' }}
+                >
+                  Spawn Random Node
+                </Button>
+                </Box>
               <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
 
               {/* AI LAYOUT SLOT */}
