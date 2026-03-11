@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.78.0] - 2026-03-10
+
+### Neu
+- **Orthogonal Manhattan Layout**: 
+    - Integration der **ELK.js** Engine für hochstrukturierte, geschichtete Graphen-Anordnungen.
+    - **Circuit Board Ästhetik**: Automatische Umstellung auf `smoothstep` Kanten mit 20px abgerundeten Ecken bei Aktivierung des Layouts.
+    - **Advanced Tuning**: Neue Experten-Parameter für ELK (Placement Strategy, Crossing Minimization, Layering Strategy).
+    - **Re-Randomisierung**: Erneuter Klick auf den Layout-Button mischt die Knoten-Reihenfolge intern neu für alternative orthogonale Ansichten.
+- **Asynchrone Layout-Architektur**: 
+    - Umstellung der gesamten Layout-Engine (`calculateLayout`, `runLayout`) auf `async/await`, um Promise-basierte Bibliotheken wie ELK.js nativ zu unterstützen.
+
 ## [1.77.0] - 2026-03-10
 
 ### Neu

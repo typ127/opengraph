@@ -1,5 +1,8 @@
 import dagre from 'dagre';
 import * as d3Force from 'd3-force';
+import ELK from 'elkjs/lib/elk.bundled.js';
+
+const elk = new ELK();
 
 /**
  * Utility to calculate the center of gravity for a set of nodes
@@ -275,9 +278,61 @@ const getBundledLayout = (nodes, options = {}) => {
 };
 
 /**
+ * 6. Orthogonal Layout (Manhattan)
+ * Uses elkjs for complex layered/orthogonal routing.
+ */
+const getOrthogonalLayout = async (nodes, edges, options = {}, layoutTrigger = 0) => {
+  // Shuffling nodes based on layoutTrigger can lead to different deterministic results 
+  // in ELK's layering/crossing minimization, effectively "re-randomizing" the order.
+  let processedNodes = [...nodes];
+  if (layoutTrigger > 0) {
+    processedNodes = processedNodes.sort(() => Math.random() - 0.5);
+  }
+
+  const elkGraph = {
+    id: 'root',
+    layoutOptions: {
+      'elk.algorithm': 'layered',
+      'elk.direction': options.elkDirection || 'RIGHT',
+      'elk.edgeRouting': 'ORTHOGONAL',
+      'elk.spacing.nodeNode': String(options.elkNodeSpacing || 80),
+      'elk.layered.spacing.nodeNodeBetweenLayers': String(options.elkLayerSpacing || 120),
+      'elk.padding': '[top=50,left=50,bottom=50,right=50]',
+      'elk.layered.nodePlacement.strategy': options.elkPlacementStrategy || 'BRANDES_KOEPF',
+      'elk.layered.crossingMinimization.strategy': options.elkCrossingStrategy || 'LAYER_SWEEP',
+      'elk.layered.layering.strategy': options.elkLayeringStrategy || 'NETWORK_SIMPLEX'
+    },
+    children: processedNodes.map(n => ({
+      id: n.id,
+      width: options.nodeWidth || 180,
+      height: options.nodeHeight || 80,
+    })),
+    edges: edges.map(e => ({
+      id: e.id,
+      sources: [e.source],
+      targets: [e.target],
+    })),
+  };
+
+  try {
+    const layoutedGraph = await elk.layout(elkGraph);
+    return nodes.map(node => {
+      const elkNode = layoutedGraph.children.find(n => n.id === node.id);
+      return {
+        ...node,
+        position: { x: elkNode.x, y: elkNode.y }
+      };
+    });
+  } catch (error) {
+    console.error('[ELK] Layout Error:', error);
+    return nodes;
+  }
+};
+
+/**
  * Main Layout Entry Point
  */
-export const calculateLayout = (nodes, edges, type, options = {}, rootNodeId = null) => {
+export const calculateLayout = async (nodes, edges, type, options = {}, rootNodeId = null, layoutTrigger = 0) => {
   if (!nodes || nodes.length === 0) return [];
 
   // Auto-select root if none provided for hierarchical layouts
@@ -308,6 +363,9 @@ export const calculateLayout = (nodes, edges, type, options = {}, rootNodeId = n
     case 'bundled':
       layoutedNodes = getBundledLayout(nodes, options);
       break;
+    case 'orthogonal':
+      layoutedNodes = await getOrthogonalLayout(nodes, edges, options, layoutTrigger);
+      break;
     default:
       return nodes;
   }
@@ -323,3 +381,4 @@ export const calculateLayout = (nodes, edges, type, options = {}, rootNodeId = n
     position: { x: n.position.x + offsetX, y: n.position.y + offsetY }
   }));
 };
+

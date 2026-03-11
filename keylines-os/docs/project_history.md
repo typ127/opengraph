@@ -77,6 +77,10 @@ In dieser Phase wurde der Fokus auf die mathematische Stabilität der Layout-Eng
     - **Organische Ordnung**: Einführung des HEB-Layouts zur Visualisierung dichter Beziehungsgeflechte durch radiale Gruppierung (nach Planeten) und Kantenbündelung im Zentrum.
     - **Custom Edge Logic**: Entwicklung der `BundledEdge`-Komponente, die quadratische Bezier-Kurven nutzt, deren Kontrollpunkte dynamisch durch einen "Tension-Slider" (0.0 - 1.0) zum Graph-Kern gezogen werden.
     - **UI-Entkopplung**: Implementierung einer intelligenten Rendering-Logik, die Layout-spezifische Kanten-Stile erzwingt, beim Verlassen des Modus jedoch nahtlos zu den globalen Benutzereinstellungen zurückkehrt.
+- **ELK Orthogonal Layout & Async Engine (v1.78.0)**:
+    - **Manhattan-Routing**: Integration von ELK.js für ein streng orthogonales Layout, das Graphen in einer futuristischen "Circuit Board" Ästhetik darstellt.
+    - **Async Evolution**: Umbau der zentralen Layout-Pipeline auf asynchrone Verarbeitung, um komplexe externe Solver (wie ELK) ohne Blockierung des UI-Threads zu integrieren.
+    - **Algorithmic Fine-Tuning**: Bereitstellung mathematischer Parameter wie Kreuzungsminimierung und Platzierungs-Strategien direkt im User-Interface.
 
 ---
 

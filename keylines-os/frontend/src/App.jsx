@@ -59,6 +59,7 @@ import {
   BlurCircular as CircularIcon, 
   Hub as HiveIcon,
   Polyline as BundledIcon,
+  SettingsInputComponent as OrthogonalIcon,
   ElectricBolt as ForceIcon,
   Close as CloseIcon, 
   Info as InfoIcon, 
@@ -393,7 +394,13 @@ export default function App() {
               hiveInnerRadius: 200,
               hiveAxisLength: 800,
               bundlingTension: 0.85,
-              groupGap: 0.4
+              groupGap: 0.4,
+              elkDirection: 'RIGHT',
+              elkNodeSpacing: 80,
+              elkLayerSpacing: 120,
+              elkPlacementStrategy: 'BRANDES_KOEPF',
+              elkCrossingStrategy: 'LAYER_SWEEP',
+              elkLayeringStrategy: 'NETWORK_SIMPLEX'
             };
             const saved = localStorage.getItem('kl_layoutOptions');
             if (saved !== null) {
@@ -457,7 +464,7 @@ export default function App() {
           });
           }, [fitView]);
 
-          const runLayout = useCallback((type, gravityValue = layoutSpacing, rootNodeId = null) => {
+          const runLayout = useCallback(async (type, gravityValue = layoutSpacing, rootNodeId = null) => {
             // SKIP STATIC CALCULATION FOR LIVE FORCE
             if (type === 'force') return [];
 
@@ -467,7 +474,7 @@ export default function App() {
             const visibleEdgesOnStage = edgesRef.current.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
 
             console.log(`[LayoutEngine] Calculating "${type}" layout with options:`, layoutOptions, `RootNode: ${rootNodeId}`);
-            let layoutedVisible = calculateLayout(visibleNodesOnStage, visibleEdgesOnStage, type, layoutOptions, rootNodeId);
+            let layoutedVisible = await calculateLayout(visibleNodesOnStage, visibleEdgesOnStage, type, layoutOptions, rootNodeId, layoutTrigger);
 
             // APPLY ROTATION (if any)
             if (layoutOptions.rotation !== 0 && layoutedVisible.length > 0) {
@@ -559,19 +566,22 @@ export default function App() {
   // Handle structural layout changes (button click or option change)
   useEffect(() => {
     if (activeLayout === 'force') return;
-    
-    console.log("Triggering structural layout recalculation:", activeLayout);
-    // Only use a root if a node is explicitly set as root by the user (Shift+Click)
-    const rootId = activeRootNodeId || null;
-    const layoutedVisible = runLayout(activeLayout, layoutSpacing, rootId);
-    
-    if (layoutedVisible && layoutedVisible.length > 0) {
-      setTimeout(() => {
-        fitToNodes(layoutedVisible);
-      }, 300);
-    }
-  }, [activeLayout, layoutTrigger, runLayout, fitToNodes, layoutOptions, activeRootNodeId]);
 
+    const performLayout = async () => {
+      console.log("Triggering structural layout recalculation:", activeLayout);
+      // Only use a root if a node is explicitly set as root by the user (Shift+Click)
+      const rootId = activeRootNodeId || null;
+      const layoutedVisible = await runLayout(activeLayout, layoutSpacing, rootId);
+
+      if (layoutedVisible && layoutedVisible.length > 0) {
+        setTimeout(() => {
+          fitToNodes(layoutedVisible);
+        }, 300);
+      }
+    };
+
+    performLayout();
+  }, [activeLayout, layoutTrigger, runLayout, fitToNodes, layoutOptions, activeRootNodeId]);
   const prevLayoutSpacingRef = useRef(layoutSpacing);
   const prevLayoutOptionsRef = useRef(layoutOptions);
 
@@ -1286,14 +1296,14 @@ export default function App() {
                   setEdges(nextEdges);
                   
                   // Trigger layout only for visible nodes
-                  setTimeout(() => {
+                  setTimeout(async () => {
                     const visibleOnStage = nextNodes.filter(n => !hiddenTypes.has(n.data.type));
                     const visibleIds = new Set(visibleOnStage.map(n => n.id));
                     
                     // STRUCTURAL ONLY: Exclude pathEdges!
                     const visibleEdges = nextEdges.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
                     
-                    const layoutedVisible = calculateLayout(visibleOnStage, visibleEdges, activeLayout, layoutOptions, activeRootNodeId);
+                    const layoutedVisible = await calculateLayout(visibleOnStage, visibleEdges, activeLayout, layoutOptions, activeRootNodeId, layoutTrigger);
                     
                     // APPLY ROTATION (Must match runLayout)
                     let rotatedVisible = layoutedVisible;
@@ -1372,14 +1382,14 @@ export default function App() {
         setNodes(nextNodes);
         
         // Trigger layout
-        setTimeout(() => {
+        setTimeout(async () => {
           const visibleOnStage = nextNodes.filter(n => !hiddenTypes.has(n.data.type));
           const visibleIds = new Set(visibleOnStage.map(n => n.id));
           
           // STRUCTURAL ONLY: Exclude pathEdges!
           const visibleEdges = edgesRef.current.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
           
-          const layoutedVisible = calculateLayout(visibleOnStage, visibleEdges, activeLayout, layoutOptions, activeRootNodeId);
+          const layoutedVisible = await calculateLayout(visibleOnStage, visibleEdges, activeLayout, layoutOptions, activeRootNodeId, layoutTrigger);
           
           // APPLY ROTATION (Must match runLayout)
           let rotatedVisible = layoutedVisible;
@@ -1485,14 +1495,14 @@ export default function App() {
         existing = newNode;
         
         // Trigger layout calculation for the new node to integrate it
-        setTimeout(() => {
+        setTimeout(async () => {
           const visibleOnStage = nextNodes.filter(n => !hiddenTypes.has(n.data.type));
           const visibleIds = new Set(visibleOnStage.map(n => n.id));
           
           // STRUCTURAL ONLY: Exclude pathEdges!
           const visibleEdges = edgesRef.current.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
           
-          const layoutedVisible = calculateLayout(visibleOnStage, visibleEdges, activeLayout, layoutOptions, activeRootNodeId);
+          const layoutedVisible = await calculateLayout(visibleOnStage, visibleEdges, activeLayout, layoutOptions, activeRootNodeId, layoutTrigger);
           
           // APPLY ROTATION (Must match runLayout)
           let rotatedVisible = layoutedVisible;
@@ -1700,8 +1710,10 @@ export default function App() {
             
             // Determination of the effective render type:
             // 1. If Layout is BUNDLED, force 'bundled' visual
-            // 2. Otherwise, use global edgePathType (simplebezier, straight, etc.)
-            const effectiveType = activeLayout === 'bundled' ? 'bundled' : edgePathType;
+            // 2. If Layout is ORTHOGONAL, force 'smoothstep' visual
+            // 3. Otherwise, use global edgePathType (simplebezier, straight, etc.)
+            let effectiveType = activeLayout === 'bundled' ? 'bundled' : edgePathType;
+            if (activeLayout === 'orthogonal') effectiveType = 'smoothstep';
             
             const updatedData = { 
               ...edge.data, 
@@ -1712,7 +1724,7 @@ export default function App() {
 
             return { 
               ...edge, 
-              type: activeLayout === 'bundled' ? 'bundled' : 'pathEdge', 
+              type: (activeLayout === 'bundled' || activeLayout === 'orthogonal') ? effectiveType : 'pathEdge', 
               data: updatedData,
               label: isPath ? "" : (zoomLevel > 0.6 ? (edge.label || edge.data?.dbType?.replace("_", " ").toLowerCase()) : ""), 
               className: isPath ? 'path-edge' : '',
@@ -1725,6 +1737,7 @@ export default function App() {
                 ...edge.style, 
                 stroke: isPath ? COLORS.secondary : COLORS.primary,
                 opacity: highlightOpacity,
+                borderRadius: activeLayout === 'orthogonal' ? 20 : 0,
                 transition: 'opacity 0.3s ease'
               }
             };
@@ -2142,6 +2155,7 @@ export default function App() {
             <Tooltip title="Circular"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Circular Hub Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('circular')} color={activeLayout === 'circular' ? 'secondary' : 'primary'}><CircularIcon /></IconButton></Tooltip>
             <Tooltip title="Hive Plot"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Deterministic Hive Plot Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('hive')} color={activeLayout === 'hive' ? 'secondary' : 'primary'}><HiveIcon /></IconButton></Tooltip>
             <Tooltip title="Bundled (HEB)"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Hierarchical Edge Bundling' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('bundled')} color={activeLayout === 'bundled' ? 'secondary' : 'primary'}><BundledIcon /></IconButton></Tooltip>
+            <Tooltip title="Orthogonal (Manhattan)"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Orthogonal Manhattan Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('orthogonal')} color={activeLayout === 'orthogonal' ? 'secondary' : 'primary'}><OrthogonalIcon /></IconButton></Tooltip>
             </ButtonGroup>          <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
           <ButtonGroup variant="text" size="small">
             <Tooltip title="Degree"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Scale by Degree Centrality (Connectivity)' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onAnalyze('degree')} color={activeAlgorithm === 'degree' ? 'secondary' : 'primary'}><DegreeIcon /></IconButton></Tooltip>
@@ -2920,6 +2934,121 @@ export default function App() {
                           setLayoutTrigger(prev => prev + 1);
                         }} color="secondary" />
                     </Box>
+                  </Box>
+                </Box>
+              )}
+
+              {activeLayout === 'orthogonal' && (
+                <Box>
+                  <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.65rem', fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center', gap: 1, letterSpacing: 1 }}>
+                    <OrthogonalIcon sx={{ fontSize: 14, color: COLORS.secondary }} /> ORTHOGONAL SETUP
+                  </Typography>
+                  
+                  <Box sx={{ mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>DIRECTION</Typography>
+                    <Select
+                      size="small"
+                      value={layoutOptions.elkDirection || 'RIGHT'}
+                      onChange={(e) => {
+                        setLayoutOptions(prev => ({ ...prev, elkDirection: e.target.value }));
+                        setLayoutTrigger(prev => prev + 1);
+                      }}
+                      fullWidth
+                      sx={{ 
+                        fontSize: '9px', height: 26, color: COLORS.secondary,
+                        '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' }
+                      }}
+                    >
+                      <MenuItem value="RIGHT" sx={{ fontSize: '10px' }}>Left to Right</MenuItem>
+                      <MenuItem value="DOWN" sx={{ fontSize: '10px' }}>Top to Bottom</MenuItem>
+                      <MenuItem value="UP" sx={{ fontSize: '10px' }}>Bottom to Top</MenuItem>
+                      <MenuItem value="LEFT" sx={{ fontSize: '10px' }}>Right to Left</MenuItem>
+                    </Select>
+                  </Box>
+
+                  <Box sx={{ mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>NODE SPACING: {layoutOptions.elkNodeSpacing}</Typography>
+                    <Box sx={{ px: 1 }}>
+                      <Slider size="small" value={layoutOptions.elkNodeSpacing} min={20} max={300} step={10}
+                        onChange={(e, v) => {
+                          setLayoutOptions(prev => ({ ...prev, elkNodeSpacing: v }));
+                          setLayoutTrigger(prev => prev + 1);
+                        }} color="secondary" />
+                    </Box>
+                  </Box>
+
+                  <Box sx={{ mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>LAYER SPACING: {layoutOptions.elkLayerSpacing}</Typography>
+                    <Box sx={{ px: 1 }}>
+                      <Slider size="small" value={layoutOptions.elkLayerSpacing} min={20} max={400} step={10}
+                        onChange={(e, v) => {
+                          setLayoutOptions(prev => ({ ...prev, elkLayerSpacing: v }));
+                          setLayoutTrigger(prev => prev + 1);
+                        }} color="secondary" />
+                    </Box>
+                  </Box>
+
+                  <Box sx={{ mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>PLACEMENT STRATEGY</Typography>
+                    <Select
+                      size="small"
+                      value={layoutOptions.elkPlacementStrategy || 'BRANDES_KOEPF'}
+                      onChange={(e) => {
+                        setLayoutOptions(prev => ({ ...prev, elkPlacementStrategy: e.target.value }));
+                        setLayoutTrigger(prev => prev + 1);
+                      }}
+                      fullWidth
+                      sx={{ 
+                        fontSize: '9px', height: 26, color: COLORS.secondary,
+                        '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' }
+                      }}
+                    >
+                      <MenuItem value="BRANDES_KOEPF" sx={{ fontSize: '10px' }}>Brandes Koepf (Clean)</MenuItem>
+                      <MenuItem value="SIMPLE" sx={{ fontSize: '10px' }}>Simple</MenuItem>
+                      <MenuItem value="LINEAR_SEGMENTS" sx={{ fontSize: '10px' }}>Linear Segments</MenuItem>
+                      <MenuItem value="NETWORK_SIMPLEX" sx={{ fontSize: '10px' }}>Network Simplex</MenuItem>
+                    </Select>
+                  </Box>
+
+                  <Box sx={{ mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>CROSSING MINIMIZATION</Typography>
+                    <Select
+                      size="small"
+                      value={layoutOptions.elkCrossingStrategy || 'LAYER_SWEEP'}
+                      onChange={(e) => {
+                        setLayoutOptions(prev => ({ ...prev, elkCrossingStrategy: e.target.value }));
+                        setLayoutTrigger(prev => prev + 1);
+                      }}
+                      fullWidth
+                      sx={{ 
+                        fontSize: '9px', height: 26, color: COLORS.secondary,
+                        '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' }
+                      }}
+                    >
+                      <MenuItem value="LAYER_SWEEP" sx={{ fontSize: '10px' }}>Layer Sweep</MenuItem>
+                      <MenuItem value="CROSS_COUNT" sx={{ fontSize: '10px' }}>Cross Count</MenuItem>
+                    </Select>
+                  </Box>
+
+                  <Box sx={{ mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>LAYERING STRATEGY</Typography>
+                    <Select
+                      size="small"
+                      value={layoutOptions.elkLayeringStrategy || 'NETWORK_SIMPLEX'}
+                      onChange={(e) => {
+                        setLayoutOptions(prev => ({ ...prev, elkLayeringStrategy: e.target.value }));
+                        setLayoutTrigger(prev => prev + 1);
+                      }}
+                      fullWidth
+                      sx={{ 
+                        fontSize: '9px', height: 26, color: COLORS.secondary,
+                        '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' }
+                      }}
+                    >
+                      <MenuItem value="NETWORK_SIMPLEX" sx={{ fontSize: '10px' }}>Network Simplex</MenuItem>
+                      <MenuItem value="LONGEST_PATH" sx={{ fontSize: '10px' }}>Longest Path</MenuItem>
+                      <MenuItem value="COFFMAN_GRAHAM" sx={{ fontSize: '10px' }}>Coffman Graham</MenuItem>
+                    </Select>
                   </Box>
                 </Box>
               )}
