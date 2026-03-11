@@ -11,25 +11,28 @@ export default function BioFabricNode({ data }) {
 
   return (
     <div style={{ position: 'relative', width: '1500px', height: '1px', display: 'flex', alignItems: 'center' }}>
-      <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
-      <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
-      
-      {/* Visual Track Line - Extends far to the right */}
+      <Handle type="target" position={Position.Left} style={{ opacity: 0, left: 0 }} />
+      <Handle type="source" position={Position.Left} style={{ opacity: 0, left: 0 }} />
+
+      {/* Visual Track Line - Extends far to the right, starting from the anchor */}
       <div style={{ 
         position: 'absolute', left: 0, width: '4000px', height: '1px', 
         backgroundColor: nodeColor, opacity: 0.2, boxShadow: `0 0 5px ${nodeColor}66`,
         pointerEvents: 'none'
       }} />
 
+      {/* Node Label - Right-aligned to the anchor (extends to the left) */}
       <Box sx={{ 
-        position: 'absolute', left: 0, display: 'flex', alignItems: 'center', gap: 1, 
-        transform: 'translateY(-50%)', bgcolor: 'rgba(30,30,30,0.9)', border: `1px solid ${nodeColor}44`,
-        px: 1.5, py: 0.5, borderRadius: 1, zIndex: 10, backdropFilter: 'blur(4px)'
+        position: 'absolute', right: '100%', mr: 2, display: 'flex', alignItems: 'center', gap: 1, 
+        transform: 'translateY(-50%)', bgcolor: nodeColor, 
+        px: 1.5, py: 0.5, borderRadius: 1, zIndex: 10,
+        whiteSpace: 'nowrap',
+        boxShadow: `0 0 10px ${nodeColor}44`
       }}>
-        <IconComponent sx={{ fontSize: 14, color: nodeColor }} />
-        <Typography sx={{ fontSize: '10px', color: '#fff', whiteSpace: 'nowrap', fontWeight: 'bold', letterSpacing: 0.5 }}>
+        <Typography sx={{ fontSize: '10px', color: '#fff', fontWeight: 'bold', letterSpacing: 0.5 }}>
           {data.label?.toUpperCase()}
         </Typography>
+        <IconComponent sx={{ fontSize: 14, color: '#fff' }} />
       </Box>
     </div>
   );

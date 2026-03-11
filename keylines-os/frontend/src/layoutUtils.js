@@ -382,12 +382,23 @@ const getBioFabricLayout = (nodes, edges, options = {}) => {
   const sortMode = options.bioFabricSort || 'importance';
   const startY = 100;
   
+  // Calculate degree (activity) for each node if needed
+  const nodeDegrees = {};
+  if (sortMode === 'activity') {
+    edges.forEach(e => {
+      nodeDegrees[e.source] = (nodeDegrees[e.source] || 0) + 1;
+      nodeDegrees[e.target] = (nodeDegrees[e.target] || 0) + 1;
+    });
+  }
+
   // Sort nodes
   const sortedNodes = [...nodes].sort((a, b) => {
     if (sortMode === 'type') {
       const typeA = a.data.type || '';
       const typeB = b.data.type || '';
       return typeA.localeCompare(typeB);
+    } else if (sortMode === 'activity') {
+      return (nodeDegrees[b.id] || 0) - (nodeDegrees[a.id] || 0);
     }
     // Default: Importance (descending)
     return (b.data.importance || 0) - (a.data.importance || 0);
@@ -445,13 +456,13 @@ export const calculateLayout = async (nodes, edges, type, options = {}, rootNode
       layoutedNodes = getArcLayout(nodes, options);
       break;
     case 'biofabric':
-      layoutedNodes = getBioFabricLayout(nodes, edges, options);
-      break;
+      return getBioFabricLayout(nodes, edges, options);
     default:
       return nodes;
   }
 
   // Preserve the original viewport center to prevent the graph from jumping
+  // Skip this for BioFabric to keep it strictly at x: 0
   const oldCenter = getLayoutCenter(nodes);
   const newCenter = getLayoutCenter(layoutedNodes);
   const offsetX = oldCenter.x - newCenter.x;

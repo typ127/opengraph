@@ -1955,7 +1955,7 @@ export default function App() {
       const newNode = {
         ...node,
         position: { 
-          x: (Math.random() - 0.5) * 400 + 400, 
+          x: activeLayout === 'biofabric' ? 0 : (Math.random() - 0.5) * 400 + 400, 
           y: (Math.random() - 0.5) * 400 + 400 
         },
         data: {
@@ -3207,6 +3207,7 @@ export default function App() {
                     >
                       <MenuItem value="type" sx={{ fontSize: '10px' }}>By Type</MenuItem>
                       <MenuItem value="importance" sx={{ fontSize: '10px' }}>By Importance</MenuItem>
+                      <MenuItem value="activity" sx={{ fontSize: '10px' }}>By Activity</MenuItem>
                     </Select>
                   </Box>
 
