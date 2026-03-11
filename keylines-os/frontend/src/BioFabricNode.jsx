@@ -22,13 +22,20 @@ export default function BioFabricNode({ data }) {
       }} />
 
       {/* Node Label - Right-aligned to the anchor (extends to the left) */}
-      <Box sx={{ 
-        position: 'absolute', right: '100%', mr: 2, display: 'flex', alignItems: 'center', gap: 1, 
-        transform: 'translateY(-50%)', bgcolor: nodeColor, 
-        px: 1.5, py: 0.5, borderRadius: 1, zIndex: 10,
-        whiteSpace: 'nowrap',
-        boxShadow: `0 0 10px ${nodeColor}44`
-      }}>
+      <Box 
+        onMouseEnter={() => data.onMouseEnter?.()}
+        onMouseLeave={() => data.onMouseLeave?.()}
+        sx={{ 
+          position: 'absolute', right: '100%', mr: 2, display: 'flex', alignItems: 'center', gap: 1, 
+          transform: 'translateY(-50%)', bgcolor: nodeColor, 
+          px: 1.5, py: 0.5, borderRadius: 1, zIndex: 10,
+          whiteSpace: 'nowrap',
+          boxShadow: `0 0 10px ${nodeColor}44`,
+          cursor: 'pointer',
+          transition: 'transform 0.2s ease',
+          '&:hover': { transform: 'translateY(-50%) scale(1.05)' }
+        }}
+      >
         <Typography sx={{ fontSize: '10px', color: '#fff', fontWeight: 'bold', letterSpacing: 0.5 }}>
           {data.label?.toUpperCase()}
         </Typography>

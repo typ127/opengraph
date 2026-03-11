@@ -32,14 +32,19 @@ const KeyLinesNode = ({ data }) => {
   const glowColor = myColor;
 
   return (
-    <Box sx={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
-      alignItems: 'center',
-      transform: `scale(${finalScale})`,
-      transition: 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-      zIndex: Math.round(score * 10), 
-    }}>
+    <Box 
+      onMouseEnter={() => data.onMouseEnter?.()}
+      onMouseLeave={() => data.onMouseLeave?.()}
+      sx={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        alignItems: 'center',
+        transform: `scale(${finalScale})`,
+        transition: 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+        zIndex: Math.round(score * 10), 
+        cursor: 'pointer'
+      }}
+    >
       <div 
         className="node-circle-container"
         style={{ 

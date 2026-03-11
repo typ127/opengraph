@@ -305,6 +305,7 @@ export default function App() {
   const [selectedNodeNeighbors, setSelectedNodeNeighbors] = useState([]);
   const [selectedNodeEdges, setSelectedNodeEdges] = useState([]);
   const [previewData, setPreviewData] = useState(null);
+  const [hoveredNodeId, setHoveredNodeId] = useState(null);
 
   const [zoomLevel, setZoomLevel] = useState(1);
   const [dbCounts, setDbCounts] = useState({});
@@ -416,7 +417,9 @@ export default function App() {
               bioFabricRowSpacing: 40,
               bioFabricColSpacing: 15,
               bioFabricSort: 'importance',
-              bioFabricUseSystemColor: false
+              bioFabricUseSystemColor: false,
+              phyllotaxisSpacing: 40,
+              enableEdgeHighlightOnHover: false
             };
             const saved = localStorage.getItem('kl_layoutOptions');
             if (saved !== null) {
@@ -1693,7 +1696,12 @@ export default function App() {
               return {
                 ...n, 
                 type: activeLayout === 'biofabric' ? 'biofabric' : 'keylines',
-                data: { ...n.data, donut: newDonut },
+                data: { 
+                  ...n.data, 
+                  donut: newDonut,
+                  onMouseEnter: () => setHoveredNodeId(n.id),
+                  onMouseLeave: () => setHoveredNodeId(null)
+                },
                 style: { ...n.style, opacity: hasHighlight ? (highlightedTypes.has(n.data.type) ? 1 : 0.2) : 1, transition: 'opacity 0.3s ease' }
               };
             });
@@ -1743,18 +1751,23 @@ export default function App() {
             const isPath = edge.data?.type === 'PATH';
             const isHighlighted = hasHighlight ? (highlightedTypes.has(sourceNode?.data.type) || highlightedTypes.has(targetNode?.data.type)) : true;
 
-            const highlightOpacity = isPath ? 1.0 : (hasHighlight ? (isHighlighted ? 0.8 : 0.1) : 1.0);
+            const isConnectedToHovered = hoveredNodeId && (edge.source === hoveredNodeId || edge.target === hoveredNodeId);
+            const isDimmedByHover = layoutOptions.enableEdgeHighlightOnHover && hoveredNodeId && !isConnectedToHovered;
+
+            const highlightOpacity = isPath ? 1.0 : (hasHighlight ? (isHighlighted ? 0.8 : 0.2) : 1.0);
             
             // Determination of the effective render type:
             // 1. If Layout is BUNDLED, force 'bundled' visual
             // 2. If Layout is ORTHOGONAL, force 'smoothstep' visual
             // 3. If Layout is ARC, force 'arc' visual
             // 4. If Layout is BIOFABRIC, force 'biofabric' visual
-            // 5. Otherwise, use global edgePathType (simplebezier, straight, etc.)
+            // 5. If Layout is PHYLLOTAXIS, force 'straight' visual
+            // 6. Otherwise, use global edgePathType (simplebezier, straight, etc.)
             let effectiveType = activeLayout === 'bundled' ? 'bundled' : edgePathType;
             if (activeLayout === 'orthogonal') effectiveType = 'smoothstep';
             if (activeLayout === 'arc') effectiveType = 'arc';
             if (activeLayout === 'biofabric') effectiveType = 'biofabric';
+            if (activeLayout === 'phyllotaxis') effectiveType = 'straight';
             
             const updatedData = { 
               ...edge.data, 
@@ -1766,11 +1779,22 @@ export default function App() {
               columnIndex: activeLayout === 'biofabric' ? idx : (edge.data?.columnIndex || 0)
             };
 
+            const isPhyllotaxis = activeLayout === 'phyllotaxis';
+            const isBioFabric = activeLayout === 'biofabric';
+            const baseOpacity = isPhyllotaxis ? 0.1 : 1.0;
+
             return { 
               ...edge, 
-              type: (activeLayout === 'bundled' || activeLayout === 'orthogonal' || activeLayout === 'arc' || activeLayout === 'biofabric') ? effectiveType : 'pathEdge', 
+              type: (activeLayout === 'bundled' || activeLayout === 'orthogonal' || activeLayout === 'arc' || activeLayout === 'biofabric' || activeLayout === 'phyllotaxis') ? effectiveType : 'pathEdge', 
               data: updatedData,
-              label: isPath ? "" : (zoomLevel > 0.6 ? (edge.label || edge.data?.dbType?.replace("_", " ").toLowerCase()) : ""), 
+              label: (isPath || isPhyllotaxis) ? "" : (zoomLevel > 0.6 ? (edge.label || edge.data?.dbType?.replace("_", " ").toLowerCase()) : ""), 
+              markerEnd: isBioFabric ? {
+                type: MarkerType.Arrow,
+                width: 20,
+                height: 20,
+                strokeWidth: 2,
+                color: isPath ? COLORS.secondary : (layoutOptions.bioFabricUseSystemColor ? COLORS.primary : getHexColor(sourceNode?.data.type))
+              } : edge.markerEnd,
               className: isPath ? 'path-edge' : '',
               zIndex: isPath ? -1 : -2, 
               labelStyle: { fill: COLORS.nodeLabel, fontWeight: 600, fontSize: '10px', fontFamily: '"Open Sans", sans-serif', fontStyle: 'italic' },
@@ -1780,13 +1804,13 @@ export default function App() {
               style: { 
                 ...edge.style, 
                 stroke: isPath ? COLORS.secondary : COLORS.primary,
-                opacity: highlightOpacity,
+                opacity: isPath ? 1.0 : (isDimmedByHover ? 0.05 : highlightOpacity * baseOpacity),
                 borderRadius: activeLayout === 'orthogonal' ? 20 : 0,
                 transition: 'opacity 0.3s ease'
               }
             };
           });
-        }, [nodes, pathEdges, visibleNodes, hiddenTypes, highlightedTypes, edgePathType, zoomLevel, layoutOptions]);
+        }, [nodes, pathEdges, visibleNodes, hiddenTypes, highlightedTypes, edgePathType, zoomLevel, layoutOptions, hoveredNodeId]);
   const onDeleteSnapshot = useCallback((id) => {
     setSnapshots(prev => prev.filter(s => s.id !== id));
   }, []);
@@ -3847,13 +3871,24 @@ export default function App() {
             </Box>
             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 2, letterSpacing: 1 }}>VISUALIZATION RULES</Typography>
             <FormGroup sx={{ px: 1 }}>
-              <FormControlLabel 
-                control={<Switch checked={enableDonuts} onChange={(e) => setEnableDonuts(e.target.checked)} color="secondary" />} 
-                label={<Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>Show Node Donuts</Typography>} 
+              <FormControlLabel
+                control={<Switch checked={enableDonuts} onChange={(e) => setEnableDonuts(e.target.checked)} color="secondary" />}
+                label={<Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>Show Node Donuts</Typography>}
               />
               <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', ml: 4, mb: 2, display: 'block' }}>Display neighbor distribution rings around nodes</Typography>
-            </FormGroup>
-            
+
+              <FormControlLabel
+                control={
+                  <Switch 
+                    checked={layoutOptions.enableEdgeHighlightOnHover || false} 
+                    onChange={(e) => setLayoutOptions(prev => ({ ...prev, enableEdgeHighlightOnHover: e.target.checked }))} 
+                    color="secondary" 
+                  />
+                }
+                label={<Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>Edge Focus on Hover</Typography>}
+              />
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', ml: 4, mb: 2, display: 'block' }}>Highlight connected edges and dim others when hovering a node</Typography>
+              </FormGroup>            
             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', mb: 1, letterSpacing: 1 }}>GRAVITY (TENSION)</Typography>
             <Box sx={{ px: 2, mt: 1 }}>
               <Slider

@@ -31,9 +31,21 @@ export default function BioFabricEdge({
   const edgeX = sourceX + labelPadding + (colIndex * colSpacing);
 
   const edgePath = useMemo(() => {
-    // Strict vertical line
+    // Full path for hit area
     return `M${edgeX},${sourceY} L${edgeX},${targetY}`;
   }, [edgeX, sourceY, targetY]);
+
+  const visualPath = useMemo(() => {
+    // Shortened path for BaseEdge to allow for arrow offset
+    const offset = 12; 
+    const isDown = targetY > sourceY;
+    const arrowY = isDown ? targetY - offset : targetY + offset;
+    
+    // Safety check: if distance is too small, use original
+    if (Math.abs(targetY - sourceY) <= offset) return edgePath;
+    
+    return `M${edgeX},${sourceY} L${edgeX},${arrowY}`;
+  }, [edgeX, sourceY, targetY, edgePath]);
 
   // Find source node color for aesthetic mapping
   const sourceNode = data?.nodes?.find(n => n.id === data?.source);
@@ -63,7 +75,7 @@ export default function BioFabricEdge({
         
         <BaseEdge
           id={id}
-          path={edgePath}
+          path={visualPath}
           markerEnd={markerEnd}
           style={{
             ...style,

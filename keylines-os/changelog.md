@@ -2,13 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.81.0] - 2026-03-10
+
+### Neu
+- **Interactive Highlighting & Focus**:
+    - **Edge Focus on Hover**: Neues Setting (standardmäßig aus), das beim Hovern über einen Knoten alle nicht verbundenen Kanten dimmt (Opazität 0.05).
+    - **Highlight Polishing**: Basis-Opazität für inaktive Kategorien beim Filtern von 0.1 auf 0.2 angehoben.
+    - **Hover Feedback**: BioFabric-Labels skalieren beim Hovern leicht (1.05x).
+
 ## [1.80.0] - 2026-03-10
 
 ### Neu
 - **Experimental BioFabric Layout**: 
     - Einführung einer radikal neuen Visualisierungsform: Knoten als horizontale Bahnen, Kanten als vertikale Spalten.
     - **Custom BioFabricNode**: Rechtsbündige, farblich invertierte Labels (Hintergrund = Typfarbe) mit Glow-Effekt.
-    - **Custom BioFabricEdge**: Vertikale Linien mit interaktiven Hover-Labels und Path-Glyphen (analog zum globalen Design).
+    - **Custom BioFabricEdge**: Vertikale Linien mit interaktiven Hover-Labels, Path-Glyphen und **Pfeilspitzen** zur Anzeige der Relationsrichtung.
     - **Dynamic Column Indexing**: Echtzeit-Berechnung der Kanten-Spalten für ein stabiles, bündiges Gitter-Gewebe.
 - **BioFabric Tuning Panel**: 
     - Steuerung von `Row Spacing` und `Col Spacing`.
