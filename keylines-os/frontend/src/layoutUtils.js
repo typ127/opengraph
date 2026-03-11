@@ -373,6 +373,38 @@ const getArcLayout = (nodes, options = {}) => {
 };
 
 /**
+ * 8. BioFabric Layout
+ * Nodes are horizontal lines (rows), edges are vertical lines (columns).
+ * Note: Column assignment for edges is handled reactively in App.jsx.
+ */
+const getBioFabricLayout = (nodes, edges, options = {}) => {
+  const rowSpacing = options.bioFabricRowSpacing || 40;
+  const sortMode = options.bioFabricSort || 'importance';
+  const startY = 100;
+  
+  // Sort nodes
+  const sortedNodes = [...nodes].sort((a, b) => {
+    if (sortMode === 'type') {
+      const typeA = a.data.type || '';
+      const typeB = b.data.type || '';
+      return typeA.localeCompare(typeB);
+    }
+    // Default: Importance (descending)
+    return (b.data.importance || 0) - (a.data.importance || 0);
+  });
+
+  // Assign Y positions (rows)
+  const layoutedNodes = sortedNodes.map((node, i) => {
+    return {
+      ...node,
+      position: { x: 0, y: startY + (i * rowSpacing) } 
+    };
+  });
+
+  return layoutedNodes;
+};
+
+/**
  * Main Layout Entry Point
  */
 export const calculateLayout = async (nodes, edges, type, options = {}, rootNodeId = null, layoutTrigger = 0) => {
@@ -411,6 +443,9 @@ export const calculateLayout = async (nodes, edges, type, options = {}, rootNode
       break;
     case 'arc':
       layoutedNodes = getArcLayout(nodes, options);
+      break;
+    case 'biofabric':
+      layoutedNodes = getBioFabricLayout(nodes, edges, options);
       break;
     default:
       return nodes;

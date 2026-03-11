@@ -85,6 +85,10 @@ In dieser Phase wurde der Fokus auf die mathematische Stabilität der Layout-Eng
     - **Horizontale Ordnung**: Implementierung eines Arc Diagram Layouts zur Analyse von planetaren Gruppierungen entlang einer linearen Zeitachse/Struktur.
     - **Directional Pathing**: Entwicklung der `ArcEdge`-Komponente, die Verbindungen als bidirektionale Halbkreise (oben/unten) visualisiert, um visuelle Clutter zu vermeiden.
     - **Data Art Visualization**: Kopplung von Knoten-Bedeutung und Typ an Linienstärke und Farbe, was den Graphen in ein ästhetisches Informations-Kunstwerk verwandelt.
+- **BioFabric Node-Line Visualization (v1.80.0)**:
+    - **Paradigmenwechsel**: Einführung des BioFabric-Layouts, das die klassische Knoten-Link-Darstellung zugunsten eines horizontalen Gitters auflöst.
+    - **Intersection-Mapping**: Knoten werden als unendlich lange horizontale Bahnen gerendert, während Kanten vertikale Spalten bilden, deren Schnittpunkte durch präzise Konnektor-Punkte markiert werden.
+    - **Viewport Control**: Mathematische Anpassung der Knoten-Bounding-Boxes zur Stabilisierung der Kamera-Zentrierung auf die vertikalen Verbindungslinien.
 
 ---
 

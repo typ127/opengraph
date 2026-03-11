@@ -61,6 +61,7 @@ import {
   Polyline as BundledIcon,
   SettingsInputComponent as OrthogonalIcon,
   Timeline as ArcIcon,
+  ViewStream as BioFabricIcon,
   ElectricBolt as ForceIcon,
   Close as CloseIcon, 
   Info as InfoIcon, 
@@ -103,9 +104,12 @@ import {
   import { useLiveForceLayout } from './useLiveForceLayout';
   import BundledEdge from './BundledEdge';
   import ArcEdge from './ArcEdge';
+  import BioFabricNode from './BioFabricNode';
+  import BioFabricEdge from './BioFabricEdge';
   
   const nodeTypes = {
     keylines: KeyLinesNode,
+    biofabric: BioFabricNode,
   };
 
   const PathEdge = ({
@@ -203,6 +207,7 @@ import {
     pathEdge: PathEdge,
     bundled: BundledEdge,
     arc: ArcEdge,
+    biofabric: BioFabricEdge,
   };
   
   const ExpandableText = ({ text, maxLength = 100 }) => {
@@ -407,7 +412,11 @@ export default function App() {
               arcSort: 'type',
               arcDirection: 'both',
               arcImportanceWeight: 2.0,
-              arcUseSystemColor: false
+              arcUseSystemColor: false,
+              bioFabricRowSpacing: 40,
+              bioFabricColSpacing: 15,
+              bioFabricSort: 'importance',
+              bioFabricUseSystemColor: false
             };
             const saved = localStorage.getItem('kl_layoutOptions');
             if (saved !== null) {
@@ -467,7 +476,9 @@ export default function App() {
             
             // In Arc Mode, we need more padding because edges make wide semi-circles
             // which are not part of the nodes' bounding box.
-            const padding = activeLayout === 'arc' ? 0.8 : 0.2;
+            let padding = 0.2;
+            if (activeLayout === 'arc') padding = 0.8;
+            if (activeLayout === 'biofabric') padding = 0.5;
 
             fitView({
               duration: 600,
@@ -1681,11 +1692,12 @@ export default function App() {
       
               return {
                 ...n, 
+                type: activeLayout === 'biofabric' ? 'biofabric' : 'keylines',
                 data: { ...n.data, donut: newDonut },
                 style: { ...n.style, opacity: hasHighlight ? (highlightedTypes.has(n.data.type) ? 1 : 0.2) : 1, transition: 'opacity 0.3s ease' }
               };
             });
-          }, [nodes, edges, pathEdges, hiddenTypes, highlightedTypes]);
+          }, [nodes, edges, pathEdges, hiddenTypes, highlightedTypes, activeLayout]);
         const visibleEdges = useMemo(() => {
           const nodeIds = new Set(visibleNodes.map(n => n.id));
           const hasHighlight = highlightedTypes.size > 0;
@@ -1693,7 +1705,7 @@ export default function App() {
           // Wir nutzen NUR noch pathEdges für das Rendering auf der Stage.
           // Die Basis-Relationen (edges) werden NICHT mehr im DOM gerendert,
           // sondern dienen nur noch als Daten-Layer für das Layout-Engine.
-          const filteredPathEdges = pathEdges.filter(pe => {
+          let filteredPathEdges = pathEdges.filter(pe => {
             const { source, target } = pe;
             const length = pe.data?.length || 0;
 
@@ -1712,7 +1724,20 @@ export default function App() {
             }
           });
 
-          return filteredPathEdges.map(edge => {
+          // BIOFABRIC: Assign unique column indexes to visible edges
+          if (activeLayout === 'biofabric') {
+            // Sort edges by source node Y position to make it look organized
+            const nodeYMap = {};
+            visibleNodes.forEach(n => { nodeYMap[n.id] = n.position.y; });
+            
+            filteredPathEdges = [...filteredPathEdges].sort((a, b) => {
+              const yA = nodeYMap[a.source] || 0;
+              const yB = nodeYMap[b.source] || 0;
+              return yA - yB;
+            });
+          }
+
+          return filteredPathEdges.map((edge, idx) => {
             const sourceNode = nodes.find(n => n.id === edge.source); 
             const targetNode = nodes.find(n => n.id === edge.target);
             const isPath = edge.data?.type === 'PATH';
@@ -1724,10 +1749,12 @@ export default function App() {
             // 1. If Layout is BUNDLED, force 'bundled' visual
             // 2. If Layout is ORTHOGONAL, force 'smoothstep' visual
             // 3. If Layout is ARC, force 'arc' visual
-            // 4. Otherwise, use global edgePathType (simplebezier, straight, etc.)
+            // 4. If Layout is BIOFABRIC, force 'biofabric' visual
+            // 5. Otherwise, use global edgePathType (simplebezier, straight, etc.)
             let effectiveType = activeLayout === 'bundled' ? 'bundled' : edgePathType;
             if (activeLayout === 'orthogonal') effectiveType = 'smoothstep';
             if (activeLayout === 'arc') effectiveType = 'arc';
+            if (activeLayout === 'biofabric') effectiveType = 'biofabric';
             
             const updatedData = { 
               ...edge.data, 
@@ -1735,12 +1762,13 @@ export default function App() {
               layoutOptions,
               nodes,
               source: edge.source,
-              target: edge.target
+              target: edge.target,
+              columnIndex: activeLayout === 'biofabric' ? idx : (edge.data?.columnIndex || 0)
             };
 
             return { 
               ...edge, 
-              type: (activeLayout === 'bundled' || activeLayout === 'orthogonal' || activeLayout === 'arc') ? effectiveType : 'pathEdge', 
+              type: (activeLayout === 'bundled' || activeLayout === 'orthogonal' || activeLayout === 'arc' || activeLayout === 'biofabric') ? effectiveType : 'pathEdge', 
               data: updatedData,
               label: isPath ? "" : (zoomLevel > 0.6 ? (edge.label || edge.data?.dbType?.replace("_", " ").toLowerCase()) : ""), 
               className: isPath ? 'path-edge' : '',
@@ -1946,8 +1974,10 @@ export default function App() {
       // Reheat simulation or trigger layout run
       setLayoutTrigger(prev => prev + 1);
       
-      // Focus on the new node
-      setTimeout(() => fitToNodes(nextNodes), 150);
+      // Focus on the new node, but skip automatic zoom in BioFabric mode to keep viewport stability
+      if (activeLayout !== 'biofabric') {
+        setTimeout(() => fitToNodes(nextNodes), 150);
+      }
     } catch (err) {
       console.error('Failed to spawn random node:', err);
     }
@@ -2173,6 +2203,7 @@ export default function App() {
             <Tooltip title="Bundled (HEB)"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Hierarchical Edge Bundling' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('bundled')} color={activeLayout === 'bundled' ? 'secondary' : 'primary'}><BundledIcon /></IconButton></Tooltip>
             <Tooltip title="Orthogonal (Manhattan)"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Orthogonal Manhattan Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('orthogonal')} color={activeLayout === 'orthogonal' ? 'secondary' : 'primary'}><OrthogonalIcon /></IconButton></Tooltip>
             <Tooltip title="Arc Diagram"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Linear Arc Diagram Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('arc')} color={activeLayout === 'arc' ? 'secondary' : 'primary'}><ArcIcon /></IconButton></Tooltip>
+            <Tooltip title="BioFabric"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply BioFabric Node-Line Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('biofabric')} color={activeLayout === 'biofabric' ? 'secondary' : 'primary'}><BioFabricIcon /></IconButton></Tooltip>
             </ButtonGroup>          <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
           <ButtonGroup variant="text" size="small">
             <Tooltip title="Degree"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Scale by Degree Centrality (Connectivity)' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onAnalyze('degree')} color={activeAlgorithm === 'degree' ? 'secondary' : 'primary'}><DegreeIcon /></IconButton></Tooltip>
@@ -3146,6 +3177,69 @@ export default function App() {
                       <Slider size="small" value={layoutOptions.nodeSpacing} min={50} max={400} step={10}
                         onChange={(e, v) => {
                           setLayoutOptions(prev => ({ ...prev, nodeSpacing: v }));
+                          setLayoutTrigger(prev => prev + 1);
+                        }} color="secondary" />
+                    </Box>
+                  </Box>
+                </Box>
+              )}
+
+              {activeLayout === 'biofabric' && (
+                <Box>
+                  <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.65rem', fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center', gap: 1, letterSpacing: 1 }}>
+                    <BioFabricIcon sx={{ fontSize: 14, color: COLORS.secondary }} /> BIOFABRIC SETUP
+                  </Typography>
+
+                  <Box sx={{ mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>SORTING</Typography>
+                    <Select
+                      size="small"
+                      value={layoutOptions.bioFabricSort || 'importance'}
+                      onChange={(e) => {
+                        setLayoutOptions(prev => ({ ...prev, bioFabricSort: e.target.value }));
+                        setLayoutTrigger(prev => prev + 1);
+                      }}
+                      fullWidth
+                      sx={{ 
+                        fontSize: '9px', height: 26, color: COLORS.secondary,
+                        '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' }
+                      }}
+                    >
+                      <MenuItem value="type" sx={{ fontSize: '10px' }}>By Type</MenuItem>
+                      <MenuItem value="importance" sx={{ fontSize: '10px' }}>By Importance</MenuItem>
+                    </Select>
+                  </Box>
+
+                  <Box sx={{ mb: 1.5 }}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox 
+                          size="small" 
+                          checked={layoutOptions.bioFabricUseSystemColor || false}
+                          onChange={(e) => setLayoutOptions(prev => ({ ...prev, bioFabricUseSystemColor: e.target.checked }))}
+                          sx={{ color: 'rgba(255,255,255,0.2)', '&.Mui-checked': { color: COLORS.secondary } }}
+                        />
+                      }
+                      label={<Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>USE SYSTEM COLORS (SINGLE)</Typography>}
+                    />
+                  </Box>
+
+                  <Box sx={{ mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>ROW SPACING: {layoutOptions.bioFabricRowSpacing}</Typography>
+                    <Box sx={{ px: 1 }}>
+                      <Slider size="small" value={layoutOptions.bioFabricRowSpacing} min={10} max={100} step={5}
+                        onChange={(e, v) => {
+                          setLayoutOptions(prev => ({ ...prev, bioFabricRowSpacing: v }));
+                          setLayoutTrigger(prev => prev + 1);
+                        }} color="secondary" />
+                    </Box>
+                  </Box>
+                  <Box sx={{ mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>COL SPACING: {layoutOptions.bioFabricColSpacing}</Typography>
+                    <Box sx={{ px: 1 }}>
+                      <Slider size="small" value={layoutOptions.bioFabricColSpacing} min={5} max={50} step={1}
+                        onChange={(e, v) => {
+                          setLayoutOptions(prev => ({ ...prev, bioFabricColSpacing: v }));
                           setLayoutTrigger(prev => prev + 1);
                         }} color="secondary" />
                     </Box>

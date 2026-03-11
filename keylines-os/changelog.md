@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.80.0] - 2026-03-10
+
+### Neu
+- **Experimental BioFabric Layout**: 
+    - Einführung einer radikal neuen Visualisierungsform: Knoten als horizontale Bahnen, Kanten als vertikale Spalten.
+    - **Custom BioFabricNode**: Verwandelt Knoten in leuchtende, horizontale Tracks mit linksbündigen Glas-Morphismus-Labels.
+    - **Custom BioFabricEdge**: Zeichnet strikt vertikale Linien mit SVG-Verbindungspunkten an den Schnittpunkten der Knoten-Bahnen.
+    - **Dynamic Column Indexing**: Echtzeit-Berechnung der Kanten-Spalten in `App.jsx` für ein stabiles, bündiges Gitter-Gewebe.
+- **BioFabric Tuning Panel**: 
+    - Steuerung von `Row Spacing` (Zeilenabstand) und `Col Spacing` (Spaltenbreite).
+    - **Dynamische Sortierung**: Umschalten zwischen `Importance` (Standard) und `By Type` zur vertikalen Anordnung.
+    - **System Colors Mode**: Einheitliche Primärfärbung für alle vertikalen Relationen.
+- **Smart Camera Optimierung**:
+    - Anpassung der Bounding-Box-Berechnung für BioFabric-Knoten (1500px logische Breite), um ein sauberes Zentrieren der vertikalen Verbindungen zu ermöglichen.
+    - Viewport-Stabilität: Deaktivierung des automatischen Zooms beim Knoten-Spawn im BioFabric-Modus.
+
 ## [1.79.0] - 2026-03-10
 
 ### Neu
