@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.90.0] - 2026-03-12
+
+### Neu
+- **Narrative Flow & Chronological Timeline**:
+    - Einführung eines völlig neuen Layout-Modus zur Visualisierung historischer Handlungsstränge ("xkcd Movie Narrative Chart" Stil).
+    - **Narrative Layout**: Strikte horizontale Anordnung der Knoten nach `era` (Zeit) und vertikale Gruppierung in Planeten-Bahnen ("Lanes").
+    - **Custom StoryNode**: Spezialisierter Knoten mit **dynamischen Handles**. Ein- und Ausgänge werden automatisch gleichmäßig verteilt, um Überkreuzungen zu minimieren.
+    - **Custom FlowingEdge**: Organische, horizontale Bezier-Kurven ("River-Flow"), die wie Handlungsstränge durch die Zeit fließen.
+    - **Time Bridge Highlighting**: Historische Verbindungen, die große Zeitspannen überbrücken (Gap > 2 Eras), werden automatisch fett, gold leuchtend und animiert dargestellt.
+- **Narrative Tuning Panel**: 
+    - Dedizierte Regler für `Era Spacing` (horizontaler Zeitabstand), `Lane Spacing` (vertikaler Planetenabstand) und `Stack Spacing` (Abstand überlappender Knoten in derselben Ära).
+- **Integrierte Zeit-Daten (Era System)**:
+    - Backend-Update für den Import von `asimov_nodes_expanded_era.csv`. Jeder Knoten besitzt nun eine `era` Eigenschaft für die chronologische Einordnung.
+    - Neue Sortier-Optionen "By Era" für Arc-, Circular- und BioFabric-Layouts.
+- **Architektur-Upgrade (Unified Layout Logic)**:
+    - Refactoring der `calculateLayout` Engine: Rückgabe von `{ nodes, edges }` Objekten zur nativen Unterstützung von Handle-basierten Layouts und On-the-fly Typ-Transformationen.
+
 ## [1.81.0] - 2026-03-10
 
 ### Neu

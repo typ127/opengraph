@@ -11,10 +11,10 @@ def import_data():
 
     # Im Docker-Container ist das /app Verzeichnis das Root-Verzeichnis
     # Die Daten liegen also in /app/data/asimov_nodes.csv
-    nodes_path = "data/asimov_nodes_expanded.csv"
+    nodes_path = "data/asimov_nodes_expanded_era.csv"
     if not os.path.exists(nodes_path):
         # Fallback für lokalen Start ohne Docker
-        nodes_path = "backend/data/asimov_nodes_expanded.csv"
+        nodes_path = "backend/data/asimov_nodes_expanded_era.csv"
     
     if not os.path.exists(nodes_path):
         print(f"Error: Could not find nodes file in data/ or backend/data/")
@@ -32,6 +32,7 @@ def import_data():
             desc = row.get('description', '').replace("'", "\\'")
             published = row.get('published', '').replace("'", "\\'")
             importance = float(row.get('importance', 0.5))
+            era = int(row.get('era', 0)) if row.get('era') else 0
             
             query = f"""
             MERGE (n:Entity {{id: '{row['id']}'}})
@@ -43,10 +44,11 @@ def import_data():
                 n.category = '{category}',
                 n.description = '{desc}',
                 n.published = '{published}',
-                n.importance = {importance}
+                n.importance = {importance},
+                n.era = {era}
             """
             memgraph.execute(query)
-            print(f"Imported Node: {row['label']}")
+            print(f"Imported Node: {row['label']} (Era: {era})")
 
     edges_path = "data/asimov_edges_expanded.csv"
     if not os.path.exists(edges_path):

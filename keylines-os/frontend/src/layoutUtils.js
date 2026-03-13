@@ -7,7 +7,7 @@ const elk = new ELK();
 /**
  * Utility to calculate the center of gravity for a set of nodes
  */
-export const getLayoutCenter = (nodes) => {
+const getLayoutCenter = (nodes) => {
   if (!nodes || nodes.length === 0) return { x: 400, y: 400 };
   const avgX = nodes.reduce((sum, n) => sum + n.position.x, 0) / nodes.length;
   const avgY = nodes.reduce((sum, n) => sum + n.position.y, 0) / nodes.length;
@@ -153,6 +153,15 @@ const getCircularLayout = (nodes, options = {}) => {
     });
   } else if (sortMode === 'byImportance') {
     sortedNodes.sort((a, b) => (b.data.importance || 0) - (a.data.importance || 0));
+  } else if (sortMode === 'byEra') {
+    sortedNodes.sort((a, b) => {
+      const eraA = parseInt(a.data.era || 0);
+      const eraB = parseInt(b.data.era || 0);
+      if (eraA !== eraB) return eraA - eraB;
+      const labelA = a.data.label || '';
+      const labelB = b.data.label || '';
+      return labelA.localeCompare(labelB);
+    });
   }
   // 'standard' keeps original order
 
@@ -346,6 +355,14 @@ const getArcLayout = (nodes, options = {}) => {
       return labelA.localeCompare(labelB);
     } else if (sortMode === 'importance') {
       return (b.data.importance || 0) - (a.data.importance || 0);
+    } else if (sortMode === 'era') {
+      const eraA = parseInt(a.data.era || 0);
+      const eraB = parseInt(b.data.era || 0);
+      if (eraA !== eraB) return eraA - eraB;
+      // Secondary sort by label
+      const labelA = a.data.label || '';
+      const labelB = b.data.label || '';
+      return labelA.localeCompare(labelB);
     } else {
       // Default: By Type (grouped by Planet first)
       const planetA = a.data.planet || 'Unknown';
@@ -399,6 +416,13 @@ const getBioFabricLayout = (nodes, edges, options = {}) => {
       return typeA.localeCompare(typeB);
     } else if (sortMode === 'activity') {
       return (nodeDegrees[b.id] || 0) - (nodeDegrees[a.id] || 0);
+    } else if (sortMode === 'era') {
+      const eraA = parseInt(a.data.era || 0);
+      const eraB = parseInt(b.data.era || 0);
+      if (eraA !== eraB) return eraA - eraB;
+      const labelA = a.data.label || '';
+      const labelB = b.data.label || '';
+      return labelA.localeCompare(labelB);
     }
     // Default: Importance (descending)
     return (b.data.importance || 0) - (a.data.importance || 0);
@@ -416,10 +440,107 @@ const getBioFabricLayout = (nodes, edges, options = {}) => {
 };
 
 /**
+ * Utility for xkcd-style Narrative Layout:
+ * Assigns unique handles to edges and counts them for nodes.
+ * Sorts edges to minimize crossings by relative Y positions.
+ */
+const assignHandles = (nodes, edges) => {
+  const nodeMap = {};
+  nodes.forEach(n => {
+    nodeMap[n.id] = n;
+    n.data.targetHandleCount = 0;
+    n.data.sourceHandleCount = 0;
+  });
+
+  const incoming = {};
+  const outgoing = {};
+
+  edges.forEach(e => {
+    if (!outgoing[e.source]) outgoing[e.source] = [];
+    if (!incoming[e.target]) incoming[e.target] = [];
+    outgoing[e.source].push(e);
+    incoming[e.target].push(e);
+  });
+
+  const processedEdges = edges.map(e => ({ ...e }));
+
+  nodes.forEach(node => {
+    // Sort incoming edges by the Y-position of their source node
+    const inEdges = incoming[node.id] || [];
+    inEdges.sort((a, b) => {
+      const sourceA = nodeMap[a.source];
+      const sourceB = nodeMap[b.source];
+      return (sourceA?.position?.y || 0) - (sourceB?.position?.y || 0);
+    });
+
+    inEdges.forEach((edge, index) => {
+      const actualEdge = processedEdges.find(pe => pe.id === edge.id);
+      if (actualEdge) actualEdge.targetHandle = `target-${index}`;
+    });
+    node.data.targetHandleCount = inEdges.length;
+
+    // Sort outgoing edges by the Y-position of their target node
+    const outEdges = outgoing[node.id] || [];
+    outEdges.sort((a, b) => {
+      const targetA = nodeMap[a.target];
+      const targetB = nodeMap[b.target];
+      return (targetA?.position?.y || 0) - (targetB?.position?.y || 0);
+    });
+
+    outEdges.forEach((edge, index) => {
+      const actualEdge = processedEdges.find(pe => pe.id === edge.id);
+      if (actualEdge) actualEdge.sourceHandle = `source-${index}`;
+    });
+    node.data.sourceHandleCount = outEdges.length;
+  });
+
+  return { nodes, edges: processedEdges };
+};
+
+/**
+ * 9. Narrative Layout (Chronological Timeline)
+ * X-Axis: Chronological (Era)
+ * Y-Axis: Semantic Lanes (Planet)
+ */
+const getNarrativeLayout = (nodes, options = {}) => {
+  const eraSpacing = options.eraSpacing || 600;
+  const laneSpacing = options.laneSpacing || 300;
+  const nodeSpacingY = options.nodeSpacingY || 100;
+
+  // 1. Extract unique planets for Y-Axis lanes
+  const uniquePlanets = [...new Set(nodes.map(n => n.data.planet || 'Unknown'))].sort();
+  const planetLanes = {};
+  uniquePlanets.forEach((planet, index) => {
+    planetLanes[planet] = index * laneSpacing;
+  });
+
+  // 2. Group nodes by (Era, Planet) to handle stacking
+  const clusters = {};
+  
+  return nodes.map(node => {
+    const era = parseInt(node.data.era || 0);
+    const planet = node.data.planet || 'Unknown';
+    const clusterKey = `${era}-${planet}`;
+    
+    // Initialize or increment cluster count for stacking
+    if (!clusters[clusterKey]) clusters[clusterKey] = 0;
+    const stackIndex = clusters[clusterKey]++;
+
+    return {
+      ...node,
+      position: {
+        x: era * eraSpacing,
+        y: planetLanes[planet] + (stackIndex * nodeSpacingY)
+      }
+    };
+  });
+};
+
+/**
  * Main Layout Entry Point
  */
-export const calculateLayout = async (nodes, edges, type, options = {}, rootNodeId = null, layoutTrigger = 0) => {
-  if (!nodes || nodes.length === 0) return [];
+const calculateLayout = async (nodes, edges, type, options = {}, rootNodeId = null, layoutTrigger = 0) => {
+  if (!nodes || nodes.length === 0) return { nodes: [], edges: [] };
 
   // Auto-select root if none provided for hierarchical layouts
   let effectiveRootId = rootNodeId;
@@ -432,7 +553,18 @@ export const calculateLayout = async (nodes, edges, type, options = {}, rootNode
   }
 
   let layoutedNodes = [];
+  let layoutedEdges = edges;
+
   switch (type) {
+    case 'narrative':
+      const initialNodes = getNarrativeLayout(nodes, options);
+      const assigned = assignHandles(initialNodes, edges);
+      return { 
+        nodes: assigned.nodes.map(n => ({ ...n, type: 'story' })), 
+        edges: assigned.edges.map(e => ({ ...e, type: 'flowing' })) 
+      };
+    case 'biofabric':
+      return { nodes: getBioFabricLayout(nodes, edges, options), edges };
     case 'hierarchical':
     case 'sequential':
       layoutedNodes = getSequentialLayout(nodes, edges, options, effectiveRootId);
@@ -455,22 +587,28 @@ export const calculateLayout = async (nodes, edges, type, options = {}, rootNode
     case 'arc':
       layoutedNodes = getArcLayout(nodes, options);
       break;
-    case 'biofabric':
-      return getBioFabricLayout(nodes, edges, options);
     default:
-      return nodes;
+      return { nodes, edges };
   }
 
   // Preserve the original viewport center to prevent the graph from jumping
-  // Skip this for BioFabric to keep it strictly at x: 0
   const oldCenter = getLayoutCenter(nodes);
   const newCenter = getLayoutCenter(layoutedNodes);
   const offsetX = oldCenter.x - newCenter.x;
   const offsetY = oldCenter.y - newCenter.y;
 
-  return layoutedNodes.map(n => ({
+  const finalNodes = layoutedNodes.map(n => ({
     ...n,
     position: { x: n.position.x + offsetX, y: n.position.y + offsetY }
   }));
+
+  return { nodes: finalNodes, edges: layoutedEdges };
+};
+
+export {
+  calculateLayout,
+  getLayoutCenter,
+  assignHandles,
+  calculateLayout as getLayout
 };
 

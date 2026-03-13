@@ -96,20 +96,25 @@ import {
   DeleteOutline as DeleteOutlineIcon,
   ArrowDownward as ArrowDownwardIcon,
   ModelTraining as TrainingIcon,
-  FileUpload as ImportIcon
-  } from '@mui/icons-material';  import * as Icons from '@mui/icons-material';
+  FileUpload as ImportIcon,
+  History as HistoryIcon
+  } from '@mui/icons-material';
+  import * as Icons from '@mui/icons-material';
   import { categoryMap, typeColors, getHexColor } from './constants';
   import { COLORS, EDGE_TYPES, NODE_CATEGORIES } from './theme';
-  import { calculateLayout, getLayoutCenter } from './layoutUtils';
+  import { calculateLayout, getLayoutCenter, assignHandles } from './layoutUtils';
   import { useLiveForceLayout } from './useLiveForceLayout';
   import BundledEdge from './BundledEdge';
   import ArcEdge from './ArcEdge';
   import BioFabricNode from './BioFabricNode';
   import BioFabricEdge from './BioFabricEdge';
+  import StoryNode from './StoryNode';
+  import FlowingEdge from './FlowingEdge';
   
   const nodeTypes = {
     keylines: KeyLinesNode,
     biofabric: BioFabricNode,
+    story: StoryNode,
   };
 
   const PathEdge = ({
@@ -208,6 +213,7 @@ import {
     bundled: BundledEdge,
     arc: ArcEdge,
     biofabric: BioFabricEdge,
+    flowing: FlowingEdge,
   };
   
   const ExpandableText = ({ text, maxLength = 100 }) => {
@@ -418,6 +424,9 @@ export default function App() {
               bioFabricColSpacing: 15,
               bioFabricSort: 'importance',
               bioFabricUseSystemColor: false,
+              eraSpacing: 600,
+              laneSpacing: 300,
+              nodeSpacingY: 100,
               phyllotaxisSpacing: 40,
               enableEdgeHighlightOnHover: false
             };
@@ -500,7 +509,9 @@ export default function App() {
             const visibleEdgesOnStage = edgesRef.current.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
 
             console.log(`[LayoutEngine] Calculating "${type}" layout with options:`, layoutOptions, `RootNode: ${rootNodeId}`);
-            let layoutedVisible = await calculateLayout(visibleNodesOnStage, visibleEdgesOnStage, type, layoutOptions, rootNodeId, layoutTrigger);
+            const result = await calculateLayout(visibleNodesOnStage, visibleEdgesOnStage, type, layoutOptions, rootNodeId, layoutTrigger);
+            let layoutedVisible = result.nodes;
+            let finalEdges = result.edges;
 
             // APPLY ROTATION (if any)
             if (layoutOptions.rotation !== 0 && layoutedVisible.length > 0) {
@@ -522,14 +533,33 @@ export default function App() {
               });
             }
 
-            const layoutedMap = new Map(layoutedVisible.map(n => [n.id, n.position]));
+            const layoutedMap = new Map(layoutedVisible.map(n => [n.id, n]));
 
             setNodes(nds => nds.map(n => {
               if (layoutedMap.has(n.id)) {
-                return { ...n, position: layoutedMap.get(n.id) };
+                const ln = layoutedMap.get(n.id);
+                return { ...n, position: ln.position, type: ln.type, data: ln.data };
               }
               return n;
             }));
+
+            // We update edges if they were modified (like in narrative)
+            if (finalEdges !== visibleEdgesOnStage) {
+              const edgeMap = new Map(finalEdges.map(e => [e.id, e]));
+              setEdges(eds => eds.map(e => {
+                if (edgeMap.has(e.id)) {
+                  const fe = edgeMap.get(e.id);
+                  return { 
+                    ...e, 
+                    type: fe.type, 
+                    sourceHandle: fe.sourceHandle, 
+                    targetHandle: fe.targetHandle,
+                    data: { ...e.data, ...fe.data }
+                  };
+                }
+                return e;
+              }));
+            }
 
             return layoutedVisible;
           }, [setNodes, hiddenTypes, layoutOptions]);
@@ -1329,7 +1359,9 @@ export default function App() {
                     // STRUCTURAL ONLY: Exclude pathEdges!
                     const visibleEdges = nextEdges.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
                     
-                    const layoutedVisible = await calculateLayout(visibleOnStage, visibleEdges, activeLayout, layoutOptions, activeRootNodeId, layoutTrigger);
+                    const result = await calculateLayout(visibleOnStage, visibleEdges, activeLayout, layoutOptions, activeRootNodeId, layoutTrigger);
+                    let layoutedVisible = result.nodes;
+                    let finalEdges = result.edges;
                     
                     // APPLY ROTATION (Must match runLayout)
                     let rotatedVisible = layoutedVisible;
@@ -1352,14 +1384,32 @@ export default function App() {
                       });
                     }
 
-                    const layoutedMap = new Map(rotatedVisible.map(n => [n.id, n.position]));
+                    const layoutedMap = new Map(rotatedVisible.map(n => [n.id, n]));
 
                     setNodes(nds => nds.map(n => {
                       if (layoutedMap.has(n.id)) {
-                        return { ...n, position: layoutedMap.get(n.id) };
+                        const ln = layoutedMap.get(n.id);
+                        return { ...n, position: ln.position, type: ln.type, data: ln.data };
                       }
                       return n;
                     }));
+
+                    if (finalEdges !== visibleEdges) {
+                      const edgeMap = new Map(finalEdges.map(e => [e.id, e]));
+                      setEdges(eds => eds.map(e => {
+                        if (edgeMap.has(e.id)) {
+                          const fe = edgeMap.get(e.id);
+                          return { 
+                            ...e, 
+                            type: fe.type, 
+                            sourceHandle: fe.sourceHandle, 
+                            targetHandle: fe.targetHandle,
+                            data: { ...e.data, ...fe.data }
+                          };
+                        }
+                        return e;
+                      }));
+                    }
                     
                     setTimeout(() => fitToNodes(rotatedVisible), 300);
                   }, 50);
@@ -1415,7 +1465,9 @@ export default function App() {
           // STRUCTURAL ONLY: Exclude pathEdges!
           const visibleEdges = edgesRef.current.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
           
-          const layoutedVisible = await calculateLayout(visibleOnStage, visibleEdges, activeLayout, layoutOptions, activeRootNodeId, layoutTrigger);
+          const result = await calculateLayout(visibleOnStage, visibleEdges, activeLayout, layoutOptions, activeRootNodeId, layoutTrigger);
+          let layoutedVisible = result.nodes;
+          let finalEdges = result.edges;
           
           // APPLY ROTATION (Must match runLayout)
           let rotatedVisible = layoutedVisible;
@@ -1438,14 +1490,32 @@ export default function App() {
             });
           }
 
-          const layoutedMap = new Map(rotatedVisible.map(n => [n.id, n.position]));
+          const layoutedMap = new Map(rotatedVisible.map(n => [n.id, n]));
 
           setNodes(nds => nds.map(n => {
             if (layoutedMap.has(n.id)) {
-              return { ...n, position: layoutedMap.get(n.id) };
+              const ln = layoutedMap.get(n.id);
+              return { ...n, position: ln.position, type: ln.type, data: ln.data };
             }
             return n;
           }));
+
+          if (finalEdges !== visibleEdges) {
+            const edgeMap = new Map(finalEdges.map(e => [e.id, e]));
+            setEdges(eds => eds.map(e => {
+              if (edgeMap.has(e.id)) {
+                const fe = edgeMap.get(e.id);
+                return { 
+                  ...e, 
+                  type: fe.type, 
+                  sourceHandle: fe.sourceHandle, 
+                  targetHandle: fe.targetHandle,
+                  data: { ...e.data, ...fe.data }
+                };
+              }
+              return e;
+            }));
+          }
           
           setTimeout(() => fitToNodes(rotatedVisible), 300);
         }, 50);
@@ -1528,7 +1598,9 @@ export default function App() {
           // STRUCTURAL ONLY: Exclude pathEdges!
           const visibleEdges = edgesRef.current.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
           
-          const layoutedVisible = await calculateLayout(visibleOnStage, visibleEdges, activeLayout, layoutOptions, activeRootNodeId, layoutTrigger);
+          const result = await calculateLayout(visibleOnStage, visibleEdges, activeLayout, layoutOptions, activeRootNodeId, layoutTrigger);
+          let layoutedVisible = result.nodes;
+          let finalEdges = result.edges;
           
           // APPLY ROTATION (Must match runLayout)
           let rotatedVisible = layoutedVisible;
@@ -1551,14 +1623,32 @@ export default function App() {
             });
           }
 
-          const layoutedMap = new Map(rotatedVisible.map(n => [n.id, n.position]));
+          const layoutedMap = new Map(rotatedVisible.map(n => [n.id, n]));
 
           setNodes(nds => nds.map(n => {
             if (layoutedMap.has(n.id)) {
-              return { ...n, position: layoutedMap.get(n.id) };
+              const ln = layoutedMap.get(n.id);
+              return { ...n, position: ln.position, type: ln.type, data: ln.data };
             }
             return n;
           }));
+
+          if (finalEdges !== visibleEdges) {
+            const edgeMap = new Map(finalEdges.map(e => [e.id, e]));
+            setEdges(eds => eds.map(e => {
+              if (edgeMap.has(e.id)) {
+                const fe = edgeMap.get(e.id);
+                return { 
+                  ...e, 
+                  type: fe.type, 
+                  sourceHandle: fe.sourceHandle, 
+                  targetHandle: fe.targetHandle,
+                  data: { ...e.data, ...fe.data }
+                };
+              }
+              return e;
+            }));
+          }
           
           setTimeout(() => fitToNodes(rotatedVisible), 300);
         }, 50);
@@ -1768,6 +1858,33 @@ export default function App() {
             if (activeLayout === 'arc') effectiveType = 'arc';
             if (activeLayout === 'biofabric') effectiveType = 'biofabric';
             if (activeLayout === 'phyllotaxis') effectiveType = 'straight';
+            if (activeLayout === 'narrative') effectiveType = 'smoothstep';
+
+            // Special Styling for Narrative "Time Bridges"
+            let edgeStyleOverride = {};
+            let isAnimated = edge.animated;
+            
+            if (activeLayout === 'narrative') {
+              const sourceNode = nodes.find(n => n.id === edge.source);
+              const targetNode = nodes.find(n => n.id === edge.target);
+              if (sourceNode && targetNode) {
+                const eraGap = Math.abs(parseInt(sourceNode.data.era || 0) - parseInt(targetNode.data.era || 0));
+                if (eraGap > 2) {
+                  // Massive historical connection (Time Bridge)
+                  edgeStyleOverride = {
+                    stroke: '#ffd700', // Gold
+                    strokeWidth: 4,
+                    filter: 'drop-shadow(0 0 8px #ffd700)',
+                  };
+                  isAnimated = true; // Make it pulse/flow
+                } else {
+                  edgeStyleOverride = {
+                    stroke: 'rgba(255, 255, 255, 0.3)',
+                    strokeWidth: 1.5,
+                  };
+                }
+              }
+            }
             
             const updatedData = { 
               ...edge.data, 
@@ -1785,8 +1902,9 @@ export default function App() {
 
             return { 
               ...edge, 
-              type: (activeLayout === 'bundled' || activeLayout === 'orthogonal' || activeLayout === 'arc' || activeLayout === 'biofabric' || activeLayout === 'phyllotaxis') ? effectiveType : 'pathEdge', 
+              type: (activeLayout === 'bundled' || activeLayout === 'orthogonal' || activeLayout === 'arc' || activeLayout === 'biofabric' || activeLayout === 'phyllotaxis' || activeLayout === 'narrative') ? effectiveType : 'pathEdge', 
               data: updatedData,
+              animated: isAnimated,
               label: (isPath || isPhyllotaxis) ? "" : (zoomLevel > 0.6 ? (edge.label || edge.data?.dbType?.replace("_", " ").toLowerCase()) : ""), 
               markerEnd: isBioFabric ? {
                 type: MarkerType.Arrow,
@@ -1803,7 +1921,9 @@ export default function App() {
               labelBgBorderRadius: 4,
               style: { 
                 ...edge.style, 
-                stroke: isPath ? COLORS.secondary : COLORS.primary,
+                stroke: isPath ? COLORS.secondary : (Object.keys(edgeStyleOverride).length > 0 ? edgeStyleOverride.stroke : COLORS.primary),
+                strokeWidth: edgeStyleOverride.strokeWidth || 1,
+                filter: edgeStyleOverride.filter || 'none',
                 opacity: isPath ? 1.0 : (isDimmedByHover ? 0.05 : highlightOpacity * baseOpacity),
                 borderRadius: activeLayout === 'orthogonal' ? 20 : 0,
                 transition: 'opacity 0.3s ease'
@@ -2227,6 +2347,7 @@ export default function App() {
             <Tooltip title="Bundled (HEB)"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Hierarchical Edge Bundling' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('bundled')} color={activeLayout === 'bundled' ? 'secondary' : 'primary'}><BundledIcon /></IconButton></Tooltip>
             <Tooltip title="Orthogonal (Manhattan)"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Orthogonal Manhattan Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('orthogonal')} color={activeLayout === 'orthogonal' ? 'secondary' : 'primary'}><OrthogonalIcon /></IconButton></Tooltip>
             <Tooltip title="Arc Diagram"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Linear Arc Diagram Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('arc')} color={activeLayout === 'arc' ? 'secondary' : 'primary'}><ArcIcon /></IconButton></Tooltip>
+            <Tooltip title="Narrative Timeline"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply Narrative Timeline Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('narrative')} color={activeLayout === 'narrative' ? 'secondary' : 'primary'}><HistoryIcon /></IconButton></Tooltip>
             <Tooltip title="BioFabric"><IconButton onMouseEnter={() => setStatusParts([{ trigger: 'CLICK', action: 'Apply BioFabric Node-Line Layout' }])} onMouseLeave={() => setStatusParts([])} onClick={() => onLayoutClick('biofabric')} color={activeLayout === 'biofabric' ? 'secondary' : 'primary'}><BioFabricIcon /></IconButton></Tooltip>
             </ButtonGroup>          <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
           <ButtonGroup variant="text" size="small">
@@ -2940,6 +3061,7 @@ export default function App() {
                       <MenuItem value="standard" sx={{ fontSize: '10px' }}>Standard</MenuItem>
                       <MenuItem value="byType" sx={{ fontSize: '10px' }}>By Type</MenuItem>
                       <MenuItem value="byImportance" sx={{ fontSize: '10px' }}>By Importance</MenuItem>
+                      <MenuItem value="byEra" sx={{ fontSize: '10px' }}>By Era</MenuItem>
                     </Select>
                   </Box>
                 </Box>
@@ -3148,6 +3270,7 @@ export default function App() {
                       <MenuItem value="lexical" sx={{ fontSize: '10px' }}>Lexical (A-Z)</MenuItem>
                       <MenuItem value="type" sx={{ fontSize: '10px' }}>By Type / Planet</MenuItem>
                       <MenuItem value="importance" sx={{ fontSize: '10px' }}>By Importance</MenuItem>
+                      <MenuItem value="era" sx={{ fontSize: '10px' }}>Chronological (Era)</MenuItem>
                     </Select>
                   </Box>
 
@@ -3208,6 +3331,47 @@ export default function App() {
                 </Box>
               )}
 
+              {activeLayout === 'narrative' && (
+                <Box>
+                  <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.65rem', fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center', gap: 1, letterSpacing: 1 }}>
+                    <HistoryIcon sx={{ fontSize: 14, color: COLORS.secondary }} /> NARRATIVE SETUP
+                  </Typography>
+
+                  <Box sx={{ mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>ERA SPACING: {layoutOptions.eraSpacing}</Typography>
+                    <Box sx={{ px: 1 }}>
+                      <Slider size="small" value={layoutOptions.eraSpacing} min={200} max={1500} step={50}
+                        onChange={(e, v) => {
+                          setLayoutOptions(prev => ({ ...prev, eraSpacing: v }));
+                          setLayoutTrigger(prev => prev + 1);
+                        }} color="secondary" />
+                    </Box>
+                  </Box>
+
+                  <Box sx={{ mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>LANE SPACING: {layoutOptions.laneSpacing}</Typography>
+                    <Box sx={{ px: 1 }}>
+                      <Slider size="small" value={layoutOptions.laneSpacing} min={100} max={800} step={25}
+                        onChange={(e, v) => {
+                          setLayoutOptions(prev => ({ ...prev, laneSpacing: v }));
+                          setLayoutTrigger(prev => prev + 1);
+                        }} color="secondary" />
+                    </Box>
+                  </Box>
+
+                  <Box sx={{ mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', display: 'block', mb: 0.5 }}>STACK SPACING: {layoutOptions.nodeSpacingY}</Typography>
+                    <Box sx={{ px: 1 }}>
+                      <Slider size="small" value={layoutOptions.nodeSpacingY} min={20} max={300} step={10}
+                        onChange={(e, v) => {
+                          setLayoutOptions(prev => ({ ...prev, nodeSpacingY: v }));
+                          setLayoutTrigger(prev => prev + 1);
+                        }} color="secondary" />
+                    </Box>
+                  </Box>
+                </Box>
+              )}
+
               {activeLayout === 'biofabric' && (
                 <Box>
                   <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.65rem', fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center', gap: 1, letterSpacing: 1 }}>
@@ -3232,6 +3396,7 @@ export default function App() {
                       <MenuItem value="type" sx={{ fontSize: '10px' }}>By Type</MenuItem>
                       <MenuItem value="importance" sx={{ fontSize: '10px' }}>By Importance</MenuItem>
                       <MenuItem value="activity" sx={{ fontSize: '10px' }}>By Activity</MenuItem>
+                      <MenuItem value="era" sx={{ fontSize: '10px' }}>By Era</MenuItem>
                     </Select>
                   </Box>
 
